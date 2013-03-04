@@ -10,7 +10,7 @@ centidb
 
 `centidb` is a tiny database that provides a tradeoff between the minimalism of
 a key/value store and the convenience of SQL. It wraps any store that provides
-an ordered-map interface, adding features that often cause developers to desire
+an ordered-map interface, adding features that often tempt developers to use
 more complex systems.
 
 Functionality is provided for forming ordered composite keys, managing and
@@ -162,16 +162,16 @@ Encodings
 .. autoclass:: centidb.Encoder
 
 
-``centidb.KEY_ENCODER``
-+++++++++++++++++++++++
+``KEY_ENCODER``
++++++++++++++++
 
     This is a predefined `Encoder` instance that uses `encode_keys()` and
     `decode_keys()` to serialize tuples. It is used internally to represent
-    metadata.
+    keys, counters, and store metadata.
 
 
-``centidb.PICKLE_ENCODER``
-++++++++++++++++++++++++++
+``PICKLE_ENCODER``
+++++++++++++++++++
 
     This is a predefined `Encoder` instance that uses `cPickle.dumps()` and
     `cPickle.loads()` to serialize tuples, using pickle protocol version 2. It
@@ -191,7 +191,6 @@ Create an `Encoder` factory:
 
     def make_thrift_encoder(klass, factory=None):
         if not factory:
-            # WTF Facebook GTFO HAND
             factory = thrift.protocol.TCompactProtocol.TCompactProtocolFactory()
 
         def loads(buf):

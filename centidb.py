@@ -221,7 +221,8 @@ def decode_keys(s, prefix=None, first=False):
     return tups[0] if first else tups
 
 class Encoder:
-    """This class represents an encoding format, including its associated name.
+    """Instances of this class represents an encoding format, including its
+    associated name.
 
         `name`:
             ASCII string uniquely identifying the encoding. A future version
@@ -256,7 +257,23 @@ PICKLE_ENCODER = Encoder('pickle', pickle.loads,
 class Index:
     """Provides query and manipulation access to a single index on a
     Collection. You should not create this class directly, instead use
-    `Collection.add_index()` and the `Collection.indices` attribute.
+    `Collection.add_index()` and the `Collection.indices` mapping.
+
+    `Index.get()` and the iteration methods take a common set of parameters
+    that are described below:
+
+        `args`:
+            Prefix of the index entries to to be matched, or ``None`` or the
+            empty tuple to indicate all index entries should be matched.
+
+        `reverse`:
+            If ``True``, iteration should begin with the last naturally ordered
+            match returned first, and end with the first naturally ordered
+            match returned last.
+
+        `txn`:
+            Transaction to use, or ``None`` to indicate the default behaviour
+            of the associated `Store`.
     """
     def __init__(self, coll, info, func):
         self.coll = coll
@@ -269,6 +286,9 @@ class Index:
 
     def iterpairs(self, args=None, reverse=None, txn=None, max=None,
             closed=True, _lst=False):
+        """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
+        is the tuple returned by the user's index function, and `key` is the
+        key of the matching record."""
         key = encode_keys((args or (),), self.prefix, closed)
         it = self.db.iterator(prefix=key, reverse=reverse, include_value=False)
         if max is not None:
@@ -278,16 +298,23 @@ class Index:
 
     def itertups(self, args=None, reverse=None, txn=None, max=None,
             closed=True):
+        """Yield all index tuples in the index, in tuple order. The index tuple
+        is the part of the entry produced by the user's index function, i.e.
+        the index's natural "value"."""
         return itertools.imap(operator.itemgetter(0),
                               self.iterpairs(args, reverse, txn, max))
 
     def iterkeys(self, args=None, reverse=None, txn=None, max=None,
             closed=True):
+        """Yield all keys in the index, in tuple order."""
         return itertools.imap(operator.itemgetter(1),
                               self.iterpairs(args, reverse, txn, max))
 
     def iteritems(self, args=None, reverse=False, txn=None, rec=None,
             max=None, closed=True):
+        """Yield all `(key, value)` items referred to by the index, in tuple
+        order. If `rec` is ``True``, `Record` instances are yielded instead of
+        record values."""
         for idx_key, key in \
                 self.iterpairs(args, reverse, txn, max, closed, _lst=True):
             obj = self.coll.get(key, txn=txn, rec=rec)
@@ -298,30 +325,41 @@ class Index:
 
     def itervalues(self, args=None, reverse=None, txn=None, rec=None,
             max=None, closed=True):
+        """Yield all values referred to by the index, in tuple order. If `rec`
+        is ``True``, `Record` instances are yielded instead of record
+        values."""
         return itertools.imap(operator.itemgetter(1),
             self.iteritems(args, reverse, txn, rec, max, closed))
 
-    def get(self, args=None, reverse=None, txn=None, rec=None, closed=True):
+    def get(self, args=None, reverse=None, txn=None, rec=None, closed=True,
+            default=None):
+        """Return the first matching values referred to by the index, in tuple
+        order. If `rec` is ``True`` a `Record` instance is returned of the
+        record value."""
         for p in self.iteritems(args, reverse, txn, rec, 1, closed):
             return p[1]
+        if rec and default is not None:
+            return Record(self.coll, default)
+        return default
+
 
 class Record:
     """Wraps a record value with its last saved key, if any.
 
-    This is primarily used to track index keys that were valid for the record
-    when it was loaded, allowing many operations to be avoided if the user
-    deletes or modifies it within the same transaction. Use of the class is
-    only required when modifying existing records.
+    `Record` instances are usually created by the `Collection` and `Index`
+    ``get()``/``put()``/``iter*()`` functions. They are primarily used to track
+    index keys that were valid for the record when it was loaded, allowing many
+    operations to be avoided if the user deletes or modifies it within the same
+    transaction. The class is only required when modifying existing records.
 
     It is possible to avoid using the class when `Collection.derived_keys =
     True`, however this hurts perfomance as it forces `put()` to first check
     for any existing record with the same key, and therefore for any existing
     index keys that must first be deleted.
 
-    **Warning**: you may create instances of this class directly, **but you
-    must not** modify its attributes (except `data`), or construct it using any
-    parameters except `coll` and `data`, otherwise index corruption will likely
-    occur.
+    *Note:* you may create `Record` instances directly, **but you must not
+    modify any attributes except** `data`, or construct it using any parameters
+    except `coll` and `data`, otherwise index corruption will likely occur.
     """
     def __init__(self, coll, data, _key=None, _batch=False,
             _txn_id=None, _index_keys=None):
@@ -329,8 +367,8 @@ class Record:
         self.coll = coll
         #: The actual record value.
         self.data = data
-        #: Key for this record when it was last saved, or None if the record is
-        #: deleted or has never been saved.
+        #: Key for this record when it was last saved, or ``None`` if the
+        #: record is deleted or has never been saved.
         self.key = _key
         #: True if the record was loaded from a physical key that contained
         #: other records. Used internally to know when to explode batches
@@ -348,8 +386,8 @@ class Record:
         return '<Record %s:(%s) %r>' % (self.coll.info.name, tups, self.data)
 
 class Collection:
-    """Provides access to a record collection contained within a Store, and
-    ensures associated indices update consistently when the changes are made.
+    """Provides access to a record collection contained within a `Store`, and
+    ensures associated indices update consistently when changes are made.
 
         `store`:
             Store the collection belongs to. If metadata for the collection
@@ -368,8 +406,8 @@ class Collection:
             `counter_name` and `counter_prefix`.
 
         `derived_keys`:
-            If True, indicates the key function derives the key purely from the
-            record value, and should be invoked for each change. If the key
+            If ``True``, indicates the key function derives the key purely from
+            the record value, and should be invoked for each change. If the key
             changes the previous key and index entries are automatically
             deleted.
 
@@ -424,7 +462,7 @@ class Collection:
         self.derived_keys = derived_keys
         self.encoder = encoder or PICKLE_ENCODER
         #: Dict mapping indices added using ``add_index()`` to `Index`
-        #: instances representing them. Example:
+        #: instances representing them.
         #:
         #: ::
         #:
@@ -574,8 +612,8 @@ class Collection:
                 it allows ``put()`` to avoid many database operations.
 
             `txn`:
-                Transaction to use, or None to indicate the default behaviour
-                of the associated `Store`.
+                Transaction to use, or ``None`` to indicate the default
+                behaviour of the associated `Store`.
 
             `key`:
                 If specified, overrides the use of collection's key function
