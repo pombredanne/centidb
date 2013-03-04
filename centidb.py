@@ -3,9 +3,11 @@ import cPickle as pickle
 import cStringIO
 import collections
 import functools
+import itertools
 import re
 import struct
 import time
+import warnings
 import zlib
 
 import plyvel
@@ -134,7 +136,7 @@ def encode_tuples(tups, prefix=''):
 def encode_tuple(tup, prefix=''):
     return encode_tuples((tup,), prefix)
 
-def decode_tuples(s, prefix=None):
+def decode_tuples(s, prefix=None, first=False):
     if prefix:
         s = buffer(s, len(prefix))
     io = cStringIO.StringIO(s)
@@ -158,6 +160,8 @@ def decode_tuples(s, prefix=None):
             arg = Key(decode_str(getc))
         elif c == KIND_SEP:
             tups.append(tuple(tup))
+            if first:
+                return tups[0]
             tup = []
             continue
         else:
@@ -206,19 +210,32 @@ class PickleEncoder:
         return pickle.dumps(lst, 2)
 
 class Index:
-    def __init__(self, store, info, func):
-        self.store = store
-        self.db = store.db
+    def __init__(self, coll, info, func):
+        self.coll = coll
+        self.store = coll.store
+        self.db = self.store.db
         self.info = info
-        self.prefix = store.prefix + encode_int(info.idx)
         self.func = func
+        self.prefix = self.store.prefix + encode_int(info.idx)
+        self._decode = functools.partial(decode_tuples, prefix=self.prefix)
 
-    def iter(self, args=(), reverse=False):
-        key = encode_tuple(args, self.prefix)
+    def iterpairs(self, args=None, reverse=False, txn=None, max=None,
+            _lst=False):
+        key = encode_tuple(args or (), self.prefix)
         it = self.db.iterator(prefix=key, reverse=reverse, include_value=False)
-        for key in it:
-            key, val = decode_tuples(key, self.prefix)
-            yield key, val
+        if max is not None:
+            it = itertools.islice(it, max)
+        it = itertools.imap(self._decode, it)
+        return it if _lst else itertools.imap(tuple, it)
+
+    def itervalues(self, args=None, reverse=False, txn=None, rec=False,
+            max=None):
+        for idx_key, key in self.iterpairs(args, reverse, txn, max, _lst=True):
+            obj = self.coll.get(key, txn=txn, rec=rec)
+            if obj:
+                yield obj
+            else:
+                warnings.warn('stale entry in %r, requires rebuild')
 
     def get(self, args=(), reverse=True):
         return next(self.iter(args, reverse=reverse), None)
@@ -282,7 +299,7 @@ class Collection:
         assert name not in self.indices
         info_name = 'index:%s:%s' % (self.info.name, name)
         info = self.store._get_info(info_name, index_for=self.info.name)
-        index = Index(self.store, info, func)
+        index = Index(self, info, func)
         self.indices[name] = index
         return index
 
@@ -293,7 +310,7 @@ class Collection:
 
     def phys_keys(self):
         it = self.db.iterator(prefix=self.prefix, include_value=False)
-        return (decode_tuples(phys, self.prefix)[0] for phys in it)
+        return (decode_tuples(phys, self.prefix, first=True) for phys in it)
 
     def index_keys(self, key, obj):
         idx_keys = []
@@ -328,29 +345,25 @@ class Collection:
                     obj = Record(self, obj, keys[-(1 + i)], len(keys) > 1)
                 yield keys[-(1 + i)], obj
 
-    def getrec(self, key, default=None):
+    def get(self, key, default=None, rec=False, txn=None):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead. If `rec` is ``True``, return
         a `Record` instance for use when later re-saving the record, otherwise
         only the record's value is returned."""
         key = tuplize(key)
-        it = self.db.iterator(start=encode_tuple(key, self.prefix))
+        it = (txn or self.db).iterator(start=encode_tuple(key, self.prefix))
         phys, data = next(it, (None, None))
 
         if phys and phys.startswith(self.prefix):
             keys = decode_tuples(phys, self.prefix)
             for i, obj in enumerate(self.encoder.loads_many(self._decompress(data))):
                 if keys[-(1 + i)] == key:
-                    return Record(self, obj, key, len(keys) > 1)
+                    return Record(self, obj, key, len(keys)>1) if rec else obj
         if default is not None:
-            return Record(self, default)
+            return Record(self, default) if rec else default
 
-    def get(self, key, default=None):
-        rec = self.getrec(key, default)
-        return rec and rec.data
-
-    def _split_batch(self, rec, wb):
+    def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
         it = self.db.iterator(
             start=encode_tuple(rec.key, self.prefix))
@@ -362,8 +375,8 @@ class Collection:
         objs = self.encoder.loads_many(self._decompress(data))
         for i, obj in enumerate(objs):
             if keys[-(1 + i)] != rec.key:
-                self.put(Record(self, obj), wb, key=keys[-(1 + i)])
-        (wb or self.db).delete(phys)
+                self.put(Record(self, obj), txn, key=keys[-(1 + i)])
+        (txn or self.db).delete(phys)
         rec.key = None
         rec.batch = False
 
@@ -374,17 +387,17 @@ class Collection:
             return tuplize(self.txn_key_func(rec.data, txn))
         return tuplize(self.key_func(rec.data))
 
-    def put(self, rec, wb=None, key=None):
+    def put(self, rec, txn=None, key=None):
         if not isinstance(rec, Record):
             rec = Record(self, rec)
-        obj_key = key or self._reassign_key(rec, wb)
+        obj_key = key or self._reassign_key(rec, txn)
         index_keys = self.index_keys(obj_key, rec.data)
 
         if rec.key:
-            delete = (wb or self.db).delete
+            delete = (txn or self.db).delete
             if rec.batch:
                 # Old key was part of a batch, explode the batch.
-                self._split_batch(rec, wb)
+                self._split_batch(rec, txn)
             elif rec.key != obj_key:
                 # New version has changed key, delete old.
                 delete(encode_tuple(rec.key, self.prefix))
@@ -395,7 +408,7 @@ class Collection:
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
-        put = (wb or self.db).put
+        put = (txn or self.db).put
         put(encode_tuple(obj_key, self.prefix),
             ' ' + self.encoder.dumps_many([rec.data]))
         for index_key in index_keys:
@@ -406,7 +419,7 @@ class Collection:
 
     def delete(self, obj, txn=None):
         if isinstance(obj, tuple):
-            rec = self.getrec(obj)
+            rec = self.get(obj, rec=True)
         elif isinstance(obj, Record):
             rec = obj
         else:
@@ -435,17 +448,17 @@ class Store:
             encoder=TupleEncoder(), key_func=lambda tup: tup[0])
 
     def _get_info(self, name, idx=None, index_for=None):
-        rec = self._info_coll.getrec(name)
-        if rec:
-            assert rec.data == (name, idx or rec.data[1], index_for)
-            return CollInfo(*rec.data)
+        tup = self._info_coll.get(name)
+        if tup:
+            assert tup == (name, idx or tup[1], index_for)
+            return CollInfo(*tup)
         if idx is None:
             idx = self.count('\x00collections_idx', init=10)
             info = CollInfo(name, idx, index_for)
         return self._info_coll.put(info).data
 
     def count(self, name, n=1, init=1):
-        rec = self._counter_coll.getrec(name, default=(name, init))
+        rec = self._counter_coll.get(name, default=(name, init), rec=True)
         val = rec.data[1]
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
