@@ -19,6 +19,7 @@ KIND_BOOL = chr(30)
 KIND_BLOB = chr(40)
 KIND_TEXT = chr(50)
 KIND_KEY = chr(100)
+KIND_SEP = chr(101)
 
 class Key(str):
     pass
@@ -95,44 +96,51 @@ def decode_str(getc):
 def tuplize(o):
     return o if isinstance(o, tuple) else (o,)
 
-def encode_tuple(args, prefix=''):
+def encode_tuples(tups, prefix=''):
     io = cStringIO.StringIO()
     w = io.write
     w(prefix)
-    for arg in tuplize(args):
-        if arg is None:
-            w(KIND_NULL)
-        elif isinstance(arg, bool):
-            w(KIND_BOOL)
-            w(encode_int(arg))
-        elif isinstance(arg, (int, long)):
-            if arg < 0:
-                w(KIND_NEG_INTEGER)
-                w(encode_int(-arg))
-            else:
-                w(KIND_INTEGER)
+    for i, tup in enumerate(tups):
+        if i:
+            w(KIND_SEP)
+        for arg in tuplize(tup):
+            if arg is None:
+                w(KIND_NULL)
+            elif isinstance(arg, bool):
+                w(KIND_BOOL)
                 w(encode_int(arg))
-        elif isinstance(arg, Key):
-            w(KIND_KEY)
-            w(encode_str(arg))
-        elif isinstance(arg, str):
-            w(KIND_BLOB)
-            w(encode_str(arg))
-            w('\x00')
-        elif isinstance(arg, unicode):
-            w(KIND_TEXT)
-            w(encode_str(arg.encode('utf-8')))
-            w('\x00')
-        else:
-            raise TypeError('unsupported type: %r' % (arg,))
+            elif isinstance(arg, (int, long)):
+                if arg < 0:
+                    w(KIND_NEG_INTEGER)
+                    w(encode_int(-arg))
+                else:
+                    w(KIND_INTEGER)
+                    w(encode_int(arg))
+            elif isinstance(arg, Key):
+                w(KIND_KEY)
+                w(encode_str(arg))
+            elif isinstance(arg, str):
+                w(KIND_BLOB)
+                w(encode_str(arg))
+                w('\x00')
+            elif isinstance(arg, unicode):
+                w(KIND_TEXT)
+                w(encode_str(arg.encode('utf-8')))
+                w('\x00')
+            else:
+                raise TypeError('unsupported type: %r' % (arg,))
     return io.getvalue()
 
-def decode_tuple(s, prefix=None, _lst=False):
+def encode_tuple(tup, prefix=''):
+    return encode_tuples((tup,), prefix)
+
+def decode_tuples(s, prefix=None):
     if prefix:
         s = buffer(s, len(prefix))
     io = cStringIO.StringIO(s)
     getc = functools.partial(io.read, 1)
-    args = []
+    tups = []
+    tup = []
     for c in iter(getc, ''):
         if c == KIND_NULL:
             arg = None
@@ -148,27 +156,53 @@ def decode_tuple(s, prefix=None, _lst=False):
             arg = decode_str(getc).decode('utf-8')
         elif c == KIND_KEY:
             arg = Key(decode_str(getc))
+        elif c == KIND_SEP:
+            tups.append(tuple(tup))
+            tup = []
+            continue
         else:
-            raise ValueError('bad kind %r; key corrupt? %r' % (o, args))
-        args.append(arg)
-    return args if _lst else tuple(args)
+            raise ValueError('bad kind %r; key corrupt? %r' % (ord(c), tup))
+        tup.append(arg)
+    tups.append(tuple(tup))
+    return tups
+
+def now():
+    return int(time.time() * 1e6)
+
+def make_counter_key(store, name, prefix=None):
+    """
+    Return a key function that assigns new keys transactionally using a counter
+    named ``("key_counter:" + name)``.
+    """
+    name = 'key_counter:%s' % name
+    prefix = tuplize(prefix or ())
+    def counter_key_func(obj, txn):
+        return prefix + (coll.store.count(name, txn=txn),)
 
 class TupleEncoder:
+    """Encode Python tuples using encode_tuple(). Note that the tuple format
+    does not support batch value serialization.
+    """
     def loads_many(self, s):
-        return [decode_tuple(s)]
+        """Decode the serialized tuple."""
+        return decode_tuples(s)
 
     def dumps_many(self, lst):
-        assert len(lst) == 1, 'TupleEncoder doesn\'t handle many'
-        return encode_tuple(lst[0])
+        """Serialize a list containing one tuple."""
+        return encode_tuples(lst)
 
     def __eq__(self, other):
+        """Return True if the other object is a TupleEncoder."""
         return isinstance(other, TupleEncoder)
 
 class PickleEncoder:
+    """Encode Python objects using the cPickle version 2 protocol."""
     def loads_many(self, s):
+        """Decode the serialized batch."""
         return pickle.loads(s)
 
     def dumps_many(self, lst):
+        """Encode a batch of objects."""
         return pickle.dumps(lst, 2)
 
 class Index:
@@ -176,69 +210,73 @@ class Index:
         self.store = store
         self.db = store.db
         self.info = info
-        self.prefix = encode_int(info.idx)
+        self.prefix = store.prefix + encode_int(info.idx)
         self.func = func
-
-    def index_keys(self, obj_key, obj):
-        index_keys = []
-        encoded = encode_tuple(obj_key)
-        result = self.func(obj_key, obj)
-        if not isinstance(result, list):
-            result = [result]
-        for args in result:
-            args = tuplize(args) + (encoded,)
-            index_keys.append(encode_tuple(args, self.prefix))
-        return index_keys
-
-    def delete_keys(self, obj_key, obj, wb=None):
-        delete = (wb or self.db).delete
-        for index_key in self.index_keys(obj_key, obj):
-            delete(index_key)
-
-    def add_keys(self, obj_key, obj, wb=None):
-        put = (wb or self.db).put
-        for index_key in self.index_keys(key, obj):
-            put(index_key, '')
 
     def iter(self, args=(), reverse=False):
         key = encode_tuple(args, self.prefix)
-        print 'prefix =', repr(key)
         it = self.db.iterator(prefix=key, reverse=reverse, include_value=False)
         for key in it:
-            lst = decode_tuple(key, self.prefix, _lst=True)
-            yield tuple(lst[:-1]), decode_tuple(lst[-1])
+            key, val = decode_tuples(key, self.prefix)
+            yield key, val
 
     def get(self, args=(), reverse=True):
         return next(self.iter(args, reverse=reverse), None)
 
 class Record:
-    def __init__(self, coll, data, load_key=None, phys_key=None,
+    def __init__(self, coll, data, key=None, batch=False,
             index_keys=None):
         self.coll = coll
         self.data = data
-        self.load_key = load_key
-        self.phys_key = phys_key
+        self.key = key
+        self.batch = batch
+        if key and index_keys is None:
+            index_keys = coll.index_keys(key, data)
         self.index_keys = index_keys
 
     def __repr__(self):
-        tups = ','.join(map(repr, self.load_key or ()))
+        tups = ','.join(map(repr, self.key or ()))
         return '<Record %s:(%s) %r>' % (self.coll.info.name, tups, self.data)
 
 class Collection:
-    def __init__(self, store, name, key_func=None, encoder=None, _idx=None):
+    """Provides access to a record collection contained within a Store, and
+    ensures associated indices are updated consistently when the collection
+    changes.
+
+    `key_func`: Primary key function
+        If given, must be a function accepting `(existing_key, obj)` arguments
+        and is expected to return a new primary key for `obj`.
+
+        The first argument is primary key already assigned to the record, or
+        ``None`` if it has never been saved.
+    """
+    def __init__(self, store, name, key_func=None, txn_key_func=None,
+            derived_keys=False, encoder=None, _idx=None):
+        """Create or open a collection contained within `store`.
+            lol :)
+        lol is strong today
+        `key_func`:  blerp
+        `encoder`: zerpo
+
+        zerpalot
+        """
         self.store = store
         self.db = store.db
         if _idx is not None:
             self.info = CollInfo(name, _idx, None)
         else:
             self.info = store._get_info(name, idx=_idx)
-        self.prefix = encode_int(self.info.idx)
+        self.prefix = store.prefix + encode_int(self.info.idx)
         self.indices = {}
-        self.key_func = key_func or self._time_key
+        self.key_func = key_func
+        self.txn_key_func = txn_key_func
+        if not (key_func or txn_key_func):
+            self.key_func = self._time_key
+        self.derived_keys = derived_keys
         self.encoder = encoder or PickleEncoder()
 
-    def _time_key(self, obj_key, obj):
-        return obj_key or int(time.time() * 1000000)
+    def _time_key(self, obj):
+        return now()
 
     def add_index(self, name, func):
         assert name not in self.indices
@@ -255,73 +293,101 @@ class Collection:
 
     def phys_keys(self):
         it = self.db.iterator(prefix=self.prefix, include_value=False)
-        for phys_key in it:
-            yield decode_tuple(phys_key, self.prefix)
+        return (decode_tuples(phys, self.prefix)[0] for phys in it)
 
-    def _index_keys(self, obj_key, obj):
-        keys = []
-        for index in self.indices.itervalues():
-            keys.extend(index.index_keys(obj_key, obj))
-        return keys
-
-    def _make_record(self, obj, load_key=None, phys_key=None):
-        load_key = tuplize(load_key or self.key_func(None, obj))
-        return Record(self, obj, load_key, phys_key,
-                      self._index_keys(load_key, obj))
+    def index_keys(self, key, obj):
+        idx_keys = []
+        for idx in self.indices.itervalues():
+            lst = idx.func(obj)
+            for idx_key in lst if type(lst) is list else [lst]:
+                idx_keys.append(encode_tuples((idx_key, key), idx.prefix))
+        return idx_keys
 
     def values(self, rec=True):
-        for phys_key, data in self.db.iterator(prefix=self.prefix):
-            phys_key = decode_tuple(phys_key, self.prefix)
-            for obj in self.encoder.loads_many(self._decompress(data)):
+        """Return an iterator that yields all records from the collection. If
+        `rec` is ``True``, return `Record` instances, otherwise only the
+        record's value is returned."""
+        for phys, data in self.db.iterator(prefix=self.prefix):
+            if not phys.startswith(self.prefix):
+                break
+            keys = decode_tuples(phys, self.prefix)
+            for i, obj in enumerate(self.encoder.loads_many(self._decompress(data))):
                 if rec:
-                    obj = self._make_record(obj, phys_key=phys_key)
+                    obj = Record(self, obj, keys[-(i + 1)], len(keys) > 1)
                 yield obj
 
-    def get(self, key, default=None, rec=True):
+    def iter(self, key, rec=True):
         key = tuplize(key)
         it = self.db.iterator(start=encode_tuple(key, self.prefix))
-        phys_key, data = next(it, (None, None))
-        if phys_key and phys_key.startswith(self.prefix):
-            for obj in self.encoder.loads_many(self._decompress(data)):
-                obj_key = tuplize(self.key_func(None, obj))
-                if obj_key == key:
-                    if rec:
-                        phys_key = decode_tuple(phys_key, self.prefix)
-                        return self._make_record(obj, key, phys_key)
-                    else:
-                        return obj
+        for phys, data in it:
+            if not phys.startswith(self.prefix):
+                break
+            keys = decode_tuples(phys, self.prefix)
+            for i, obj in enumerate(self.encoder.loads_many(self._decompress(data))):
+                if rec:
+                    obj = Record(self, obj, keys[-(1 + i)], len(keys) > 1)
+                yield keys[-(1 + i)], obj
+
+    def getrec(self, key, default=None):
+        """Fetch a record given its key. If `key` is not a tuple, it is wrapped
+        in a 1-tuple. If the record does not exist, return ``None`` or if
+        `default` is provided, return it instead. If `rec` is ``True``, return
+        a `Record` instance for use when later re-saving the record, otherwise
+        only the record's value is returned."""
+        key = tuplize(key)
+        it = self.db.iterator(start=encode_tuple(key, self.prefix))
+        phys, data = next(it, (None, None))
+
+        if phys and phys.startswith(self.prefix):
+            keys = decode_tuples(phys, self.prefix)
+            for i, obj in enumerate(self.encoder.loads_many(self._decompress(data))):
+                if keys[-(1 + i)] == key:
+                    return Record(self, obj, key, len(keys) > 1)
         if default is not None:
-            return self._make_record(default)
+            return Record(self, default)
+
+    def get(self, key, default=None):
+        rec = self.getrec(key, default)
+        return rec and rec.data
 
     def _split_batch(self, rec, wb):
-        assert rec.load_key and rec.phys_key and rec.phys_key != rec.load_key
+        assert rec.key and rec.batch
         it = self.db.iterator(
-            start=encode_tuple(rec.phys_key, self.prefix))
-        phys_key, data = next(it, (None, None))
-        assert rec.phys_key == phys_key, \
-            'Physical key missing: %r' % (rec.phys_key,)
-        for obj in self.encoder.loads_many(self._decompress(data)):
-            obj_key = self.key_func(obj)
-            if obj_key != rec.load_key:
-                self.put(self._make_record(obj), wb, _obj_key=obj_key)
-        (wb or self.db).delete(encode_tuple(rec.phys_key, self.prefix))
-        rec.load_key = None
-        rec.phys_key = None
+            start=encode_tuple(rec.key, self.prefix))
+        phys, data = next(it, (None, None))
+        keys = decode_tuples(phys, self.prefix)
+        assert len(keys) > 1 and rec.key in keys, \
+            'Physical key missing: %r' % (rec.key,)
 
-    def put(self, rec, wb=None, _obj_key=None):
+        objs = self.encoder.loads_many(self._decompress(data))
+        for i, obj in enumerate(objs):
+            if keys[-(1 + i)] != rec.key:
+                self.put(Record(self, obj), wb, key=keys[-(1 + i)])
+        (wb or self.db).delete(phys)
+        rec.key = None
+        rec.batch = False
+
+    def _reassign_key(self, rec, txn):
+        if rec.key and not self.derived_keys:
+            return rec.key
+        elif self.txn_key_func:
+            return tuplize(self.txn_key_func(rec.data, txn))
+        return tuplize(self.key_func(rec.data))
+
+    def put(self, rec, wb=None, key=None):
         if not isinstance(rec, Record):
-            rec = self._make_record(rec)
-        obj_key = tuplize(_obj_key or self.key_func(rec.load_key, rec.data))
-        index_keys = self._index_keys(obj_key, rec.data)
+            rec = Record(self, rec)
+        obj_key = key or self._reassign_key(rec, wb)
+        index_keys = self.index_keys(obj_key, rec.data)
 
-        if rec.load_key:
+        if rec.key:
             delete = (wb or self.db).delete
-            if rec.phys_key and rec.load_key != rec.phys_key: # TODO end of batch
+            if rec.batch:
                 # Old key was part of a batch, explode the batch.
                 self._split_batch(rec, wb)
-            elif rec.load_key != obj_key:
+            elif rec.key != obj_key:
                 # New version has changed key, delete old.
-                delete(encode_tuple(rec.load_key, self.prefix))
+                delete(encode_tuple(rec.key, self.prefix))
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     delete(index_key)
@@ -334,52 +400,52 @@ class Collection:
             ' ' + self.encoder.dumps_many([rec.data]))
         for index_key in index_keys:
             put(index_key, '')
-        rec.load_key = obj_key
-        rec.phys_key = obj_key
+        rec.key = obj_key
         rec.index_keys = index_keys
         return rec
 
-    def delete(self, obj, wb=None):
+    def delete(self, obj, txn=None):
         if isinstance(obj, tuple):
-            rec = self.get(obj)
+            rec = self.getrec(obj)
         elif isinstance(obj, Record):
             rec = obj
         else:
-            rec = self.get(self.key_func(obj))
+            rec = Record(self, obj)
         if rec:
-            rec_key = rec.load_key or self.key_func(rec.data)
-            if rec.phys_key and rec_key != rec.phys_key:
-                self._split_batch(rec, wb)
+            rec_key = rec.key or self._reassign_key(rec, txn)
+            if rec.batch:
+                self._split_batch(rec, txn)
             else:
-                delete = (wb or self.db).delete
+                delete = (txn or self.db).delete
                 delete(encode_tuple(rec_key, self.prefix))
                 for index_key in rec.index_keys or ():
                     delete(index_key)
-            rec.load_key = None
-            rec.phys_key = None
+            rec.key = None
+            rec.batch = False
             rec.index_keys = None
             return rec
 
 class Store:
-    def __init__(self, db):
+    def __init__(self, db, prefix=''):
         self.db = db
+        self.prefix = prefix
         self._info_coll = Collection(self, '\x00collections', _idx=0,
-            encoder=TupleEncoder(), key_func=lambda _, tup: tup[0])
+            encoder=TupleEncoder(), key_func=lambda tup: tup[0])
         self._counter_coll = Collection(self, '\x00counters', _idx=1,
-            encoder=TupleEncoder(), key_func=lambda _, tup: tup[0])
+            encoder=TupleEncoder(), key_func=lambda tup: tup[0])
 
     def _get_info(self, name, idx=None, index_for=None):
-        rec = self._info_coll.get(name)
+        rec = self._info_coll.getrec(name)
         if rec:
-            assert rec.data == (name, idx or rec.data.idx, index_for)
-            return CollInfo(rec.data)
+            assert rec.data == (name, idx or rec.data[1], index_for)
+            return CollInfo(*rec.data)
         if idx is None:
             idx = self.count('\x00collections_idx', init=10)
             info = CollInfo(name, idx, index_for)
         return self._info_coll.put(info).data
 
     def count(self, name, n=1, init=1):
-        rec = self._counter_coll.get(name, default=(name, init))
+        rec = self._counter_coll.getrec(name, default=(name, init))
         val = rec.data[1]
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
