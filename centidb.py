@@ -218,33 +218,40 @@ def decode_keys(s, prefix=None, first=False):
             raise ValueError('bad kind %r; key corrupt? %r' % (ord(c), tup))
         tup.append(arg)
     tups.append(tuple(tup))
-    return tups
+    return tups[0] if first else tups
 
-class KeyEncoder:
-    """Encode Python tuples using encode_keys(). Note that the tuple format
-    does not support batch value serialization.
+class Encoder:
+    """This class represents an encoding format, including its associated name.
+
+        `name`:
+            ASCII string uniquely identifying the encoding. A future version
+            may use this to verify the encoding matches what was used to create
+            `Collection`.
+
+        `loads`:
+            Function to deserialize an encoded value. The function is called
+            with **a buffer object containing the encoded bytestring** as its
+            sole argument, and should return the decoded value. If your encoder
+            does not support `buffer()` objects (many C extensions do), then
+            pass the value through `str()`.
+
+        `dumps`:
+            Function to serialize a value. The function is called with the
+            value as its sole argument, and should return the encoded
+            bytestring.
     """
-    def loads_many(self, s):
-        """Decode the serialized tuple."""
-        return decode_keys(s)
+    def __init__(self, name, loads, dumps):
+        self.loads = loads
+        self.dumps = dumps
+        self.name = name
 
-    def dumps_many(self, lst):
-        """Serialize a list containing one tuple."""
-        return encode_keys(lst)
+#: Encode Python tuples using encode_keys()/decode_keys().
+KEY_ENCODER = Encoder('key', lambda s: decode_keys(s, first=True),
+                             lambda o: encode_keys((o,)))
 
-    def __eq__(self, other):
-        """Return True if the other object is a KeyEncoder."""
-        return isinstance(other, KeyEncoder)
-
-class PickleEncoder:
-    """Encode Python objects using the cPickle version 2 protocol."""
-    def loads_many(self, s):
-        """Decode the serialized batch."""
-        return pickle.loads(s)
-
-    def dumps_many(self, lst):
-        """Encode a batch of objects."""
-        return pickle.dumps(lst, 2)
+#: Encode Python objects using the cPickle version 2 protocol."""
+PICKLE_ENCODER = Encoder('pickle', pickle.loads,
+                         functools.partial(pickle.dumps, protocol=2))
 
 class Index:
     """Provides query and manipulation access to a single index on a
@@ -380,7 +387,7 @@ class Collection:
         `encoder`:
             Specifies the value encoder instance to use; see the `KeyEncoder`
             class for an interface specification. If unspecified, defaults to
-            `PickleEncoder`, which assumes record values are any pickleable
+            `PICKLE_ENCODER`, which assumes record values are any pickleable
             Python object.
 
         `counter_name`:
@@ -415,7 +422,7 @@ class Collection:
         self.key_func = key_func
         self.txn_key_func = txn_key_func
         self.derived_keys = derived_keys
-        self.encoder = encoder or PickleEncoder()
+        self.encoder = encoder or PICKLE_ENCODER
         #: Dict mapping indices added using ``add_index()`` to `Index`
         #: instances representing them. Example:
         #:
@@ -448,7 +455,7 @@ class Collection:
 
             ::
 
-                # Use default auto-increment key and PickleEncoder.
+                # Use default auto-increment key and PICKLE_ENCODER.
                 coll = Collection(store, 'people')
                 coll.add_index('name', lambda person: person['name'])
 
@@ -503,10 +510,10 @@ class Collection:
             if not phys.startswith(self.prefix):
                 break
             keys = decode_keys(phys, self.prefix)
-            for i, obj in enumerate(self.encoder.loads_many(self._decompress(data))):
-                if rec:
-                    obj = Record(self, obj, keys[-(1 + i)], len(keys) > 1)
-                yield keys[-(1 + i)], obj
+            obj = self.encoder.loads(self._decompress(data))
+            if rec:
+                obj = Record(self, obj, keys[-1], len(keys) > 1)
+            yield keys[-(1 + i)], obj
 
     def itervalues(self, key, rec=False):
         """Yield all values in the collection, in key order. If `rec` is
@@ -525,9 +532,9 @@ class Collection:
 
         if phys and phys.startswith(self.prefix):
             keys = decode_keys(phys, self.prefix)
-            for i, obj in enumerate(self.encoder.loads_many(self._decompress(data))):
-                if keys[-(1 + i)] == key:
-                    return Record(self, obj, key, len(keys)>1) if rec else obj
+            obj = self.encoder.loads(self._decompress(data))
+            if keys[-1] == key:
+                return Record(self, obj, key, len(keys)>1) if rec else obj
         if default is not None:
             return Record(self, default) if rec else default
 
@@ -540,6 +547,7 @@ class Collection:
         assert len(keys) > 1 and rec.key in keys, \
             'Physical key missing: %r' % (rec.key,)
 
+        assert 0
         objs = self.encoder.loads_many(self._decompress(data))
         for i, obj in enumerate(objs):
             if keys[-(1 + i)] != rec.key:
@@ -595,7 +603,7 @@ class Collection:
 
         put = (txn or self.db).put
         put(encode_keys((obj_key,), self.prefix),
-            ' ' + self.encoder.dumps_many([rec.data]))
+            ' ' + self.encoder.dumps(rec.data))
         for index_key in index_keys:
             put(index_key, '')
         rec.key = obj_key
@@ -655,9 +663,9 @@ class Store:
         self.db = db
         self.prefix = prefix
         self._info_coll = Collection(self, '\x00collections', _idx=0,
-            encoder=KeyEncoder(), key_func=lambda tup: tup[0])
+            encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
         self._counter_coll = Collection(self, '\x00counters', _idx=1,
-            encoder=KeyEncoder(), key_func=lambda tup: tup[0])
+            encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
 
     def _get_info(self, name, idx=None, index_for=None):
         tup = self._info_coll.get(name)

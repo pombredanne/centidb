@@ -20,4 +20,4 @@ people.put({
     'age': 29
 })
 
-print list(people.indices['age'].iter(29))
+print list(people.indices['age'].iteritems(29))
