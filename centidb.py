@@ -357,14 +357,14 @@ class Collection:
             argument, the record's value, while `txn_key_func` also receives
             the active transaction, to allow transactionally assigning
             identifiers. If neither is given, keys are assigned using a
-            transactional counter (like auto-increment columns in SQL). See
+            transactional counter (like auto-increment in SQL). See
             `counter_name` and `counter_prefix`.
 
         `derived_keys`:
             If True, indicates the key function derives the key purely from the
             record value, and should be invoked for each change. If the key
-            changes, the previous key and index entries are automatically
-            removed.
+            changes the previous key and index entries are automatically
+            deleted.
 
             ::
 
@@ -378,19 +378,22 @@ class Collection:
             as `get(rec=True)` and `put(<Record instance>)` are used.
 
         `encoder`:
-            Specifies the value encoder to use; see KeyEncoder class for the
-            interface specification. If unspecified, defaults to PickleEncoder,
-            which assumes record values are any pickleable Python object.
+            Specifies the value encoder instance to use; see the `KeyEncoder`
+            class for an interface specification. If unspecified, defaults to
+            `PickleEncoder`, which assumes record values are any pickleable
+            Python object.
 
         `counter_name`:
-            Specifies the name of the Store counter to use when generating
+            Specifies the name of the `Store` counter to use when generating
             auto-incremented keys. If unspecified, defaults to
-            ``"key_counter:<name>"``.
+            ``"key_counter:<name>"``. Unused when `key_func` or `txn_key_func`
+            are specified.
 
         `counter_prefix`:
             Optional tuple to prefix auto-incremented keys with. If
             unspecified, auto-incremented keys are a 1-tuple containing the
-            counter value.
+            counter value. Unused when `key_func` or `txn_key_func` are
+            specified.
     """
     def __init__(self, store, name, key_func=None, txn_key_func=None,
             derived_keys=False, encoder=None, _idx=None,
@@ -423,10 +426,14 @@ class Collection:
         self.indices = {}
 
     def add_index(self, name, func):
-        """Associate an index with the collection. If the index does not exist
-        in the store, it will be created. Return the Index instance describing
-        the index. `add_index()` may only be called once for each name for each
-        collection.
+        """Associate an index with the collection. The index metadata will be
+        created in the associated `Store` it it does not exist. Returns the
+        `Index` instance describing the index. `add_index()` may only be
+        invoked once for each unique `name` for each collection.
+
+        *Note:* only index metadata is persistent. You must invoke
+        `add_index()` with the same arguments every time you create a
+        `Collection` instance.
 
         `name`:
             ASCII name for the index.
@@ -597,7 +604,7 @@ class Collection:
 
     def delete(self, obj, txn=None):
         """Delete a record by key or using a `Record` instance. The deleted
-        record is returned.
+        record is returned if it existed.
 
         `obj`:
             Record to delete; may be a `Record` instance, or a tuple, or a
@@ -607,8 +614,6 @@ class Collection:
             rec = obj
         elif isinstance(obj, tuple):
             rec = self.get(obj, rec=True)
-
-        rec = Record(self, obj)
         if rec:
             rec_key = rec.key or self._reassign_key(rec, txn)
             if rec.batch:
@@ -624,7 +629,8 @@ class Collection:
             return rec
 
     def delete_value(self, val, txn=None):
-        """Delete a record value without knowing its key.
+        """Delete a record value without knowing its key. The deleted record is
+        returned, if it existed.
 
         `Note`: it is impossible (and does not make sense) to delete by value
         when ``derived_keys=False``, since the key function will generate an
@@ -642,7 +648,7 @@ class Collection:
         """
         assert self.derived_keys, \
             "Attempt to delete() by value when using non-derived keys."
-        self.delete(self.key_func(val), txn)
+        return self.delete(self.key_func(val), txn)
 
 class Store:
     def __init__(self, db, prefix=''):
