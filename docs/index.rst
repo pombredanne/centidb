@@ -14,29 +14,50 @@ an ordered-map interface, adding features that often tempt developers to use
 more complex systems.
 
 Functionality is provided for forming ordered composite keys, managing and
-querying secondary indices, and a binary encoding that lexicographically
-preserves the ordering of tuples of primitive values. Combining the simplicity
-of a key/value store with the convenience of a DBMS's indexing system, while
-absent of any storage-specific protocol/language/encoding/data model, or the
-impedence mismatch that necessitates use of ORMs, it provides for a compelling
+querying secondary indices, and a binary encoding that preserves the ordering
+of tuples of primitive values. Combining the simplicity of a key/value store
+with the convenience of a DBMS's indexing system, while absent of any
+storage-specific protocol/language/encoding/data model, or the impedence
+mismatch that necessitates use of ORMs, it provides for a compelling
 programming experience.
 
 Few design constraints are made: there is no enforced value type or encoding,
-key scheme, compression scheme, or storage engine, allowing integration with
-whatever is suited to or already used in a project. In addition to the tuple
-encoding, integration with the ``pickle`` module is provided, however new
-encodings are easily added.
+key scheme, compressor, or storage engine, allowing integration with whatever
+best suits or is already used by a project.
 
-Batch value compression is supported, trading read performance for
-significantly improved compression ratios, while still permitting easy access
-to data. Arbitrary key ranges can be selected for compression and the batch
-size is controllable.
+Batch value compression is supported, trading read performance for improved
+compression ratios, while still permitting easy access to data. Arbitrary key
+ranges can be selected for compression and the batch size is configurable.
 
 Since it is a Python library, key and index functions are written directly in
 Python rather than some unrelated language.
 
-Why `centi`-db? Because it's >100x smaller than alternatives with comparable
-features (<400 LOC excluding speedups vs. ~152 kLOC for Mongo).
+Why `centi`-db? Because it is over 100 times smaller than alternatives with
+comparable features (<400 LOC excluding speedups vs. ~152 kLOC for Mongo).
+
+
+Basics
+######
+
+Store object
+++++++++++++
+
+The user's configured storage engine is first wrapped in a `Store` instance:
+
+::
+
+    # Use a LevelDB database for storage.
+    db = plyvel.DB('test.ldb', create_if_missing=True)
+    store = centidb.Store(PlyvelEngine(db))
+
+The store manages metadata for a set of `Collection` and `Index` objects, along
+with any compressors and counters.
+
+
+
+treated as an independent set of
+`Collections` which access 
+The database engine is wrapped by a `Store` object, 
 
 
 Common Parameters
@@ -63,22 +84,15 @@ optional parameters:
 
 
 
-Key Functions
-#############
+Keys & Indices
+##############
 
+When instantiating a Collection you may provide a key function, which is
+responsible for producing the unique (primary) key for the record. The key
+function can accept either one or two parameters. In the first form, only the
+record' value is passed, while in the second form .
 
-Key Function
-++++++++++++
-
-When instantiating a Collection you may provide a `key_func`, which is
-responsible for producing a key for the record. The key function is passed
-three parameters:
-
-    `existing_key`:
-        A never-saved record is indicated by `existing_key` being set to
-        ``None``, otherwise it is set to the existing key for the record.
-        Impure keys can be implemented by returning `existing_key` if it is not
-        ``None``, otherwise generating a new key.
+is passed three parameters:
 
     `obj`:
         Which is record value itself. Note this is not the Record instance, but
@@ -93,27 +107,25 @@ primitive values. Note that any non-tuple values returned are automatically
 transformed into 1-tuples, and `you should expect this anywhere your code
 refers to the record's key`.
 
-For example, to assign a key based on the current time:
+For example, to assign a key based on the time in microseconds:
 
 ::
 
-    def time_key(obj, txn):
-        """Generate an integer key based on system time."""
-        return existing or int(time.time() * 1e6)
+    def usec_key(val):
+        return int(1e6 * time.time())
 
 Or by UUID:
 
 ::
 
-    def uuid_key(existing, obj, txn):
-        """Generate a UUID4."""
-        return existing or uuid.uuid4()
+    def uuid_key(val):
+        return uuid.uuid4()
 
 
-Auto-incrementing Keys
-----------------------
+Auto-increment
+++++++++++++++
 
-When no explicit key function is given, collections default to generating
+When no explicit key function is given, `Collection` defaults to generating
 transactionally assigned auto-incrementing integers using `Store.count()`.
 Since this doubles the database operations required, auto-incrementing keys
 should be used sparingly. Example:
@@ -135,22 +147,30 @@ should be used sparingly. Example:
 integer was wrapped in a 1-tuple.
 
 
-Record Class
-############
 
-.. autoclass:: centidb.Record
+Reference
+#########
+
+Store Class
++++++++++++
+
+.. autoclass:: centidb.Store
     :members:
 
-
 Collection Class
-################
+++++++++++++++++
 
 .. autoclass:: centidb.Collection
     :members:
 
+Record Class
+++++++++++++
+
+.. autoclass:: centidb.Record
+    :members:
 
 Index Class
-###########
++++++++++++
 
 .. autoclass:: centidb.Index
     :members:
@@ -162,28 +182,32 @@ Encodings
 .. autoclass:: centidb.Encoder
 
 
-``KEY_ENCODER``
-+++++++++++++++
+Predefined Encoders
++++++++++++++++++++
 
-    This is a predefined `Encoder` instance that uses `encode_keys()` and
-    `decode_keys()` to serialize tuples. It is used internally to represent
-    keys, counters, and store metadata.
+The ``centidb`` module contains the following predefined `Encoder` instances.
 
+    ``KEY_ENCODER``
+        Uses `encode_keys()` and `decode_keys()` to serialize tuples. It is
+        used internally to represent keys, counters, and `Store` metadata.
 
-``PICKLE_ENCODER``
-++++++++++++++++++
+    ``PICKLE_ENCODER``
+        Uses `cPickle.dumps()` and `cPickle.loads()` with protocol 2 to
+        serialize any pickleable object. It is the default encoder if no
+        specific `encoder=` argument is given to the `Collection` constructor.
 
-    This is a predefined `Encoder` instance that uses `cPickle.dumps()` and
-    `cPickle.loads()` to serialize tuples, using pickle protocol version 2. It
-    is the default encoder if no specific `Encoder` instance is given to the
-    `Collection` constructor.
+    ``ZLIB_PACKER``
+        Uses `zlib.compress()` and `zlib.decompress()` to provide value
+        compression. It may be passed as the `packer=` argument to
+        `Collection.put()`, or specified as the default using the `packer=`
+        argument to the `Collection` constructor.
 
 
 Thrift Integration
 ++++++++++++++++++
 
-This uses `Apache Thrift <http://thrift.apache.org/>`_ to serialize values
-(which must be be Thrift structs) to a compact binary representation.
+This uses `Apache Thrift <http://thrift.apache.org/>`_ to serialize Thrift
+struct values to a compact binary representation.
 
 Create an `Encoder` factory:
 
@@ -236,15 +260,70 @@ Now define a collection:
     assert coll.indices['username'].get('David') == user
 
 
-Encoding functions
-++++++++++++++++++
+Key functions
++++++++++++++
 
 .. autofunction:: centidb.encode_keys
 .. autofunction:: centidb.decode_keys
 
 
-Example
-#######
+Varint functions
+++++++++++++++++
+
+.. autofunction:: centidb.encode_int
+.. autofunction:: centidb.decode_int
+
+
+Examples
+########
+
+Index Usage
++++++++++++
+
+::
+
+    import itertools
+    import centidb
+    from pprint import pprint
+
+    import plyvel
+    store = centidb.Store(plyvel.DB('test.ldb', create_if_missing=True))
+    people = centidb.Collection(store, 'people', key_func=lambda p: p['name'])
+    people.add_index('age', lambda p: p['age'])
+    people.add_index('name', lambda p: p['age'])
+    people.add_index('city_age', lambda p: (p.get('city'), p['age']))
+
+    make_person = lambda name, city, age: dict(locals())
+
+    people.put(make_person('Alfred', 'Nairobi', 46))
+    people.put(make_person('Jemima', 'Madrid', 64))
+    people.put(make_person('Mildred', 'Paris', 34))
+    people.put(make_person('Winnifred', 'Paris', 24))
+
+    # Youngest to oldest:
+    pprint(list(people.indices['age'].iteritems()))
+
+    # Oldest to youngest:
+    pprint(list(people.indices['age'].itervalues(reverse=True)))
+
+    # Youngest to oldest, by city:
+    it = people.indices['city_age'].itervalues()
+    for city, items in itertools.groupby(it, lambda p: p['city']):
+        print '  ', city
+        for person in items:
+            print '    ', person
+
+    # Fetch youngest person:
+    print people.indices['age'].get()
+
+    # Fetch oldest person:
+    print people.indices['age'].get(reverse=True)
+
+
+Reverse Indices
++++++++++++++++
+
+The module does not yet have built-in support for 
 
 
 Performance
@@ -254,4 +333,85 @@ Performance
 Notes
 #####
 
+Floats
+++++++
+
+Float keys are unsupported, partially because I have not needed them, and their
+use can roughly be emulated with ``int(f * 1e9)`` or similar. But mainly it is
+to defer a choice: should floats order alongside integers? If not, then our
+keys don't behave like SQL or Python, causing user surprise. If yes, then
+should integers be treated as floats? If yes, then keys will always decode to
+float, causing surprise. If no, then a new encoding is needed, wasting ~2 bytes
+(terminator, discriminator).
+
+Another option is always treating numbers as float, but converting to int
+during decode if they can be represented exactly. This may be less surprising,
+since an int will coerce to float during arithmetic, but may cause
+once-per-decade bugs: depending on a database key, the expression ``123 /
+db_val`` might perform integer or float division.
+
+A final option is adding a `number_factory=` parameter to `decode_keys()`,
+which still requires picking a good default.
+
+
+Metadata Encoding
++++++++++++++++++
+
+Metadata is encoded using the key encoder to allow easy access from another
+language. JSON might also have been used, but since an implement absolutely
+must implement the key encoding anyway, this seemed a better choice.
+
+Encodings
++++++++++
+
+The key and sortable varint encodings are based directly on SQLite 4's
+algorithms `as documented here
+<http://sqlite.org/src4/doc/trunk/www/index.wiki>`_.
+
+History
++++++++
+
+The first attempt came during 2011 while porting from App Engine and a
+Datastore-alike was needed. All alternatives included so much weirdness (Java?
+JavaScript in the DB? BSON? Auto-magico-sharding?
+``PageFaultRetryableSection``?!?) that I eventually canned the project,
+rendered incapable of picking something as *simple as a database* that was
+*good enough*, overwhelmed by false promises, fake distinctions and overstated
+greatness in the endless PR veiled by marketing site designs, and driven by
+people for whom the embodiment of *elegance* is the choice of font on a
+Powerpoint slide.
+
+Storing data isn't hard: it has effectively been solved **since at least 1972**
+when the B-tree appeared, also known as the core of SQLite 3, the core of
+MongoDB, and just about 90% of all DBMS wheel reinventions existing in th 40
+years since. Yet today when faced with a B-tree adulterated with JavaScript and
+a million more dumb concepts, upon rejecting it as **junk** we are instantly
+drowned in the torrential cries of a million: *"you just don't get it!"*. I
+fear I do get it, all too well, and I hate it.
+
+So this module is borne out of frustration. On a recent project while
+experimenting with compression, I again found myself partially implementing
+what this module wants to be: a tiny layer that does little but add indices to
+a piece of Cold War era technology. No "inventions", no lies, no claims to
+beauty, no religious debates about scaleability, just 300ish lines that try to
+do one thing right.
+
+And so that remains the primary design goal: **size**. The library should be
+*small* and *convenient*. Few baked in assumptions, no overcooked
+superstructure of pure whack that won't matter anyway in a year, just indexing
+and some helpers to make queries work nicely. If you've read this far, then you
+hopefully understand why my receptiveness towards extending this library to be
+made "awesome" in some way is all but missing. Patch it at your peril, but
+please, bug fixes and obvious omissions only.
+
+Futures
++++++++
+
+1. Support inverted index keys nicely.
+2. Avoid key decoding when only used for comparison.
+3. Unique index constraint
+4. Better documented
+5. Safer
+6. Faster
+7. C++ library
 

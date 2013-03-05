@@ -43,7 +43,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'centidb'
-copyright = u'2012, David Wilson'
+copyright = u'2013, David Wilson'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

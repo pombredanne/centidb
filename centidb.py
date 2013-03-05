@@ -1,3 +1,19 @@
+#!/usr/bin/env python
+#
+# Copyright 2013, David Wilson.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#    http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 import cPickle as pickle
 import cStringIO
@@ -8,6 +24,7 @@ import operator
 import re
 import struct
 import time
+import uuid
 import warnings
 import zlib
 
@@ -21,13 +38,40 @@ KIND_INTEGER = chr(21)
 KIND_BOOL = chr(30)
 KIND_BLOB = chr(40)
 KIND_TEXT = chr(50)
-KIND_KEY = chr(100)
-KIND_SEP = chr(101)
+KIND_UUID = chr(90)
+KIND_KEY = chr(95)
+KIND_SEP = chr(102)
 
 class Key(str):
     pass
 
 def encode_int(v):
+    """Given some positive integer of 64-bits or less, return a variable length
+    bytestring representation that preserves the integer's order. The
+    bytestring size is such that:
+
+        +-------------+------------------------+
+        + *Size*      | *Largest integer*      |
+        +-------------+------------------------+
+        + 1 byte      | <= 240                 |
+        +-------------+------------------------+
+        + 2 bytes     | <= 2287                |
+        +-------------+------------------------+
+        + 3 bytes     | <= 67823               |
+        +-------------+------------------------+
+        + 4 bytes     | <= 16777215            |
+        +-------------+------------------------+
+        + 5 bytes     | <= 4294967295          |
+        +-------------+------------------------+
+        + 6 bytes     | <= 1099511627775       |
+        +-------------+------------------------+
+        + 7 bytes     | <= 281474976710655     |
+        +-------------+------------------------+
+        + 8 bytes     | <= 72057594037927935   |
+        +-------------+------------------------+
+        + 9 bytes     | <= (2**64)-1           |
+        +-------------+------------------------+
+    """
     if v < 240:
         return chr(v)
     elif v <= 2287:
@@ -53,6 +97,19 @@ def encode_int(v):
         return '\xff' + struct.pack('>Q', v)
 
 def decode_int(getc, read):
+    """Decode and return an integer encoded by `encode_int()`.
+
+    `get`:
+        Function that returns the next byte of input.
+    `read`:
+        Function accepting a byte count and returning that many bytes of input.
+
+    ::
+
+        io = cStringIO.StringIO(encoded_int)
+        i = decode_int(lambda: io.read(1), io.read)
+        # io.tell() is now positioned one byte past end of integer.
+    """
     c = getc()
     o = ord(c)
     if o <= 240:
@@ -119,9 +176,9 @@ def encode_keys(tups, prefix='', closed=True):
                 assert not aa.startswith(a_closed)
                 assert aa.startswith(a_open)
 
-    A string is returned such that elements of different types at the same
-    position within two distinct sequences with otherwise identical prefixes
-    will sort in the following order.
+    A bytestring is returned such that elements of different types at the same
+    position within distinct sequences with otherwise identical prefixes will
+    sort in the following order.
 
         1. ``None``
         2. Negative integers
@@ -130,8 +187,9 @@ def encode_keys(tups, prefix='', closed=True):
         5. ``True``
         6. Bytestrings (i.e. ``str()``).
         7. Unicode strings.
-        8. Encoded keys (i.e. ``Key()``).
-        9. Sequences with another tuple following the last identical element.
+        8. ``uuid.UUID`` instances.
+        9. Encoded keys (i.e. ``Key()``).
+        10. Sequences with another tuple following the last identical element.
     """
     io = cStringIO.StringIO()
     w = io.write
@@ -158,6 +216,9 @@ def encode_keys(tups, prefix='', closed=True):
             elif isinstance(arg, Key):
                 w(KIND_KEY)
                 w(encode_str(arg))
+            elif isinstance(arg, uuid.UUID):
+                w(KIND_UUID)
+                w(encode_str(arg.get_bytes()))
             elif isinstance(arg, str):
                 w(KIND_BLOB)
                 w(encode_str(arg))
@@ -207,6 +268,8 @@ def decode_keys(s, prefix=None, first=False):
             arg = decode_str(getc).decode('utf-8')
         elif c == KIND_KEY:
             arg = Key(decode_str(getc))
+        elif c == KIND_UUID:
+            arg = uuid.UUID(decode_str(getc))
         elif c == KIND_SEP:
             if tup:
                 tups.append(tuple(tup))
@@ -227,24 +290,24 @@ class Encoder:
         `name`:
             ASCII string uniquely identifying the encoding. A future version
             may use this to verify the encoding matches what was used to create
-            `Collection`.
+            `Collection`. For encodings used as compressors, this name is
+            persisted forever in the `Store`'s metadata following its first
+            use.
 
-        `loads`:
-            Function to deserialize an encoded value. The function is called
-            with **a buffer object containing the encoded bytestring** as its
-            sole argument, and should return the decoded value. If your encoder
-            does not support `buffer()` objects (many C extensions do), then
-            pass the value through `str()`.
+        `unpack`:
+            Function to deserialize an encoded value. The function may be
+            called with **a buffer object containing the encoded bytestring**
+            as its argument, and should return the decoded value. If your
+            encoder does not support `buffer()` objects (although many C
+            extensions do), then first convert the buffer using `str()`.
 
-        `dumps`:
+        `pack`:
             Function to serialize a value. The function is called with the
             value as its sole argument, and should return the encoded
             bytestring.
     """
-    def __init__(self, name, loads, dumps):
-        self.loads = loads
-        self.dumps = dumps
-        self.name = name
+    def __init__(self, name, unpack, pack):
+        vars(self).update(locals())
 
 #: Encode Python tuples using encode_keys()/decode_keys().
 KEY_ENCODER = Encoder('key', lambda s: decode_keys(s, first=True),
@@ -253,6 +316,9 @@ KEY_ENCODER = Encoder('key', lambda s: decode_keys(s, first=True),
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,
                          functools.partial(pickle.dumps, protocol=2))
+
+#: Compress bytestrings using zlib.compress()/zlib.decompress().
+ZLIB_ENCODER = Encoder('zlib', zlib.compress, zlib.decompress)
 
 class Index:
     """Provides query and manipulation access to a single index on a
@@ -342,7 +408,6 @@ class Index:
             return Record(self.coll, default)
         return default
 
-
 class Record:
     """Wraps a record value with its last saved key, if any.
 
@@ -363,7 +428,8 @@ class Record:
     """
     def __init__(self, coll, data, _key=None, _batch=False,
             _txn_id=None, _index_keys=None):
-        #: Collection this record belongs to.
+        #: `Collection` this record belongs to. This is always reset after a
+        #: successful `put()`.
         self.coll = coll
         #: The actual record value.
         self.data = data
@@ -390,7 +456,7 @@ class Collection:
     ensures associated indices update consistently when changes are made.
 
         `store`:
-            Store the collection belongs to. If metadata for the collection
+            `Store` the collection belongs to. If metadata for the collection
             does not already exist, it will be populated during construction.
 
         `name`:
@@ -406,8 +472,8 @@ class Collection:
             `counter_name` and `counter_prefix`.
 
         `derived_keys`:
-            If ``True``, indicates the key function derives the key purely from
-            the record value, and should be invoked for each change. If the key
+            If ``True``, indicates the key function derives the key from the
+            record's value, and should be invoked for each change. If the key
             changes the previous key and index entries are automatically
             deleted.
 
@@ -423,10 +489,14 @@ class Collection:
             as `get(rec=True)` and `put(<Record instance>)` are used.
 
         `encoder`:
-            Specifies the value encoder instance to use; see the `KeyEncoder`
-            class for an interface specification. If unspecified, defaults to
-            `PICKLE_ENCODER`, which assumes record values are any pickleable
-            Python object.
+            `Encoding` used to serialize record values to bytestrings; defaults
+            to `PICKLE_ENCODER`.
+
+        `packer`:
+            `Encoding` used to compress a group of serialized records as a
+            unit. Used only if `packer=` isn't specified during `put()` or
+            `batch()`; invocations with no `packer=` will be uncompressed if a
+            default isn't given here.
 
         `counter_name`:
             Specifies the name of the `Store` counter to use when generating
@@ -441,7 +511,7 @@ class Collection:
             specified.
     """
     def __init__(self, store, name, key_func=None, txn_key_func=None,
-            derived_keys=False, encoder=None, _idx=None,
+            derived_keys=False, encoder=None, packer=None, _idx=None,
             counter_name=None, counter_prefix=None):
         """Create an instance; see class docstring."""
         self.store = store
@@ -452,7 +522,7 @@ class Collection:
             self.info = store._get_info(name, idx=_idx)
         self.prefix = store.prefix + encode_int(self.info.idx)
         if not (key_func or txn_key_func):
-            counter_name = counter_name or ('key_counter:%s' % info.name)
+            counter_name = counter_name or ('key_counter:%s' % self.info.name)
             counter_prefix = counter_prefix or ()
             txn_key_func = lambda txn, _: \
                 (counter_prefix + (store.count(counter_name, txn=txn),))
@@ -461,6 +531,7 @@ class Collection:
         self.txn_key_func = txn_key_func
         self.derived_keys = derived_keys
         self.encoder = encoder or PICKLE_ENCODER
+        self.packer = packer
         #: Dict mapping indices added using ``add_index()`` to `Index`
         #: instances representing them.
         #:
@@ -493,7 +564,6 @@ class Collection:
 
             ::
 
-                # Use default auto-increment key and PICKLE_ENCODER.
                 coll = Collection(store, 'people')
                 coll.add_index('name', lambda person: person['name'])
 
@@ -538,7 +608,7 @@ class Collection:
                 idx_keys.append(encode_keys((idx_key, key), idx.prefix))
         return idx_keys
 
-    def iteritems(self, key, rec=False):
+    def iteritems(self, key=(), rec=False):
         """Yield all `(key, value)` tuples in the collection, in key order. If
         `rec` is ``True``, `Record` instances are yielded instead of record
         values."""
@@ -548,10 +618,10 @@ class Collection:
             if not phys.startswith(self.prefix):
                 break
             keys = decode_keys(phys, self.prefix)
-            obj = self.encoder.loads(self._decompress(data))
+            obj = self.encoder.unpack(self._decompress(data))
             if rec:
                 obj = Record(self, obj, keys[-1], len(keys) > 1)
-            yield keys[-(1 + i)], obj
+            yield keys[-(1)], obj
 
     def itervalues(self, key, rec=False):
         """Yield all values in the collection, in key order. If `rec` is
@@ -570,7 +640,7 @@ class Collection:
 
         if phys and phys.startswith(self.prefix):
             keys = decode_keys(phys, self.prefix)
-            obj = self.encoder.loads(self._decompress(data))
+            obj = self.encoder.unpack(self._decompress(data))
             if keys[-1] == key:
                 return Record(self, obj, key, len(keys)>1) if rec else obj
         if default is not None:
@@ -598,10 +668,10 @@ class Collection:
         if rec.key and not self.derived_keys:
             return rec.key
         elif self.txn_key_func:
-            return tuplize(self.txn_key_func(rec.data, txn))
+            return tuplize(self.txn_key_func(txn, rec.data))
         return tuplize(self.key_func(rec.data))
 
-    def put(self, rec, txn=None, key=None):
+    def put(self, rec, txn=None, packer=None, key=None):
         """Create or overwrite a record.
 
             `rec`:
@@ -615,6 +685,11 @@ class Collection:
                 Transaction to use, or ``None`` to indicate the default
                 behaviour of the associated `Store`.
 
+            `packer`:
+                Encoding to use to compress the value. Defaults to
+                `Collection.packer`, or uncompressed if `Collection.packer` is
+                ``None``.
+
             `key`:
                 If specified, overrides the use of collection's key function
                 and forces a specific key. Use with caution.
@@ -624,7 +699,7 @@ class Collection:
         obj_key = key or self._reassign_key(rec, txn)
         index_keys = self._index_keys(obj_key, rec.data)
 
-        if rec.key:
+        if rec.coll == self and rec.key:
             delete = (txn or self.db).delete
             if rec.batch:
                 # Old key was part of a batch, explode the batch.
@@ -636,14 +711,16 @@ class Collection:
                 for index_key in rec.index_keys or ():
                     delete(index_key)
         else:
+            # TODO: delete() may be unnecessary when no indices are defined
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
         put = (txn or self.db).put
         put(encode_keys((obj_key,), self.prefix),
-            ' ' + self.encoder.dumps(rec.data))
+            ' ' + self.encoder.pack(rec.data))
         for index_key in index_keys:
             put(index_key, '')
+        rec.coll = self
         rec.key = obj_key
         rec.index_keys = index_keys
         return rec
@@ -692,11 +769,18 @@ class Collection:
             # key_func will generate the correct key:
             call.delete_value(val)
         """
-        assert self.derived_keys, \
-            "Attempt to delete() by value when using non-derived keys."
+        assert self.derived_keys
         return self.delete(self.key_func(val), txn)
 
 class Store:
+    """Represents access to the underlying storage engine, and manages
+    counters.
+
+        `prefix`:
+            Prefix for all keys used by any associated object (record, index,
+            counter, metadata). This allows the storage engine's key space to
+            be shared amongst several users.
+    """
     def __init__(self, db, prefix=''):
         self.db = db
         self.prefix = prefix
@@ -715,8 +799,25 @@ class Store:
             info = CollInfo(name, idx, index_for)
         return self._info_coll.put(info).data
 
-    def count(self, name, n=1, init=1):
-        rec = self._counter_coll.get(name, default=(name, init), rec=True)
+    def count(self, name, n=1, init=1, txn=None):
+        """Increment a counter and return its previous value. The counter is
+        created if it doesn't exist.
+
+            `name`:
+                Name of the counter.
+
+            `n`:
+                Number to add to the counter.
+
+            `init`:
+                Initial value to give counter if it doesn't exist.
+
+            `txn`:
+                Transaction to use, or ``None`` to indicate the default
+                behaviour of the storage engine.
+        """
+        default = (name, init)
+        rec = self._counter_coll.get(name, default, rec=True, txn=txn)
         val = rec.data[1]
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
