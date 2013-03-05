@@ -263,12 +263,19 @@ Now define a collection:
 Key functions
 +++++++++++++
 
+The key encoding is based on SQLite 4's algorithm `as documented here
+<http://sqlite.org/src4/doc/trunk/www/key_encoding.wiki>`_, adding support
+for UUIDs and `Key` objects, but removing support for floats.
+
 .. autofunction:: centidb.encode_keys
 .. autofunction:: centidb.decode_keys
 
 
 Varint functions
 ++++++++++++++++
+
+The sortable varint encoding is based on SQLite 4's algorithm `as documented
+here <http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
 
 .. autofunction:: centidb.encode_int
 .. autofunction:: centidb.decode_int
@@ -380,15 +387,8 @@ Metadata Encoding
 +++++++++++++++++
 
 Metadata is encoded using the key encoder to allow easy access from another
-language. JSON might also have been used, but since an implement absolutely
-must implement the key encoding anyway, this seemed a better choice.
-
-Encodings
-+++++++++
-
-The key and sortable varint encodings are based directly on SQLite 4's
-algorithms `as documented here
-<http://sqlite.org/src4/doc/trunk/www/index.wiki>`_.
+language. JSON might also have been used, but since an implementation
+absolutely must support the key encoding, this seemed a better choice.
 
 History
 +++++++
