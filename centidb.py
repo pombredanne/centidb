@@ -165,6 +165,16 @@ def decode_str(getc):
         else:
             io.write(c)
 
+def _eat(pred, it):
+    if not eat:
+        return it
+    total = 0
+    true = 0
+    for elem in it:
+        total += 1
+        true += elem is not None
+    return total, true
+
 def tuplize(o):
     return o if isinstance(o, tuple) else (o,)
 
@@ -409,6 +419,11 @@ class Index:
         return itertools.imap(operator.itemgetter(1),
             self.iteritems(args, reverse, txn, rec, max, closed))
 
+    def gets(self, args, reverse=None, txn=None, rec=None, closed=True,
+            default=None):
+        """Yield `get(x)` for each `x` in the iterable `args`."""
+        return (self.get(x, reverse, txn, rec, closed, default) for x in args)
+
     def get(self, args=None, reverse=None, txn=None, rec=None, closed=True,
             default=None):
         """Return the first matching values referred to by the index, in tuple
@@ -640,6 +655,10 @@ class Collection:
         ``True``, `Record` instances are yielded instead of record values."""
         return itertools.imap(operator.itemgetter(1), self.iteritems(key, rec))
 
+    def gets(self, keys, default=None, rec=False, txn=None):
+        """Yield `get(k)` for each `k` in the iterable `keys`."""
+        return (self.get(x, default, rec, txn) for k in keys)
+
     def get(self, key, default=None, rec=False, txn=None):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
@@ -682,6 +701,19 @@ class Collection:
         elif self.txn_key_func:
             return tuplize(self.txn_key_func(txn, rec.data))
         return tuplize(self.key_func(rec.data))
+
+    def puts(self, recs, txn=None, packer=None, eat=True):
+        """Invoke `put()` for each element in the iterable `recs`. If `eat` is
+        ``True``, returns the number of items processed, otherwise returns an
+        iterator that lazily calls `put()` and yields its return value."""
+        return _eat(eat, (self.put(rec, txn, packer) for rec in recs))
+
+    def putitems(self, items, txn=None, packer=None, eat=True):
+        """Invoke `put(y, key=x)` for each (x, y) in the iterable `recs`. If
+        `eat` is ``True``, returns the number of items processed, otherwise
+        returns an iterator that lazily calls `put()` and yields its return
+        value."""
+        return _eat(eat, (self.put(x, txn, packer, key=y) for x, y in items))
 
     def put(self, rec, txn=None, packer=None, key=None):
         """Create or overwrite a record.
@@ -737,6 +769,25 @@ class Collection:
         rec.index_keys = index_keys
         return rec
 
+    def deletes(self, objs, txn=None, eat=True):
+        """Invoke `delete()` for each element in the iterable `objs`. If `eat`
+        is ``True``, returns a tuple containing the number of keys processed,
+        and the number of items deleted, otherwise returns an iterator that
+        lazily calls `deletes()` and yields its return value.
+
+        ::
+
+            keys = request.form['names'].split(',')
+            for rec in coll.deletes(key):
+                if rec:
+                    print '%(name)s was deleted.' % (rec.data,)
+
+            # Summary version.
+            keys, deleted = coll.deletes(request.form['names'].split(','))
+            print 'Deleted %d names of %d provided.' % (deleted, keys)
+        """
+        return _eat(eat, (self.delete(obj) for obj in objs))
+
     def delete(self, obj, txn=None):
         """Delete a record by key or using a `Record` instance. The deleted
         record is returned if it existed.
@@ -762,6 +813,14 @@ class Collection:
             rec.batch = False
             rec.index_keys = None
             return rec
+
+    def delete_values(self, vals, txn=None, eat=True):
+        """Invoke `delete_value()` for each element in the iterable `vals`. If
+        `eat` is ``True``, returns a tuple containing the number of keys
+        processed, and the number of items deleted, otherwise returns an
+        iterator that lazily calls `delete_value()` and yields its return
+        value."""
+        return _eat(eat, (self.delete_value(v) for v in vals))
 
     def delete_value(self, val, txn=None):
         """Delete a record value without knowing its key. The deleted record is
