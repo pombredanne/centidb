@@ -23,7 +23,6 @@ from __future__ import absolute_import
 
 import cPickle as pickle
 import cStringIO
-import collections
 import functools
 import itertools
 import operator
@@ -39,8 +38,6 @@ import plyvel
 __all__ = '''invert Store Collection Record Index decode_keys encode_keys
     decode_int encode_int Encoder KEY_ENCODER PICKLE_ENCODER
     ZLIB_ENCODER'''.split()
-
-CollInfo = collections.namedtuple('CollInfo', 'name idx index_for')
 
 KIND_NULL = chr(15)
 KIND_NEG_INTEGER = chr(20)
@@ -369,7 +366,7 @@ class Index(object):
         self.db = self.store.db
         self.info = info
         self.func = func
-        self.prefix = self.store.prefix + encode_int(info.idx)
+        self.prefix = self.store.prefix + encode_int(info['idx'])
         self._decode = functools.partial(decode_keys, prefix=self.prefix)
 
     def iterpairs(self, args=None, reverse=None, txn=None, max=None,
@@ -475,8 +472,8 @@ class Record(object):
         self.index_keys = _index_keys
 
     def __repr__(self):
-        tups = ','.join(map(repr, self.key or ()))
-        return '<Record %s:(%s) %r>' % (self.coll.info.name, tups, self.data)
+        s = ','.join(map(repr, self.key or ()))
+        return '<Record %s:(%s) %r>' % (self.coll.info['name'], s, self.data)
 
 class Collection(object):
     """Provides access to a record collection contained within a `Store`, and
@@ -543,13 +540,13 @@ class Collection(object):
         """Create an instance; see class docstring."""
         self.store = store
         self.db = store.db
-        if _idx is not None:
-            self.info = CollInfo(name, _idx, None)
+        if _idx:
+            self.info = {'name': name, 'idx': _idx, 'index_for': None}
         else:
             self.info = store._get_info(name, idx=_idx)
-        self.prefix = store.prefix + encode_int(self.info.idx)
+        self.prefix = store.prefix + encode_int(self.info['idx'])
         if not (key_func or txn_key_func):
-            counter_name = counter_name or ('key_counter:%s' % self.info.name)
+            counter_name = counter_name or ('key_counter:%(name)s' % self.info)
             counter_prefix = counter_prefix or ()
             txn_key_func = lambda txn, _: \
                 (counter_prefix + (store.count(counter_name, txn=txn),))
@@ -608,8 +605,8 @@ class Collection(object):
                 ]
         """
         assert name not in self.indices
-        info_name = 'index:%s:%s' % (self.info.name, name)
-        info = self.store._get_info(info_name, index_for=self.info.name)
+        info_name = 'index:%s:%s' % (self.info['name'], name)
+        info = self.store._get_info(info_name, index_for=self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
         return index
@@ -772,7 +769,7 @@ class Collection(object):
     def deletes(self, objs, txn=None, eat=True):
         """Invoke `delete()` for each element in the iterable `objs`. If `eat`
         is ``True``, returns a tuple containing the number of keys processed,
-        and the number of items deleted, otherwise returns an iterator that
+        and the number of records deleted, otherwise returns an iterator that
         lazily calls `deletes()` and yields its return value.
 
         ::
@@ -817,7 +814,7 @@ class Collection(object):
     def delete_values(self, vals, txn=None, eat=True):
         """Invoke `delete_value()` for each element in the iterable `vals`. If
         `eat` is ``True``, returns a tuple containing the number of keys
-        processed, and the number of items deleted, otherwise returns an
+        processed, and the number of records deleted, otherwise returns an
         iterator that lazily calls `delete_value()` and yields its return
         value."""
         return _eat(eat, (self.delete_value(v) for v in vals))
@@ -860,15 +857,14 @@ class Store(object):
         self._counter_coll = Collection(self, '\x00counters', _idx=1,
             encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
 
+    _INFO_KEYS = ('name', 'idx', 'index_for')
     def _get_info(self, name, idx=None, index_for=None):
-        tup = self._info_coll.get(name)
-        if tup:
-            assert tup == (name, idx or tup[1], index_for)
-            return CollInfo(*tup)
-        if idx is None:
-            idx = self.count('\x00collections_idx', init=10)
-            info = CollInfo(name, idx, index_for)
-        return self._info_coll.put(info).data
+        t = self._info_coll.get(name)
+        if not t:
+            idx = idx or self.count('\x00collections_idx', init=10)
+            t = self._info_coll.put((name, idx, index_for)).data
+        assert t == (name, idx or tup[1], index_for)
+        return dict((self._INFO_KEYS[i], v) for i, v in enumerate(t))
 
     def count(self, name, n=1, init=1, txn=None):
         """Increment a counter and return its previous value. The counter is
