@@ -337,7 +337,7 @@ components that are sorted in descending order, however this is easily
 emulated:
 
 +-----------+---------------------------------------+
-+ *Type*    + Inversion function                    |
++ *Type*    + *Inversion function*                  |
 +-----------+---------------------------------------+
 + Numbers   | ``-i``                                |
 +-----------+---------------------------------------+
