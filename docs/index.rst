@@ -269,6 +269,7 @@ for UUIDs and `Key` objects, but removing support for floats.
 
 .. autofunction:: centidb.encode_keys
 .. autofunction:: centidb.decode_keys
+.. autofunction:: centidb.invert
 
 
 Varint functions
@@ -330,7 +331,64 @@ Index Usage
 Reverse Indices
 +++++++++++++++
 
-The module does not yet have built-in support for 
+Built-in support is not yet provided for compound index keys that include
+components that are sorted in descending order, however this is easily
+emulated:
+
++-----------+---------------------------------------+
++ *Type*    + Inversion function                    |
++-----------+---------------------------------------+
++ Numbers   | ``-i``                                |
++-----------+---------------------------------------+
++ Boolean   + ``not b``                             |
++-----------+---------------------------------------+
++ String    + ``centidb.invert(s)``                 |
++-----------+---------------------------------------+
++ Unicode   + ``centidb.invert(s.encode('utf-8'))`` |
++-----------+---------------------------------------+
++ UUID      + ``centidb.invert(uuid.get_bytes())``  |
++-----------+---------------------------------------+
++ Key       + ``Key(centidb.invert(k))``            |
++-----------+---------------------------------------+
+
+Example:
+
+::
+
+    coll.add_index('name_age_desc',
+        lambda person: (person['name'], -person['age']))
+
+Note that if a key contains only a single value, or all the key's components
+are in descending order, then transformation is not required as the index
+itself can be iterated in reverse:
+
+::
+
+    coll = Collection(store, 'people',
+        key_func=lambda person: person['name'])
+    coll.add_index('age', lambda person: person['age'])
+    coll.add_index('age_height',
+        lambda person: (person['age'], person['height']))
+
+    # Not necessary.
+    coll.add_index('name_desc',
+        lambda person: centidb.inverse(person['name'].encode('utf-8')))
+
+    # Not necessary.
+    coll.add_index('age_desc', lambda person: -person['age'])
+
+    # Not necessary.
+    coll.add_index('age_desc_height_desc',
+        lambda person: (-person['age'], -person['height']))
+
+    # Equivalent to 'name_desc' index:
+    it = coll.iteritems(reverse=True)
+
+    # Equivalent to 'age_desc' index:
+    it = coll.index['age'].iteritems(reverse=True)
+
+    # Equivalent to 'age_desc_height_desc' index:
+    it = coll.index['age_height'].iteritems(reverse=True)
 
 
 Performance

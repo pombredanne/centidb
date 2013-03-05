@@ -42,8 +42,20 @@ KIND_UUID = chr(90)
 KIND_KEY = chr(95)
 KIND_SEP = chr(102)
 
+INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
+
 class Key(str):
     pass
+
+def invert(s):
+    """Invert the bits in the bytestring `s`.
+
+    This is used to achieve a descending order for blobs and strings when they
+    are part of a compound key, however when they are stored as a 1-tuple, it
+    is probably better to simply the corresponding `Collection` or `Index` with
+    ``reverse=True``.
+    """
+    return s.translate(INVERT_TBL)
 
 def encode_int(v):
     """Given some positive integer of 64-bits or less, return a variable length
