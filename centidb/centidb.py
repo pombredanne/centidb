@@ -54,9 +54,6 @@ KIND_SEP = chr(102)
 
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 
-class Key(str):
-    pass
-
 def invert(s):
     """Invert the bits in the bytestring `s`.
 
@@ -222,8 +219,7 @@ def encode_keys(tups, prefix='', closed=True):
         6. Bytestrings (i.e. ``str()``).
         7. Unicode strings.
         8. ``uuid.UUID`` instances.
-        9. Encoded keys (i.e. ``Key()``).
-        10. Sequences with another tuple following the last identical element.
+        9. Sequences with another tuple following the last identical element.
     """
     io = cStringIO.StringIO()
     w = io.write
@@ -300,8 +296,6 @@ def decode_keys(s, prefix=None, first=False):
             arg = decode_str(getc)
         elif c == KIND_TEXT:
             arg = decode_str(getc).decode('utf-8')
-        elif c == KIND_KEY:
-            arg = Key(decode_str(getc))
         elif c == KIND_UUID:
             arg = uuid.UUID(decode_str(getc))
         elif c == KIND_SEP:
