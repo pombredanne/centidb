@@ -265,7 +265,8 @@ Key functions
 
 The key encoding is based on SQLite 4's algorithm `as documented here
 <http://sqlite.org/src4/doc/trunk/www/key_encoding.wiki>`_, adding support
-for UUIDs and `Key` objects, but removing support for floats.
+for UUIDs and `Key` objects, but removing support for floats, using varints for
+the integer encoding, and a more scripting-friendly string encoding.
 
 .. autofunction:: centidb.encode_keys
 .. autofunction:: centidb.decode_keys
@@ -439,14 +440,15 @@ also occur.
 Another option is to make the key encoding configurable: this would allow
 non-tuple keys at a cost to some convenience, but also enable extra uses. For
 example, allowing a pure-integer key encoding that could be used to efficiently
-represent a `Collection` as an SQL table by leveraging the `OID` type.
+represent a `Collection` as an SQL table by leveraging the `OID` type, or to
+provide exact emulation of the sort order of other databases (e.g. App Engine).
 
 Metadata Encoding
 +++++++++++++++++
 
 Metadata is encoded using the key encoder to allow easy access from another
-language. JSON might also have been used, but since an implementation
-absolutely must support the key encoding, this seemed a better choice.
+language, since an implementation absolutely must support the key encoding, it
+seemed an obvious choice.
 
 History
 +++++++
@@ -490,7 +492,12 @@ Futures
 2. Avoid key decoding when only used for comparison.
 3. Unique index constraint
 4. Better documented
-5. Safer
-6. Faster
-7. C++ library
-
+5. Smaller
+6. Safer
+7. Faster
+8. C++ library
+9. Configurable key scheme
+10. Make key/value scheme prefix optional.
+11. Make indices work as `Collection` observers, instead of hard-wired.
+12. Support "observe-only" `Index` object.
+13. Miniature validating+indexing network server module.
