@@ -176,6 +176,73 @@ Index Class
     :members:
 
 
+Engines
+#######
+
+Engine Interface
+++++++++++++++++
+
+A storage engine or transaction is any object that implements the following
+methods. All key and value variables below are bytestrings:
+
+    `get(key)`:
+        Return the value of key `key`, or ``None`` if no such key exists.
+
+    `put(key, value)`:
+        Set the value of `key` to `value`, overwriting any previous key.
+
+    `delete(key)`:
+        Delete `key` if it exists, otherwise do nothing.
+
+    `iter(key, keys=True, values=True, reverse=False)`:
+        Yield records starting at `k` and moving either forwards or backwards.
+
+        `key`:
+            The key to iterate from. The first yielded value should correspond
+            to this key, or if the key does not exist, to the next existent key
+            that is lexigraphically greater than it. This is true regardless of
+            iteration direction.
+
+        `keys`:
+            If ``True``, indicates keys should be returned. If `values=False`,
+            then the yielded element should be a single bytestring containing
+            the key.
+
+        `values`:
+            If ``True``, indicates values should be returned. If `keys=False`,
+            then the yielded element should be a single bytestring containing
+            the value.
+
+            If both `keys=True` and `values=True`, a tuple of `(key, value)`
+            pairs should be yielded.
+
+        `reverse`:
+            If ``False``, iteration should proceed until the lexicographically
+            highest key in the engine is reached, otherwise it should proceed
+            until the lexigraphically lowest key is reached.
+
+    **txn_id** *= None*
+        Property that is expected to uniquely name the transaction represented
+        by the object; may be any Python value. For storage engines, or for
+        "transaction objects" that do not really support transactions, simply
+        set it to `None`.
+
+        This is only used to ensure cached index keys are still valid during
+        `put()`. If your engine supports transactions but cannot provide a
+        transaction ID, simply set this to `time.time()` in your constructor,
+        or similar.
+
+
+Predefined Engines
+++++++++++++++++++
+
+.. autoclass:: centidb.support.ArrayEngine
+    :members:
+
+.. autoclass:: centidb.support.PlyvelEngine
+    :members:
+
+
 Encodings
 #########
 

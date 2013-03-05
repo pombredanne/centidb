@@ -9,8 +9,18 @@ import centidb
 
 
 class ArrayEngine(object):
+    """Storage engine that backs onto a sorted Python array of `(key, value)`
+    tuples. Lookup is logarithmic while insertion is worst case linear.
+
+    Primarily useful for unit testing. The constructor receives no arguments.
+    """
+    txn_id = None
+
     def __init__(self):
+        #: The sorted list of `(key, value)` tuples.
         self.pairs = []
+        #: Total size in bytes of all stored pairs, i.e.
+        #: ``sum(len(k)+len(v) for k, v in pairs).
         self.size = 0
 
     def get(self, k):
@@ -45,6 +55,16 @@ class ArrayEngine(object):
 
 
 class PlyvelEngine(object):
+    """Storage engine that uses the Google LevelDB library, by way of the
+    `Plyvel <http://plyvel.readthedocs.org/>`_ Python module.
+
+        `db`:
+            If specified, should be a `plyvel.DB` instance for an already open
+            database. Otherwise, the remaining keyword args are passed to the
+            `plyvel.DB` constructor.
+    """
+    txn_id = None
+
     def __init__(self, db=None, **kwargs):
         self.db = db
         if not self.db:
