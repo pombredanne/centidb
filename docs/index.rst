@@ -16,7 +16,7 @@ more complex systems.
 Functionality is provided for forming ordered composite keys, managing and
 querying secondary indices, and a binary encoding that preserves the ordering
 of tuples of primitive values. Combining the simplicity of a key/value store
-with the convenience of a DBMS's indexing system, while absent of any
+with the convenience of a DBMS indexing system, while absent of any
 storage-specific protocol/language/encoding/data model, or the impedence
 mismatch that necessitates use of ORMs, it provides for a compelling
 programming experience.
@@ -53,11 +53,39 @@ The user's configured storage engine is first wrapped in a `Store` instance:
 The store manages metadata for a set of `Collection` and `Index` objects, along
 with any compressors and counters.
 
-
-
 treated as an independent set of
 `Collections` which access 
 The database engine is wrapped by a `Store` object, 
+
+
+
+Value compression
++++++++++++++++++
+
+Values can be compressed by passing a `packer=` argument to `Collection.put()`,
+or by passing a `default_packer=` argument to the `Collection` constructor. One
+predefined packer is provided, `ZLIB_PACKER`, however it is trivial to add
+more. See the `Encoding` documentation below for more information.
+
+::
+
+    coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
+
+A batch compression mode is also supported, where a configurable set of keys
+first have their values combined before being passed through a packer. The
+resulting stream is saved as a single record using a special key that still
+allows centidb to efficiently locate children.
+
+The main restriction is that batches cannot violate the ordering of the storage
+engine, meaning only contiguous key ranges can be compressed. Inserting a
+record will cause any existing batch covering that range to be split until
+further batching calls are made.
+
+Since it is designed for archival, it is expected that records within a batch
+will not be written often. They must also already exist in the store before
+batching can occur, although this restriction may be removed in future.
+
+Batching works by way of the `Collection.batch()` method described later.
 
 
 Common Parameters
