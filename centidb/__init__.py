@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 #
-# Copyright 2012, David Wilson
+# Copyright 2013, David Wilson.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,20 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-"""sortedfile distutils script.
-"""
-
-from setuptools import setup
-
-
-setup(
-    name =          'centidb',
-    version =       '0.1',
-    description =   'Minimalist DBMS middleware for key/value stores.',
-    author =        'David Wilson',
-    author_email =  'dw@botanicus.net',
-    license =       'Apache 2',
-    url =           'http://github.com/dw/centidb/',
-    py_packages =   ['centidb']
-)
+from __future__ import absolute_import
+from centidb.centidb import *
+from centidb.centidb import __all__
+from centidb.centidb import __doc__

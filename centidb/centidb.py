@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2013, David Wilson.
 # 
@@ -14,6 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+"""
+Minimalist object DBMS for Python
+
+See http://centidb.readthedocs.org/
+"""
+
+from __future__ import absolute_import
 
 import cPickle as pickle
 import cStringIO
@@ -29,6 +35,10 @@ import warnings
 import zlib
 
 import plyvel
+
+__all__ = '''invert Store Collection Record Index decode_keys encode_keys
+    decode_int encode_int Encoder KEY_ENCODER PICKLE_ENCODER
+    ZLIB_ENCODER'''.split()
 
 CollInfo = collections.namedtuple('CollInfo', 'name idx index_for')
 
@@ -165,7 +175,7 @@ def decode_str(getc):
         else:
             io.write(c)
 
-def _eat(pred, it):
+def _eat(pred, it, total_only=False):
     if not eat:
         return it
     total = 0
@@ -173,6 +183,8 @@ def _eat(pred, it):
     for elem in it:
         total += 1
         true += elem is not None
+    if total_only:
+        return total
     return total, true
 
 def tuplize(o):
@@ -305,7 +317,7 @@ def decode_keys(s, prefix=None, first=False):
     tups.append(tuple(tup))
     return tups[0] if first else tups
 
-class Encoder:
+class Encoder(object):
     """Instances of this class represents an encoding format, including its
     associated name.
 
@@ -342,7 +354,7 @@ PICKLE_ENCODER = Encoder('pickle', pickle.loads,
 #: Compress bytestrings using zlib.compress()/zlib.decompress().
 ZLIB_ENCODER = Encoder('zlib', zlib.compress, zlib.decompress)
 
-class Index:
+class Index(object):
     """Provides query and manipulation access to a single index on a
     Collection. You should not create this class directly, instead use
     `Collection.add_index()` and the `Collection.indices` mapping.
@@ -435,7 +447,7 @@ class Index:
             return Record(self.coll, default)
         return default
 
-class Record:
+class Record(object):
     """Wraps a record value with its last saved key, if any.
 
     `Record` instances are usually created by the `Collection` and `Index`
@@ -478,7 +490,7 @@ class Record:
         tups = ','.join(map(repr, self.key or ()))
         return '<Record %s:(%s) %r>' % (self.coll.info.name, tups, self.data)
 
-class Collection:
+class Collection(object):
     """Provides access to a record collection contained within a `Store`, and
     ensures associated indices update consistently when changes are made.
 
@@ -706,14 +718,14 @@ class Collection:
         """Invoke `put()` for each element in the iterable `recs`. If `eat` is
         ``True``, returns the number of items processed, otherwise returns an
         iterator that lazily calls `put()` and yields its return value."""
-        return _eat(eat, (self.put(rec, txn, packer) for rec in recs))
+        return _eat(eat, (self.put(rec, txn, packer) for rec in recs), True)
 
-    def putitems(self, items, txn=None, packer=None, eat=True):
-        """Invoke `put(y, key=x)` for each (x, y) in the iterable `recs`. If
+    def putitems(self, it, txn=None, packer=None, eat=True):
+        """Invoke `put(y, key=x)` for each (x, y) in the iterable `it`. If
         `eat` is ``True``, returns the number of items processed, otherwise
         returns an iterator that lazily calls `put()` and yields its return
         value."""
-        return _eat(eat, (self.put(x, txn, packer, key=y) for x, y in items))
+        return _eat(eat, (self.put(x, txn, packer, y) for x, y in it), True)
 
     def put(self, rec, txn=None, packer=None, key=None):
         """Create or overwrite a record.
@@ -843,7 +855,7 @@ class Collection:
         assert self.derived_keys
         return self.delete(self.key_func(val), txn)
 
-class Store:
+class Store(object):
     """Represents access to the underlying storage engine, and manages
     counters.
 
