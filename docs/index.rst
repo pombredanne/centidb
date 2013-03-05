@@ -353,6 +353,28 @@ db_val`` might perform integer or float division.
 A final option is adding a `number_factory=` parameter to `decode_keys()`,
 which still requires picking a good default.
 
+Non-tuple Keys
+++++++++++++++
+
+Keys composed of a single value have much the same trade-offs and problems as
+floats: either a heuristic is employed that always treats 1-tuples as single
+values, leading to user surprise in some cases, and ugly logic when writing
+generic code, or waste a byte for each single-valued key.
+
+In the non-heuristic case, further problems emerge: if the user calls
+``get(1)``, should it return the same result as ``get((1,))``? If yes, two
+lookups may be required.
+
+If no, then another problem emerges: staticly typed languages. In a language
+where we might have a ``Tuple`` type representing the key tuple, every
+interface dealing with keys must be duplicated for the single-valued case.
+Meanwhile the same problems with lookups and comparison in a dynamic language
+also occur.
+
+Another option is to make the key encoding configurable: this would allow
+non-tuple keys at a cost to some convenience, but also enable extra uses. For
+example, allowing a pure-integer key encoding that could be used to efficiently
+represent a `Collection` as an SQL table by leveraging the `OID` type.
 
 Metadata Encoding
 +++++++++++++++++
@@ -373,17 +395,16 @@ History
 
 The first attempt came during 2011 while porting from App Engine and a
 Datastore-alike was needed. All alternatives included so much weirdness (Java?
-JavaScript in the DB? BSON? Auto-magico-sharding?
-``PageFaultRetryableSection``?!?) that I eventually canned the project,
-rendered incapable of picking something as *simple as a database* that was
-*good enough*, overwhelmed by false promises, fake distinctions and overstated
-greatness in the endless PR veiled by marketing site designs, and driven by
-people for whom the embodiment of *elegance* is the choice of font on a
-Powerpoint slide.
+JavaScript? BSON? Auto-magico-sharding? ``PageFaultRetryableSection``?!?) that
+I eventually canned the project, rendered incapable of picking something as
+*simple as a database* that was *good enough*, overwhelmed by false promises,
+fake distinctions and overstated greatness in the endless PR veiled by
+marketing site designs, and driven by people for whom the embodiment of
+*elegance* is the choice of font on a Powerpoint slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
 when the B-tree appeared, also known as the core of SQLite 3, the core of
-MongoDB, and just about 90% of all DBMS wheel reinventions existing in th 40
+MongoDB, and just about 90% of all DBMS wheel reinventions existing in the 40
 years since. Yet today when faced with a B-tree adulterated with JavaScript and
 a million more dumb concepts, upon rejecting it as **junk** we are instantly
 drowned in the torrential cries of a million: *"you just don't get it!"*. I
