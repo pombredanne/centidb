@@ -21,9 +21,9 @@ storage-specific protocol/language/encoding/data model, or the impedence
 mismatch that necessitates use of ORMs, it provides for a compelling
 programming experience.
 
-Few design constraints are made: there is no enforced value type or encoding,
-key scheme, compressor, or storage engine, allowing integration with whatever
-best suits or is already used by a project.
+Few design constraints exist: there is no enforced value type or encoding, key
+scheme, compressor, or storage engine, allowing integration with whatever best
+suits or is already used by a project.
 
 Batch value compression is supported, trading read performance for improved
 compression ratios, while still permitting easy access to data. Arbitrary key
@@ -342,10 +342,13 @@ Now define a collection:
 Key functions
 +++++++++++++
 
-The key encoding is based on SQLite 4's algorithm `as documented here
-<http://sqlite.org/src4/doc/trunk/www/key_encoding.wiki>`_, adding support
-for UUIDs and `Key` objects, but removing support for floats, using varints for
-the integer encoding, and a more scripting-friendly string encoding.
+These functions are based on `SQLite 4's key encoding
+<http://sqlite.org/src4/doc/trunk/www/key_encoding.wiki>`_, except that:
+
+* Support for ``uuid.UUID`` is added.
+* Floats are removed.
+* Varints are used for integers.
+* Strings use a more scripting-friendly encoding.
 
 .. autofunction:: centidb.encode_keys
 .. autofunction:: centidb.decode_keys
@@ -355,8 +358,8 @@ the integer encoding, and a more scripting-friendly string encoding.
 Varint functions
 ++++++++++++++++
 
-The sortable varint encoding is based on SQLite 4's algorithm `as documented
-here <http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
+These functions are based on `SQLite 4's sortable varint encoding
+<http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
 
 .. autofunction:: centidb.encode_int
 .. autofunction:: centidb.decode_int
@@ -483,10 +486,10 @@ Floats
 
 Float keys are unsupported, partially because I have not needed them, and their
 use can roughly be emulated with ``int(f * 1e9)`` or similar. But mainly it is
-to defer a choice: should floats order alongside integers? If not, then our
-keys don't behave like SQL or Python, causing user surprise. If yes, then
-should integers be treated as floats? If yes, then keys will always decode to
-float, causing surprise. If no, then a new encoding is needed, wasting ~2 bytes
+to defer a choice: should floats order alongside integers? If not, then sorting
+won't behave like SQL or Python, causing user surprise. If yes, then should
+integers be treated as floats? If yes, then keys will always decode to float,
+causing surprise. If no, then a new encoding is needed, wasting ~2 bytes
 (terminator, discriminator).
 
 Another option is always treating numbers as float, but converting to int
@@ -522,12 +525,102 @@ example, allowing a pure-integer key encoding that could be used to efficiently
 represent a `Collection` as an SQL table by leveraging the `OID` type, or to
 provide exact emulation of the sort order of other databases (e.g. App Engine).
 
-Metadata Encoding
-+++++++++++++++++
 
-Metadata is encoded using the key encoder to allow easy access from another
-language, since an implementation needs to support the key encoding, it seemed
-an obvious choice.
+Metadata
+++++++++
+
+Only a small amount of metadata is kept in the storage engine. It is encoded
+using ``KEY_ENCODER`` to allow easy access from another language, since
+implementations cannot avoid supporting the key encoding.
+
+
+Collections
+-----------
+
+The collection metadata starts with ``<prefix>\x00``, where `<prefix>` is the
+prefix passed to `Store`'s constructor. The remainder of the key is an encoded
+string representing the collection name.
+
+The value is a ``KEY_ENCODER``-encoded tuple of these fields:
+
++-------------------+-------------------------------------------------------+
+| *Name*            | *Description*                                         |
++-------------------+-------------------------------------------------------+
+| ``name``          | Bytestring collection name.                           |
++-------------------+-------------------------------------------------------+
+| ``idx``           | Integer collection index, used to form key prefix.    |
++-------------------+-------------------------------------------------------+
+| ``index_for``     | Bytestring parent collection name. If not ``None``,   |
+|                   | indicates this collection is an index.                |
++-------------------+-------------------------------------------------------+
+| ``key_scheme``    | Bytestring encoder name used for all keys. If         |
+|                   | ``None``, indicates first byte of key indicates       |
+|                   | encoding. *Not yet implemented.*                      |
++-------------------+-------------------------------------------------------+
+| ``value_scheme``  | String encoder name used for all value encodings in   |
+|                   | the collection. *Not yet implemented.*                |
++-------------------+-------------------------------------------------------+
+| ``packer_scheme`` | String compressor name used to compress all keys.     |
+|                   | If ``None``, indicates first bye of value indicates   |
+|                   | packer. *Not yet implemented.*                        |
++-------------------+-------------------------------------------------------+
+
+Collection key prefixes are formed simply by encoding the index using
+`encode_int()`. The index itself is assigned by a call to `count()` using the
+special name ``'\x00collections_idx'``.
+
+Counters
+--------
+
+Counter metadata starts with ``<prefix>\x01``. The remainder of the key is an
+encoded string representing the counter name.
+
+The value is a ``KEY_ENCODER``-encoded tuple of these fields:
+
++-------------------+-------------------------------------------------------+
+| *Name*            | *Description*                                         |
++-------------------+-------------------------------------------------------+
+| ``name``          | Bytestring counter name.                              |
++-------------------+-------------------------------------------------------+
+| ``value``         | Integer value.                                        |
++-------------------+-------------------------------------------------------+
+
+Encodings
+---------
+
+*Note: not implemented yet.*
+
+Encoding metadata starts with ``<prefix>\x02``. The remainder of the key is an
+encoded string representing the encoding or compressor name.
+
+The value is a ``KEY_ENCODER``-encoded tuple of these fields:
+
++-------------------+-------------------------------------------------------+
+| *Name*            | *Description*                                         |
++-------------------+-------------------------------------------------------+
+| ``name``          | Bytestring encoding/compressor name.                  |
++-------------------+-------------------------------------------------------+
+| ``idx``           | Integer compressor index, used to form value prefix.  |
++-------------------+-------------------------------------------------------+
+
+Compressor value prefixes are formed simply by encoding the index using
+`encode_int()`. The index itself is assigned by a call to `count()` using the
+special name ``'\x00encodings_idx'``.
+
+Additionally, the following encoding metadata entries always exist (*not yet
+implemented*):
+
++-------------------+---------+---------------------------------------------+
+| ``name``          | ``idx`` | *Description*                               |
++-------------------+---------+---------------------------------------------+
+| ``key``           | 1       | Built-in key encoding.                      |
++-------------------+---------+---------------------------------------------+
+| ``pickle``        | 2       | Built-in pickle encoding.                   |
++-------------------+---------+---------------------------------------------+
+| ``zlib``          | 3       | Built-in zlib encoding.                     |
++-------------------+---------+---------------------------------------------+
+
+
 
 History
 +++++++
