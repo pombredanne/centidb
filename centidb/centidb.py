@@ -167,7 +167,7 @@ def decode_str(getc):
             if c == '\x01':
                 io.write('\x00')
             else:
-                assert o == '\x02'
+                assert c == '\x02'
                 io.write('\x01')
         else:
             io.write(c)
@@ -243,9 +243,6 @@ def encode_keys(tups, prefix='', closed=True):
                 else:
                     w(KIND_INTEGER)
                     w(encode_int(arg))
-            elif isinstance(arg, Key):
-                w(KIND_KEY)
-                w(encode_str(arg))
             elif isinstance(arg, uuid.UUID):
                 w(KIND_UUID)
                 w(encode_str(arg.get_bytes()))
@@ -312,27 +309,24 @@ def decode_keys(s, prefix=None, first=False):
     return tups[0] if first else tups
 
 class Encoder(object):
-    """Instances of this class represents an encoding format, including its
-    associated name.
+    """Instances of this class represents an encoding.
 
         `name`:
             ASCII string uniquely identifying the encoding. A future version
             may use this to verify the encoding matches what was used to create
-            `Collection`. For encodings used as compressors, this name is
-            persisted forever in the `Store`'s metadata following its first
-            use.
+            the `Collection`. For encodings used as compressors, this name is
+            persisted forever in `Store`'s metadata after first use.
 
         `unpack`:
-            Function to deserialize an encoded value. The function may be
-            called with **a buffer object containing the encoded bytestring**
-            as its argument, and should return the decoded value. If your
-            encoder does not support `buffer()` objects (although many C
-            extensions do), then first convert the buffer using `str()`.
+            Function to deserialize an encoded value. It may be called with **a
+            buffer object containing the encoded bytestring** as its argument,
+            and should return the decoded value. If your encoder does not
+            support `buffer()` objects (many C extensions do), then convert the
+            buffer using `str()`.
 
         `pack`:
-            Function to serialize a value. The function is called with the
-            value as its sole argument, and should return the encoded
-            bytestring.
+            Function to serialize a value. It is called with the value as its
+            sole argument, and should return the encoded bytestring.
     """
     def __init__(self, name, unpack, pack):
         vars(self).update(locals())

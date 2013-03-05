@@ -71,21 +71,16 @@ more. See the `Encoding` documentation below for more information.
 
     coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
 
-A batch compression mode is also supported, where a configurable set of keys
-first have their values combined before being passed through a packer. The
-resulting stream is saved as a single record using a special key that still
-allows centidb to efficiently locate children.
-
-The main restriction is that batches cannot violate the ordering of the storage
-engine, meaning only contiguous key ranges can be compressed. Inserting a
-record will cause any existing batch covering that range to be split until
-further batching calls are made.
+Batch compression is supported by way of `Collection.batch()`: this is where a
+record range has its values combined before passing through the compressor. The
+resulting stream is saved using a special key that still permits efficient
+child lookup. The main restriction is that batches cannot violate the key
+ordering, meaning only contiguous ranges may be combined. Calls to `put()` will
+cause any overlapping batch to be split as part of the operation.
 
 Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
 batching can occur, although this restriction may be removed in future.
-
-Batching works by way of the `Collection.batch()` method described later.
 
 
 Common Parameters
@@ -214,40 +209,42 @@ A storage engine or transaction is any object that implements the following
 methods. All key and value variables below are bytestrings:
 
     `get(key)`:
-        Return the value of key `key`, or ``None`` if no such key exists.
+        Return the value of `key` or ``None`` if it does not exist.
 
     `put(key, value)`:
-        Set the value of `key` to `value`, overwriting any previous key.
+        Set the value of `key` to `value`, overwriting any prior value.
 
     `delete(key)`:
         Delete `key` if it exists, otherwise do nothing.
 
     `iter(key, keys=True, values=True, reverse=False)`:
-        Yield records starting at `k` and moving either forwards or backwards.
+        Yield records in key order, starting at `key` and moving in a fixed
+        direction. The key order is expected to match that of the C `memcmp()`
+        function.
 
         `key`:
-            The key to iterate from. The first yielded value should correspond
-            to this key, or if the key does not exist, to the next existent key
-            that is lexigraphically greater than it. This is true regardless of
-            iteration direction.
+            Starting key. The first yielded value should correspond to this
+            key, or if it does not exist, to the next lexicographically greater
+            key, or the last key in the store. This is true for either
+            direction.
 
         `keys`:
-            If ``True``, indicates keys should be returned. If `values=False`,
-            then the yielded element should be a single bytestring containing
-            the key.
+            Indicates whether keys are requested. If `keys=True` and
+            `values=False`, the yielded element is a bytestring containing the
+            key.
 
         `values`:
-            If ``True``, indicates values should be returned. If `keys=False`,
-            then the yielded element should be a single bytestring containing
-            the value.
+            Indicates whether values are requested. If `keys=False` and
+            `values=True`, the yielded element is a bytestring containing the
+            value.
 
             If both `keys=True` and `values=True`, a tuple of `(key, value)`
-            pairs should be yielded.
+            is yielded.
 
         `reverse`:
-            If ``False``, iteration should proceed until the lexicographically
-            highest key in the engine is reached, otherwise it should proceed
-            until the lexigraphically lowest key is reached.
+            If ``False``, iteration proceeds until the lexicographically
+            highest key is reached, otherwise it proceeds until the lowest key
+            is reached.
 
     **txn_id** *= None*
         Property that is expected to uniquely name the transaction represented
@@ -255,16 +252,15 @@ methods. All key and value variables below are bytestrings:
         "transaction objects" that do not really support transactions, simply
         set it to `None`.
 
-        This is only used to ensure cached index keys are still valid during
-        `put()`. If your engine supports transactions but cannot provide a
-        transaction ID, simply set this to `time.time()` in your constructor,
-        or similar.
+        Used to ensure cached index keys are valid during `put()`. If your
+        engine supports transactions but cannot provide an ID, simply set it to
+        `time.time()`.
 
 
 Predefined Engines
 ++++++++++++++++++
 
-.. autoclass:: centidb.support.ArrayEngine
+.. autoclass:: centidb.support.ListEngine
     :members:
 
 .. autoclass:: centidb.support.PlyvelEngine
@@ -558,7 +554,7 @@ experimenting with compression, I again found myself partially implementing
 what this module wants to be: a tiny layer that does little but add indices to
 a piece of Cold War era technology. No "inventions", no lies, no claims to
 beauty, no religious debates about scaleability, just 300ish lines that try to
-do one thing right.
+do one thing reasonably.
 
 And so that remains the primary design goal: **size**. The library should be
 *small* and *convenient*. Few baked in assumptions, no overcooked
