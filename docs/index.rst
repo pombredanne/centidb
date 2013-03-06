@@ -146,7 +146,7 @@ is passed three parameters:
 
     `obj`:
         Which is record value itself. Note this is not the Record instance, but
-        the ``Record.data`` (i.e. user data) field.
+        the :py:attr:`Record.data` (i.e. value) attribute.
 
     `txn`:
         The transaction this modification is a part of. Can be used to
@@ -175,10 +175,10 @@ Or by UUID:
 Auto-increment
 ++++++++++++++
 
-When no explicit key function is given, `Collection` defaults to generating
-transactionally assigned auto-incrementing integers using `Store.count()`.
-Since this doubles the database operations required, auto-incrementing keys
-should be used sparingly. Example:
+When no explicit key function is given, :py:class:`Collection` defaults to
+generating transactionally assigned auto-incrementing integers using
+:py:meth:`Store.count`. Since this doubles the database operations required,
+auto-incrementing keys should be used sparingly. Example:
 
 ::
 
@@ -306,22 +306,34 @@ Encodings
 Predefined Encoders
 +++++++++++++++++++
 
-The ``centidb`` module contains the following predefined `Encoder` instances.
+The ``centidb`` module contains the following predefined :py:class:`Encoder`
+instances.
 
     ``KEY_ENCODER``
         Uses `encode_keys()` and `decode_keys()` to serialize tuples. It is
-        used internally to represent keys, counters, and `Store` metadata.
+        used internally to represent keys, counters, and :py:class:`Store`
+        metadata.
 
     ``PICKLE_ENCODER``
         Uses `cPickle.dumps()` and `cPickle.loads()` with protocol 2 to
         serialize any pickleable object. It is the default encoder if no
-        specific `encoder=` argument is given to the `Collection` constructor.
+        specific `encoder=` argument is given to the :py:class:`Collection`
+        constructor.
+
+**Compressors**
+
+These are just :py:class:`Encoder` instances with the convention that their
+names end in ``_PACKER``.
+
+    ``PLAIN_PACKER``
+        Performs no compression; the input is returned unchanged. This is the
+        default packer.
 
     ``ZLIB_PACKER``
         Uses `zlib.compress()` and `zlib.decompress()` to provide value
         compression. It may be passed as the `packer=` argument to
-        `Collection.put()`, or specified as the default using the `packer=`
-        argument to the `Collection` constructor.
+        :py:meth:`Collection.put`, or specified as the default using the
+        `packer=` argument to the :py:class:`Collection` constructor.
 
 
 Thrift Integration
@@ -549,8 +561,9 @@ also occur.
 Another option is to make the key encoding configurable: this would allow
 non-tuple keys at a cost to some convenience, but also enable extra uses. For
 example, allowing a pure-integer key encoding that could be used to efficiently
-represent a `Collection` as an SQL table by leveraging the `OID` type, or to
-provide exact emulation of the sort order of other databases (e.g. App Engine).
+represent a :py:class:`Collection` as an SQL table by leveraging the `OID`
+type, or to provide exact emulation of the sort order of other databases (e.g.
+App Engine).
 
 
 Metadata
@@ -565,8 +578,8 @@ Collections
 -----------
 
 The collection metadata starts with ``<Store.prefix>\x00``, where
-`<Store.prefix>` is the prefix passed to `Store`'s constructor. The remainder
-of the key is an encoded string representing the collection name.
+`<Store.prefix>` is the prefix passed to :py:class:`Store`'s constructor. The
+remainder of the key is an encoded string representing the collection name.
 
 The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 
@@ -644,7 +657,9 @@ implemented*):
 +-------------------+---------+---------------------------------------------+
 | ``pickle``        | 2       | Built-in pickle encoding.                   |
 +-------------------+---------+---------------------------------------------+
-| ``zlib``          | 3       | Built-in zlib encoding.                     |
+| ``plain``         | 3       | Built-in ``PLAIN_PACKER`` (raw bytes).      |
++-------------------+---------+---------------------------------------------+
+| ``zlib``          | 4       | Built-in ``ZLIB_PACKER``.                   |
 +-------------------+---------+---------------------------------------------+
 
 
@@ -705,14 +720,15 @@ Maybe:
 1. `Query` object to simplify index intersections.
 2. Configurable key scheme
 3. Make key/value scheme prefix optional
-4. Make indices work as `Collection` observers, instead of hard-wired
-5. Convert `Index` to reuse `Collection`
-6. Support "read-only" `Index` object
+4. Make indices work as :py:class:`Collection` observers, instead of hard-wired
+5. Convert :py:class:`Index` to reuse :py:class:`Collection`
+6. Support "read-only" :py:class:`Index` object
 
 Probably not:
 
 1. Minimalist validating+indexing network server module
-2. `Engine` or `Collection` that implements caching on top of another
+2. `Engine` or :py:class:`Collection` that implements caching on top of another
 3. `Engine` that distributes keyspace using configurable scheme
-4. `Index` and `Query` classes that integrate with richer APIs, e.g. App Engine
+4. :py:class:`Index` and :py:class:`Query` classes that integrate with richer
+   APIs, e.g. App Engine
 

@@ -36,8 +36,8 @@ import zlib
 import plyvel
 
 __all__ = '''invert Store Collection Record Index decode_keys encode_keys
-    decode_int encode_int Encoder KEY_ENCODER PICKLE_ENCODER
-    ZLIB_ENCODER'''.split()
+    decode_int encode_int Encoder KEY_ENCODER PICKLE_ENCODER PLAIN_PACKER
+    ZLIB_PACKER'''.split()
 
 KIND_NULL = chr(15)
 KIND_NEG_INTEGER = chr(20)
@@ -55,8 +55,8 @@ def invert(s):
 
     This is used to achieve a descending order for blobs and strings when they
     are part of a compound key, however when they are stored as a 1-tuple, it
-    is probably better to simply the corresponding `Collection` or `Index` with
-    ``reverse=True``.
+    is probably better to simply the corresponding :py:class:`Collection` or
+    :py:class:`Index` with ``reverse=True``.
     """
     return s.translate(INVERT_TBL)
 
@@ -328,8 +328,9 @@ class Encoder(object):
         `name`:
             ASCII string uniquely identifying the encoding. A future version
             may use this to verify the encoding matches what was used to create
-            the `Collection`. For encodings used as compressors, this name is
-            persisted forever in `Store`'s metadata after first use.
+            the :py:class:`Collection`. For encodings used as compressors, this
+            name is persisted forever in :py:class:`Store`'s metadata after
+            first use.
 
         `unpack`:
             Function to deserialize an encoded value. It may be called with **a
@@ -353,16 +354,20 @@ KEY_ENCODER = Encoder('key', lambda s: decode_keys(s, first=True),
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,
                          functools.partial(pickle.dumps, protocol=2))
 
+#: Perform no compression at all.
+PLAIN_PACKER = Encoder('plain', str, buffer)
+
 #: Compress bytestrings using zlib.compress()/zlib.decompress().
-ZLIB_ENCODER = Encoder('zlib', zlib.compress, zlib.decompress)
+ZLIB_PACKER = Encoder('zlib', zlib.compress, zlib.decompress)
 
 class Index(object):
     """Provides query and manipulation access to a single index on a
     Collection. You should not create this class directly, instead use
-    `Collection.add_index()` and the `Collection.indices` mapping.
+    :py:meth:`Collection.add_index` and the :py:attr:`Collection.indices`
+    mapping.
 
-    `Index.get()` and the iteration methods take a common set of arguments that
-    are described below:
+    :py:meth:`Index.get` and the iteration methods take a common set of
+    arguments that are described below:
 
         `args`:
             Prefix of the index entries to to be matched, or ``None`` or the
@@ -417,8 +422,8 @@ class Index(object):
     def iteritems(self, args=None, reverse=False, txn=None, rec=None,
             max=None, closed=True):
         """Yield all `(key, value)` items referred to by the index, in tuple
-        order. If `rec` is ``True``, `Record` instances are yielded instead of
-        record values."""
+        order. If `rec` is ``True``, :py:class:`Record` instances are yielded
+        instead of record values."""
         for idx_key, key in \
                 self.iterpairs(args, reverse, txn, max, closed, _lst=True):
             obj = self.coll.get(key, txn=txn, rec=rec)
@@ -430,7 +435,7 @@ class Index(object):
     def itervalues(self, args=None, reverse=None, txn=None, rec=None,
             max=None, closed=True):
         """Yield all values referred to by the index, in tuple order. If `rec`
-        is ``True``, `Record` instances are yielded instead of record
+        is ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
         return itertools.imap(operator.itemgetter(1),
             self.iteritems(args, reverse, txn, rec, max, closed))
@@ -443,8 +448,8 @@ class Index(object):
     def get(self, args=None, reverse=None, txn=None, rec=None, closed=True,
             default=None):
         """Return the first matching values referred to by the index, in tuple
-        order. If `rec` is ``True`` a `Record` instance is returned of the
-        record value."""
+        order. If `rec` is ``True`` a :py:class:`Record` instance is returned
+        of the record value."""
         for p in self.iteritems(args, reverse, txn, rec, 1, closed):
             return p[1]
         if rec and default is not None:
@@ -454,27 +459,30 @@ class Index(object):
 class Record(object):
     """Wraps a record value with its last saved key, if any.
 
-    `Record` instances are usually created by the `Collection` and `Index`
+    :py:class:`Record` instances are usually created by the
+    :py:class:`Collection` and :py:class:`Index`
     ``get()``/``put()``/``iter*()`` functions. They are primarily used to track
     index keys that were valid for the record when it was loaded, allowing many
     operations to be avoided if the user deletes or modifies it within the same
     transaction. The class is only required when modifying existing records.
 
     It is possible to avoid using the class when `Collection.derived_keys =
-    True`, however this hurts perfomance as it forces `put()` to first check
-    for any existing record with the same key, and therefore for any existing
-    index keys that must first be deleted.
+    True`, however this hurts perfomance as it forces :py:meth:`Collectionput`
+    to first check for any existing record with the same key, and therefore for
+    any existing index keys that must first be deleted.
 
-    *Note:* you may create `Record` instances directly, **but you must not
-    modify any attributes except** `data`, or construct it using any arguments
-    except `coll` and `data`, otherwise index corruption will likely occur.
+    *Note:* you may create :py:class:`Record` instances directly, **but you
+    must not modify any attributes except** :py:attr:`Record.data`, or
+    construct it using any arguments except `coll` and `data`, otherwise index
+    corruption will likely occur.
     """
     def __init__(self, coll, data, _key=None, _batch=False,
             _txn_id=None, _index_keys=None):
-        #: `Collection` this record belongs to. This is always reset after a
-        #: successful `put()`.
+        #: :py:class:`Collection` this record belongs to. This is always reset
+        #: after a successful `put()`.
         self.coll = coll
-        #: The actual record value.
+        #: The actual record value. This may be user-supplied Python object
+        #: recognized by the collection's value encoder.
         self.data = data
         #: Key for this record when it was last saved, or ``None`` if the
         #: record is deleted or has never been saved.
@@ -495,12 +503,14 @@ class Record(object):
         return '<Record %s:(%s) %r>' % (self.coll.info['name'], s, self.data)
 
 class Collection(object):
-    """Provides access to a record collection contained within a `Store`, and
-    ensures associated indices update consistently when changes are made.
+    """Provides access to a record collection contained within a
+    :py:class:`Store`, and ensures associated indices update consistently when
+    changes are made.
 
         `store`:
-            `Store` the collection belongs to. If metadata for the collection
-            does not already exist, it will be populated during construction.
+            :py:class:`Store` the collection belongs to. If metadata for the
+            collection does not already exist, it will be populated during
+            construction.
 
         `name`:
             ASCII string used to identify the collection, aka. the key of the
@@ -542,8 +552,8 @@ class Collection(object):
             default isn't given here.
 
         `counter_name`:
-            Specifies the name of the `Store` counter to use when generating
-            auto-incremented keys. If unspecified, defaults to
+            Specifies the name of the :py:class:`Store` counter to use when
+            generating auto-incremented keys. If unspecified, defaults to
             ``"key_counter:<name>"``. Unused when `key_func` or `txn_key_func`
             are specified.
 
@@ -574,7 +584,9 @@ class Collection(object):
         self.txn_key_func = txn_key_func
         self.derived_keys = derived_keys
         self.encoder = encoder or PICKLE_ENCODER
-        self.packer = packer
+        #: Default packer used when calls to :py:meth:`Collection.put` do not
+        #: specify a `packer=` argument. Defaults to ``PLAIN_PACKER``.
+        self.packer = packer or PLAIN_PACKER
         #: Dict mapping indices added using ``add_index()`` to `Index`
         #: instances representing them.
         #:
@@ -592,7 +604,7 @@ class Collection(object):
 
         *Note:* only index metadata is persistent. You must invoke
         `add_index()` with the same arguments every time you create a
-        `Collection` instance.
+        :py:class:`Collection` instance.
 
         `name`:
             ASCII name for the index.
@@ -653,8 +665,8 @@ class Collection(object):
 
     def iteritems(self, key=(), rec=False, txn=None):
         """Yield all `(key, value)` tuples in the collection, in key order. If
-        `rec` is ``True``, `Record` instances are yielded instead of record
-        values."""
+        `rec` is ``True``, :py:class:`Record` instances are yielded instead of
+        record values."""
         key = tuplize(key)
         it = _iter(txn, self.engine, encode_keys((key,), self.prefix))
         for phys, data in it:
@@ -668,7 +680,8 @@ class Collection(object):
 
     def itervalues(self, key, rec=False):
         """Yield all values in the collection, in key order. If `rec` is
-        ``True``, `Record` instances are yielded instead of record values."""
+        ``True``, :py:class:`Record` instances are yielded instead of record
+        values."""
         return itertools.imap(operator.itemgetter(1), self.iteritems(key, rec))
 
     def gets(self, keys, default=None, rec=False, txn=None):
@@ -679,8 +692,8 @@ class Collection(object):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead. If `rec` is ``True``, return
-        a `Record` instance for use when later re-saving the record, otherwise
-        only the record's value is returned."""
+        a :py:class:`Record` instance for use when later re-saving the record,
+        otherwise only the record's value is returned."""
         key = tuplize(key)
         it = _iter(self.engine, txn, encode_keys((key,), self.prefix))
         phys, data = next(it, (None, None))
@@ -804,10 +817,11 @@ class Collection(object):
 
             `rec`:
                 The value to put; may either be a value recognised by the
-                collection's `encoder` or a `Record` instance, such as returned
-                by ``get(..., rec=True)``. It is strongly advised to prefer use
-                of `Record` instances during read-modify-write transactions as
-                it allows ``put()`` to avoid many database operations.
+                collection's `encoder` or a :py:class:`Record` instance, such
+                as returned by ``get(..., rec=True)``. It is strongly advised
+                to prefer use of :py:class:`Record` instances during
+                read-modify-write transactions as it allows ``put()`` to avoid
+                many database operations.
 
             `txn`:
                 Transaction to use, or ``None`` to indicate the default
@@ -815,8 +829,7 @@ class Collection(object):
 
             `packer`:
                 Encoding to use to compress the value. Defaults to
-                `Collection.packer`, or uncompressed if `Collection.packer` is
-                ``None``.
+                :py:attr:`Collection.packer`.
 
             `key`:
                 If specified, overrides the use of collection's key function
@@ -873,12 +886,12 @@ class Collection(object):
         return _eat(eat, (self.delete(obj) for obj in objs))
 
     def delete(self, obj, txn=None):
-        """Delete a record by key or using a `Record` instance. The deleted
-        record is returned if it existed.
+        """Delete a record by key or using a :py:class:`Record` instance. The
+        deleted record is returned if it existed.
 
         `obj`:
-            Record to delete; may be a `Record` instance, or a tuple, or a
-            primitive value.
+            Record to delete; may be a :py:class:`Record` instance, or a tuple,
+            or a primitive value.
         """
         if isinstance(obj, Record):
             rec = obj
