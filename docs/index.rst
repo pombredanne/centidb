@@ -232,7 +232,7 @@ Engine Interface
 ++++++++++++++++
 
 A storage engine or transaction is any object that implements the following
-methods. All key and value variables below are bytestrings:
+methods. All key and value variables below are ``NUL``-safe bytestrings:
 
     `get(key)`:
         Return the value of `key` or ``None`` if it does not exist.
@@ -515,6 +515,12 @@ itself may be iterated in reverse:
 Performance
 ###########
 
+TBD.
+
+* Read performance
+* Batch compression read performance
+* Write performance
+
 
 Glossary
 ########
@@ -579,13 +585,18 @@ represent a :py:class:`Collection` as an SQL table by leveraging the `OID`
 type, or to provide exact emulation of the sort order of other databases (e.g.
 App Engine).
 
+The main difficulty with parameterizing key encoding is that :py:class:`Index`
+relies on :py:func:`encode_keys` to function. One solution might be to
+parameterize :py:class:`Index`'s key construction, or force key encodings to
+accept lists of keys as part of their interface.
+
 
 Metadata
 ++++++++
 
 Only a small amount of metadata is kept in the storage engine. It is encoded
-using ``KEY_ENCODER`` to allow easy access from another language, since
-implementations cannot avoid supporting the key encoding.
+using ``KEY_ENCODER`` to allow easy access from other languages, since
+implementations must always support it.
 
 
 Collections
@@ -620,8 +631,8 @@ The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 +-------------------+-------------------------------------------------------+
 
 Collection key prefixes are formed simply by encoding the index using
-`encode_int()`. The index itself is assigned by a call to `count()` using the
-special name ``'\x00collections_idx'``.
+:py:func:`encode_int`. The index itself is assigned by a call to
+:py:meth:`Store.count` using the special name ``'\x00collections_idx'``.
 
 Counters
 --------
@@ -634,13 +645,19 @@ The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 +-------------------+-------------------------------------------------------+
 | *Name*            | *Description*                                         |
 +-------------------+-------------------------------------------------------+
-| ``name``          | Bytestring counter name.                              |
+| ``name``          | Bytestring counter name                               |
 +-------------------+-------------------------------------------------------+
-| ``value``         | Integer value.                                        |
+| ``value``         | Integer value                                         |
 +-------------------+-------------------------------------------------------+
 
 Encodings
 ---------
+
+All encodings ever used by :py:class:`Store` are kept persistently so the user
+need not manually allocate prefixes, potentially in several places spanning
+multiple languages. Additionally since the encoding name is stored, a
+meaningful diagnostic can be printed if attempts are made to access records
+encoded with an unregistered encoder.
 
 *Note: not implemented yet.*
 
@@ -652,28 +669,27 @@ The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 +-------------------+-------------------------------------------------------+
 | *Name*            | *Description*                                         |
 +-------------------+-------------------------------------------------------+
-| ``name``          | Bytestring encoding/compressor name.                  |
+| ``name``          | Bytestring encoding/compressor name                   |
 +-------------------+-------------------------------------------------------+
-| ``idx``           | Integer compressor index, used to form value prefix.  |
+| ``idx``           | Integer compressor index, used to form value prefix   |
 +-------------------+-------------------------------------------------------+
 
 Compressor value prefixes are formed simply by encoding the index using
-`encode_int()`. The index itself is assigned by a call to `count()` using the
-special name ``'\x00encodings_idx'``.
+:py:func:`encode_int`. The index itself is assigned by a call to
+:py:meth:`Store.count` using the special name ``'\x00encodings_idx'``.
 
-Additionally, the following encoding metadata entries always exist (*not yet
-implemented*):
+The following entries always exist (*not yet implemented*):
 
 +-------------------+---------+---------------------------------------------+
 | ``name``          | ``idx`` | *Description*                               |
 +-------------------+---------+---------------------------------------------+
-| ``key``           | 1       | Built-in key encoding.                      |
+| ``key``           | 1       | Built-in ``KEY_ENCODER``                    |
 +-------------------+---------+---------------------------------------------+
-| ``pickle``        | 2       | Built-in pickle encoding.                   |
+| ``pickle``        | 2       | Built-in ``PICKLE_ENCODER``                 |
 +-------------------+---------+---------------------------------------------+
-| ``plain``         | 3       | Built-in ``PLAIN_PACKER`` (raw bytes).      |
+| ``plain``         | 3       | Built-in ``PLAIN_PACKER`` (raw bytes)       |
 +-------------------+---------+---------------------------------------------+
-| ``zlib``          | 4       | Built-in ``ZLIB_PACKER``.                   |
+| ``zlib``          | 4       | Built-in ``ZLIB_PACKER``                    |
 +-------------------+---------+---------------------------------------------+
 
 
@@ -703,7 +719,7 @@ So this module is borne out of frustration. On a recent project while
 experimenting with compression, I again found myself partially implementing
 what this module wants to be: a tiny layer that does little but add indices to
 a piece of Cold War era technology. No "inventions", no lies, no claims to
-beauty, no religious debates about scaleability, just 300ish lines that try to
+beauty, no religious debates about scaleability, just 400ish lines that try to
 do one thing reasonably.
 
 And so that remains the primary design goal: **size**. The library should be
@@ -736,13 +752,13 @@ Maybe:
 3. Make key/value scheme prefix optional
 4. Make indices work as :py:class:`Collection` observers, instead of hard-wired
 5. Convert :py:class:`Index` to reuse :py:class:`Collection`
-6. Support "read-only" :py:class:`Index` object
 
 Probably not:
 
-1. Minimalist validating+indexing network server module
-2. `Engine` or :py:class:`Collection` that implements caching on top of another
-3. `Engine` that distributes keyspace using configurable scheme
-4. :py:class:`Index` and :py:class:`Query` classes that integrate with richer
+1. Support "read-only" :py:class:`Index` object
+2. Minimalist validating+indexing network server module
+3. `Engine` or :py:class:`Collection` that implements caching on top of another
+4. `Engine` that distributes keyspace using configurable scheme
+5. :py:class:`Index` and :py:class:`Query` classes that integrate with richer
    APIs, e.g. App Engine
 

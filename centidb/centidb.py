@@ -980,7 +980,8 @@ class Store(object):
         created if it doesn't exist.
 
             `name`:
-                Name of the counter.
+                Name of the counter. Names beginning with ``"\\x00"`` are
+                reserved by the implementation.
 
             `n`:
                 Number to add to the counter.
