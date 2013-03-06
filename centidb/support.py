@@ -43,15 +43,17 @@ class ListEngine(object):
             self.size -= len(k) + len(self.pairs[idx][1])
             self.pairs.pop(idx)
 
-    def iter(self, k, keys=True, values=True, reverse=False):
-        idx = bisect.bisect_left(self.pairs, (k,))
+    def iter(self, k=None, reverse=False):
+        idx = bisect.bisect_left(self.pairs, (k,)) if k else 0
         if reverse:
-            idx -= len(self.pairs) == idx or self.pairs[idx][0] > k
+            if k:
+                idx -= (len(self.pairs) == idx or self.pairs[idx][0] > k)
+            else:
+                idx = len(self.pairs) - 1
             xr = xrange(idx, -1, -1)
         else:
-            xr = xrange(idx, len(self.pairs))
-        it = imap(self.pairs.__getitem__, xr)
-        return it if keys and values else imap(itemgetter(+(not keys)), it)
+            xr = xrange(idx or 0, len(self.pairs))
+        return imap(self.pairs.__getitem__, xr)
 
 
 class PlyvelEngine(object):
@@ -74,12 +76,15 @@ class PlyvelEngine(object):
         self.put = self.db.put
         self.delete = self.db.delete
 
-    def iter(self, k, keys=True, values=True, reverse=False):
-        it = self.db.iterator(include_key=keys, include_value=values,
-                              reverse=reverse)
+    def iter(self, k, reverse=False):
+        it = self.db.iterator(reverse=reverse)
         if reverse:
-            k += '\x00'
-        it.seek(k)
+            if k:
+                it.seek(k + '\x00') # TODO
+            else:
+                it.seek_to_stop()
+        else:
+            it.seek(k)
         return it
 
 

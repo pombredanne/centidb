@@ -22,6 +22,7 @@ See http://centidb.readthedocs.org/
 from __future__ import absolute_import
 
 import cPickle as pickle
+from pprint import pprint
 import cStringIO
 import functools
 import itertools
@@ -32,8 +33,6 @@ import time
 import uuid
 import warnings
 import zlib
-
-import plyvel
 
 __all__ = '''invert Store Collection Record Index decode_keys encode_keys
     decode_int encode_int Encoder KEY_ENCODER PICKLE_ENCODER PLAIN_PACKER
@@ -168,23 +167,37 @@ def decode_str(getc):
         else:
             io.write(c)
 
-def _iter(engine, txn, key=None, prefix=None, keys=True, values=True,
-          lo=None, hi=None, reverse=False, max=None):
-    txn = txn or engine
-    lo = lo or key
+
+def prefix_bound(s):
+    """Given a bytestring `s`, return the most compact bytestring that is
+    greater than any value prefixed with `s`, but lower than any other value.
+
+    ::
+
+        '' == '\x00'
+        '\x00' == '\x01'
+        '\xff
+        assert next_greater('\x00\x00') == '\x00\x01')
+        assert next_greater('\x00\xff') == '\x01')
+        assert next_greater('\xff\xff') == '\x01')
+
+    """
+    s2 = s.rstrip('\xff')
+    return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
+
+def _iter(engine, txn, key=None, prefix=None, lo=None, hi=None, reverse=False,
+        max=None):
     if prefix:
         lo = prefix
-        hi = prefix + '\xff' # TODO
-    key = hi if reverse else lo
-    both = keys and values
-    print (txn.iter, key, dict(keys=True, values=True, reverse=reverse))
-    it = txn.iter(key, keys=True, values=True, reverse=reverse)
-    if max:
-        it = itertools.islice(it, max) if max else it
-    for tup in it:
-        if not (lo <= tup[0] <= hi):
+        hi = prefix_bound(prefix)
+
+    #pprint(dict(locals()))
+    it = (txn or engine).iter((hi if reverse else lo) or key, reverse)
+    for tup in itertools.islice(it, max) if max else it:
+        k = tup[0]
+        if (lo and lo > k) or (hi and hi < k):
             break
-        yield tup if both else tup[+values]
+        yield tup
 
 def _eat(pred, it, total_only=False):
     if not eat:
@@ -430,7 +443,7 @@ class Index(object):
             if obj:
                 yield idx_key, obj
             else:
-                warnings.warn('stale entry in %r, requires rebuild')
+                warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
     def itervalues(self, args=None, reverse=None, txn=None, rec=None,
             max=None, closed=True):
@@ -563,7 +576,7 @@ class Collection(object):
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
             generating auto-incremented keys. If unspecified, defaults to
-            ``"key_counter:<name>"``. Unused when `key_func` or `txn_key_func`
+            ``"key:<name>"``. Unused when `key_func` or `txn_key_func`
             are specified.
 
         `counter_prefix`:
@@ -584,7 +597,7 @@ class Collection(object):
             self.info = store._get_info(name, idx=_idx)
         self.prefix = store.prefix + encode_int(self.info['idx'])
         if not (key_func or txn_key_func):
-            counter_name = counter_name or ('key_counter:%(name)s' % self.info)
+            counter_name = counter_name or ('key:%(name)s' % self.info)
             counter_prefix = counter_prefix or ()
             txn_key_func = lambda txn, _: \
                 (counter_prefix + (store.count(counter_name, txn=txn),))
