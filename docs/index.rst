@@ -1,4 +1,6 @@
 
+#TODO: strings -> unicode
+
 centidb
 =======
 
@@ -14,7 +16,7 @@ a key/value store and the convenience of SQL. It wraps any store offering an
 ordered-map interface, adding features that often tempt developers to use more
 complex systems.
 
-Functionality is provided for forming ordered composite keys, managing and
+Functionality is provided for forming ordered compound keys, managing and
 querying secondary indices, and a binary encoding that preserves the ordering
 of tuples of primitive values. Combining the simplicity of a key/value store
 with the convenience of a DBMS indexing system, while absent of any
@@ -485,7 +487,7 @@ itself may be iterated in reverse:
 
 ::
 
-    coll = Collection(store, 'people',
+    coll = centidb.Collection(store, 'people',
         key_func=lambda person: person['name'])
     coll.add_index('age', lambda person: person['age'])
     coll.add_index('age_height',
@@ -512,6 +514,36 @@ itself may be iterated in reverse:
     it = coll.index['age_height'].iteritems(reverse=True)
 
 
+Covered indices
++++++++++++++++
+
+No built-in support for covered indices is provided yet, however this can be
+emulated by encoding the data to be covered as part of the index key:
+
+::
+
+    coll = centidb.Collection(store, 'people')
+
+    age_height_name = coll.add_index('age_height_name',
+        lambda person: (person['age'], person['height'], person['name']))
+
+    age_photo = coll.add_index('age_photo',
+        lambda person: (person['age'], file(person['photo']).read()))
+
+
+    coll.put({'name': 'Bob', 'age': 69, 'height': 113})
+
+    # Query by key but omit covered part:
+    tup = next(age_height_name.itertups((69, 113)))
+    name = tup and tup[-1]
+
+    tup = next(age_photo.itertups(69))
+    photo = tup and tup[-1]
+
+A future version may allow storing arbitrarily encoded values along with index
+entries as part of the API.
+
+
 Performance
 ###########
 
@@ -520,6 +552,7 @@ TBD.
 * Read performance
 * Batch compression read performance
 * Write performance
+* Compared to ZODB, MongoDB, PostgreSQL
 
 
 Glossary
@@ -718,9 +751,9 @@ fear I do get it, all too well, and I hate it.
 So this module is borne out of frustration. On a recent project while
 experimenting with compression, I again found myself partially implementing
 what this module wants to be: a tiny layer that does little but add indices to
-a piece of Cold War era technology. No "inventions", no lies, no claims to
-beauty, no religious debates about scaleability, just 400ish lines that try to
-do one thing reasonably.
+Cold War era technology. No "inventions", no lies, no claims to beauty, no
+religious debates about scaleability, just 400ish lines that try to do one
+thing reasonably.
 
 And so that remains the primary design goal: **size**. The library should be
 *small* and *convenient*. Few baked in assumptions, no overcooked
@@ -737,21 +770,23 @@ Probably:
 
 1. Support inverted index keys nicely
 2. Avoid key decoding when only used for comparison
-3. Unique index constraint
-4. Value compressed covered indices
-5. Better documentation
+3. Unique index constraints, or validation callbacks
+4. Better documentation
+5. Index and collection type signatures (prevent writes using an inconsistent
+   configuration)
 6. Smaller
 7. Safer
-8. Enough speedups to make a viable middleweight production store.
+8. Enough speedups to make a viable middleweight production store
 9. C++ library
 
 Maybe:
 
-1. `Query` object to simplify index intersections.
-2. Configurable key scheme
-3. Make key/value scheme prefix optional
-4. Make indices work as :py:class:`Collection` observers, instead of hard-wired
-5. Convert :py:class:`Index` to reuse :py:class:`Collection`
+1. Value compressed covered indices
+2. `Query` object to simplify index intersections.
+3. Configurable key scheme
+4. Make key/value scheme prefix optional
+5. Make indices work as :py:class:`Collection` observers, instead of hard-wired
+6. Convert :py:class:`Index` to reuse :py:class:`Collection`
 
 Probably not:
 
