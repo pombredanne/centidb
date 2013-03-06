@@ -59,7 +59,7 @@ collection:
 
 ::
 
-    coll = centidb.Collection(store, 'people')
+    people = centidb.Collection(store, 'people')
 
 Behind the scenes a few things just happened. Since our in-memory engine had no
 ``people`` collection registered, a 1-byte key prefix was allocated using
@@ -72,9 +72,18 @@ counter and the collection were written to the engine:
     [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
      ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
 
-treated as an independent set of
-`Collections` which access 
-The database engine is wrapped by a `Store` object, 
+    >>> pprint(people.info)
+    {'idx': 10, 'index_for': None, 'name': 'people'}
+
+Since we did not provide an `encoder=` argument, ``PICKLE_ENCODER`` is used by
+default, allowing values to be almost any Python object, and since `key_func=`
+was not provided, a key function was generated that uses
+:py:meth:`Store.count() <centidb.Store.count>` to assign auto-incrementing
+keys, just like in SQL.
+
+::
+
+    >>
 
 
 
