@@ -48,7 +48,6 @@ KIND_TEXT = chr(50)
 KIND_UUID = chr(90)
 KIND_KEY = chr(95)
 KIND_SEP = chr(102)
-
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 
 def invert(s):
@@ -178,6 +177,7 @@ def _iter(engine, txn, key=None, prefix=None, keys=True, values=True,
         hi = prefix + '\xff' # TODO
     key = hi if reverse else lo
     both = keys and values
+    print (txn.iter, key, dict(keys=True, values=True, reverse=reverse))
     it = txn.iter(key, keys=True, values=True, reverse=reverse)
     if max:
         it = itertools.islice(it, max) if max else it
@@ -361,8 +361,8 @@ class Index(object):
     Collection. You should not create this class directly, instead use
     `Collection.add_index()` and the `Collection.indices` mapping.
 
-    `Index.get()` and the iteration methods take a common set of parameters
-    that are described below:
+    `Index.get()` and the iteration methods take a common set of arguments that
+    are described below:
 
         `args`:
             Prefix of the index entries to to be matched, or ``None`` or the
@@ -466,7 +466,7 @@ class Record(object):
     index keys that must first be deleted.
 
     *Note:* you may create `Record` instances directly, **but you must not
-    modify any attributes except** `data`, or construct it using any parameters
+    modify any attributes except** `data`, or construct it using any arguments
     except `coll` and `data`, otherwise index corruption will likely occur.
     """
     def __init__(self, coll, data, _key=None, _batch=False,
@@ -692,6 +692,75 @@ class Collection(object):
                 return Record(self, obj, key, len(keys)>1) if rec else obj
         if default is not None:
             return Record(self, default) if rec else default
+
+    def batch(self, lo, hi, maxrecs=None, maxbytes=None, preserve=True,
+            packer=None, txn=None, maxphys=None):
+        """
+        Search the key range *lo..hi* for individual records, combining them
+        into a batches.
+
+        *Note: Not implemented yet.*
+
+        Returns `(found, made, last_key)` indicating the number of records
+        combined, the number of batches produced, and the last key visited
+        before `maxphys` was exceeded.
+
+        Batch size is controlled via `maxrecs` and `maxbytes`; at least one
+        must not be ``None``. Larger sizes may cause pathological behaviour in
+        the storage engine (for example, space inefficiency). Since batches are
+        fully decompressed before any member may be accessed via
+        :py:meth:`get() <Collection.get>` or :py:meth:`iteritems()
+        <Collection.iteritems>`, larger sizes may slow decompression, waste IO
+        bandwidth, and temporarily use more RAM.
+
+            `lo`:
+                Lowest search key.
+
+            `hi`:
+                Highest search key.
+
+            `maxrecs`:
+                Maximum number of records contained by any single batch. When
+                this count is reached, the current batch is saved and a new one
+                is created.
+
+            `maxbytes`:
+                Maximum size in bytes of the batch record's value after
+                compression, or ``None`` for no maximum size. When not
+                ``None``, values are recompressed after each member is
+                appended, in order to test if `maxbytes` has been reached. This
+                is inefficient, but provides the best guarantee of final record
+                size. Single records are skipped if they exceed this size when
+                compressed individually.
+
+            `preserve`:
+                If ``True``, then existing batch records in the database are
+                left untouched. When one is found within `lo..hi`, the
+                currently building batch is finished and the found batch is
+                skipped over.
+
+                If ``False``, found batches are exploded and their members
+                contribute to the currently building batch.
+
+            `packer`:
+                Specifies the value compressor to use. If ``None``, defaults to
+                the `packer=` argument given to the :py:class:`Collection`
+                constructor, or uncompressed.
+
+            `txn`:
+                Transaction to use, or ``None`` to indicate the default
+                behaviour of the storage engine.
+
+            `maxphys`:
+                Maximum number of physical keys to visit in any particular
+                call. A collection may be incrementally batched by repeatedly
+                invoking :py:meth:`Collection.batch` with `max` set, and `lo`
+                set to `last_key` of the previous run, until `found` returns
+                ``0``. This allows batching to complete over several
+                transactions without blocking other users.
+        """
+        assert maxsize or maxrecs, 'maxsize and/or maxrecs must be provided.'
+
 
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch

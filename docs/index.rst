@@ -4,12 +4,13 @@ centidb
 
 `http://github.com/dw/centidb <http://github.com/dw/centidb>`_
 
+.. currentmodule:: centidb
 .. toctree::
     :hidden:
     :maxdepth: 2
 
 `centidb` is a tiny database that offers a compromise between the minimalism of
-a key/value store and the convenience of SQL. It wraps any store providiing an
+a key/value store and the convenience of SQL. It wraps any store offering an
 ordered-map interface, adding features that often tempt developers to use more
 complex systems.
 
@@ -40,8 +41,8 @@ Introduction
 ############
 
 Since the library depends on an external engine, an initial consideration might
-be which to use. Let's forgo that nasty research and settle on the bundled
-:py:class:`ListEngine <centidb.support.ListEngine>`.
+be which to use. Let's forgo the nasty research and settle on
+:py:class:`ListEngine <centidb.support.ListEngine>`:
 
 ::
 
@@ -51,10 +52,10 @@ be which to use. Let's forgo that nasty research and settle on the bundled
     engine = centidb.support.ListEngine()
     store = centidb.Store(engine)
 
-:py:class:`Stores <centidb.Store>` manage metadata for a set of collections,
+:py:class:`Stores <Store>` manage metadata for a set of collections,
 along with any registered encodings and counters. Multiple
-:py:class:`Collections <centidb.Collection>` may exist, each managing
-independent sets of records, much like an SQL table. Let's create a people
+:py:class:`Collections <Collection>` may exist, each managing
+independent sets of records, like an SQL table. Let's create a ``people``
 collection:
 
 ::
@@ -63,8 +64,8 @@ collection:
 
 Behind the scenes a few things just happened. Since our in-memory engine had no
 ``people`` collection registered, a 1-byte key prefix was allocated using
-:py:meth:`Store.count() <centidb.Store.count>`, and keys representing the
-counter and the collection were written to the engine:
+:py:meth:`Store.count`, and keys representing the counter and the collection
+were written to the engine:
 
 ::
     
@@ -72,14 +73,10 @@ counter and the collection were written to the engine:
     [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
      ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
 
-    >>> pprint(people.info)
-    {'idx': 10, 'index_for': None, 'name': 'people'}
-
 Since we did not provide an `encoder=` argument, ``PICKLE_ENCODER`` is used by
 default, allowing values to be almost any Python object, and since `key_func=`
-was not provided, a key function was generated that uses
-:py:meth:`Store.count() <centidb.Store.count>` to assign auto-incrementing
-keys, just like in SQL.
+was not provided, a key function was generated that uses :py:meth:`Store.count`
+to assign auto-incrementing keys, just like in SQL.
 
 ::
 
@@ -90,21 +87,23 @@ keys, just like in SQL.
 Value compression
 +++++++++++++++++
 
-Values can be compressed by passing a `packer=` argument to `Collection.put()`,
-or by passing a `default_packer=` argument to the `Collection` constructor. One
-predefined packer is provided, `ZLIB_PACKER`, however it is trivial to add
-more. See the `Encoding` documentation below for more information.
+Values can be compressed by passing a `packer=` argument to
+:py:meth:`Collection.put()`, or by passing a `packer=` argument to the
+:py:class:`Collection` constructor. A predefined `ZLIB_PACKER` is included,
+however adding new compressors is simply a case of constructing an
+:py:class:`Encoder`.
 
 ::
 
     coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
 
-Batch compression is supported by way of `Collection.batch()`: this is where a
-record range has its values combined before passing through the compressor. The
-resulting stream is saved using a special key that still permits efficient
-child lookup. The main restriction is that batches cannot violate the key
-ordering, meaning only contiguous ranges may be combined. Calls to `put()` will
-cause any overlapping batch to be split as part of the operation.
+Batch compression is supported by way of :py:meth:`Collection.batch`: this is
+where a record range has its values combined before passing through the
+compressor. The resulting stream is saved using a special key that still
+permits efficient child lookup. The main restriction is that batches cannot
+violate the key ordering, meaning only contiguous ranges may be combined. Calls
+to `put()` will cause any overlapping batch to be split as part of the
+operation.
 
 Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
@@ -205,25 +204,25 @@ Reference
 Store Class
 +++++++++++
 
-.. autoclass:: centidb.Store
+.. autoclass:: Store
     :members:
 
 Collection Class
 ++++++++++++++++
 
-.. autoclass:: centidb.Collection
+.. autoclass:: Collection
     :members:
 
 Record Class
 ++++++++++++
 
-.. autoclass:: centidb.Record
+.. autoclass:: Record
     :members:
 
 Index Class
 +++++++++++
 
-.. autoclass:: centidb.Index
+.. autoclass:: Index
     :members:
 
 
@@ -301,7 +300,7 @@ Predefined Engines
 Encodings
 #########
 
-.. autoclass:: centidb.Encoder
+.. autoclass:: Encoder
 
 
 Predefined Encoders
@@ -565,9 +564,9 @@ implementations cannot avoid supporting the key encoding.
 Collections
 -----------
 
-The collection metadata starts with ``<prefix>\x00``, where `<prefix>` is the
-prefix passed to `Store`'s constructor. The remainder of the key is an encoded
-string representing the collection name.
+The collection metadata starts with ``<Store.prefix>\x00``, where
+`<Store.prefix>` is the prefix passed to `Store`'s constructor. The remainder
+of the key is an encoded string representing the collection name.
 
 The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 
@@ -600,8 +599,8 @@ special name ``'\x00collections_idx'``.
 Counters
 --------
 
-Counter metadata starts with ``<prefix>\x01``. The remainder of the key is an
-encoded string representing the counter name.
+Counter metadata starts with ``<Store.prefix>\x01``. The remainder of the key
+is an encoded string representing the counter name.
 
 The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 
@@ -689,6 +688,8 @@ please, bug fixes and obvious omissions only.
 Futures
 +++++++
 
+Probably:
+
 1. Support inverted index keys nicely
 2. Avoid key decoding when only used for comparison
 3. Unique index constraint
@@ -696,7 +697,7 @@ Futures
 5. Better documentation
 6. Smaller
 7. Safer
-8. Faster
+8. Enough speedups to make a viable middleweight production store.
 9. C++ library
 
 Maybe:
@@ -707,6 +708,11 @@ Maybe:
 4. Make indices work as `Collection` observers, instead of hard-wired
 5. Convert `Index` to reuse `Collection`
 6. Support "read-only" `Index` object
-7. Minimalist validating+indexing network server module
-8. `Engine` or `Collection` that implements caching on top of another
-9. `Engine` that distributes keyspace using configurable scheme
+
+Probably not:
+
+1. Minimalist validating+indexing network server module
+2. `Engine` or `Collection` that implements caching on top of another
+3. `Engine` that distributes keyspace using configurable scheme
+4. `Index` and `Query` classes that integrate with richer APIs, e.g. App Engine
+
