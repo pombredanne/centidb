@@ -88,9 +88,9 @@ Value compression
 +++++++++++++++++
 
 Values may be compressed by passing a `packer=` argument to
-:py:meth:`Collection.put()`, or to the :py:class:`Collection` constructor. A
-predefined `ZLIB_PACKER` is included, however adding new compressors is simply
-a case of constructing an :py:class:`Encoder`.
+:py:meth:`Collection.put`, or to the :py:class:`Collection` constructor. A
+predefined ``ZLIB_PACKER`` is included, however adding new compressors is
+simply a case of constructing an :py:class:`Encoder`.
 
 ::
 
@@ -101,8 +101,8 @@ where a record range has its values combined before passing through the
 compressor. The resulting stream is saved using a special key that still
 permits efficient child lookup. The main restriction is that batches cannot
 violate the key ordering, meaning only contiguous ranges may be combined. Calls
-to `put()` will cause any overlapping batch to be split as part of the
-operation.
+to :py:func:`Collection.put` will cause any overlapping batch to be split as
+part of the operation.
 
 Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
@@ -278,9 +278,9 @@ methods. All key and value variables below are ``NUL``-safe bytestrings:
         "transaction objects" that do not really support transactions, simply
         set it to `None`.
 
-        Used to ensure cached index keys are valid during `put()`. If your
-        engine supports transactions but cannot provide an ID, simply set it to
-        `time.time()`.
+        Used to ensure cached index keys are valid during
+        :py:meth:`Collection.put`. If your engine supports transactions but
+        cannot provide an ID, simply set it to :py:func:`time.time`.
 
 
 Predefined Engines
@@ -309,13 +309,13 @@ The ``centidb`` module contains the following predefined :py:class:`Encoder`
 instances.
 
     ``KEY_ENCODER``
-        Uses `encode_keys()` and `decode_keys()` to serialize tuples. It is
-        used internally to represent keys, counters, and :py:class:`Store`
-        metadata.
+        Uses :py:func:`encode_keys` and :py:func:`decode_keys` to serialize
+        tuples. It is used internally to represent keys, counters, and
+        :py:class:`Store` metadata.
 
     ``PICKLE_ENCODER``
-        Uses `cPickle.dumps()` and `cPickle.loads()` with protocol 2 to
-        serialize any pickleable object. It is the default encoder if no
+        Uses :py:func:`pickle.dumps` and :py:func:`pickle.loads` with protocol
+        2 to serialize any pickleable object. It is the default encoder if no
         specific `encoder=` argument is given to the :py:class:`Collection`
         constructor.
 
@@ -329,8 +329,8 @@ names end in ``_PACKER``.
         default packer.
 
     ``ZLIB_PACKER``
-        Uses `zlib.compress()` and `zlib.decompress()` to provide value
-        compression. It may be passed as the `packer=` argument to
+        Uses :py:func:`zlib.compress` and :py:func:`zlib.decompress` to provide
+        value compression. It may be passed as the `packer=` argument to
         :py:meth:`Collection.put`, or specified as the default using the
         `packer=` argument to the :py:class:`Collection` constructor.
 
@@ -557,8 +557,8 @@ since an int will coerce to float during arithmetic, but may cause
 once-per-decade bugs: depending on a database key, the expression ``123 /
 db_val`` might perform integer or float division.
 
-A final option is adding a `number_factory=` parameter to `decode_keys()`,
-which still requires picking a good default.
+A final option is adding a `number_factory=` parameter to
+:py:func:`decode_keys`, which still requires picking a good default.
 
 Non-tuple Keys
 ++++++++++++++

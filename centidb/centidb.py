@@ -112,7 +112,7 @@ def encode_int(v):
         return '\xff' + struct.pack('>Q', v)
 
 def decode_int(getc, read):
-    """Decode and return an integer encoded by `encode_int()`.
+    """Decode and return an integer encoded by :py:func:`encode_int`.
 
     `get`:
         Function that returns the next byte of input.
@@ -230,7 +230,7 @@ def encode_keys(tups, prefix='', closed=True):
         3. Positive integers
         4. ``False``
         5. ``True``
-        6. Bytestrings (i.e. ``str()``).
+        6. Bytestrings (i.e. :py:func:`str`).
         7. Unicode strings.
         8. ``uuid.UUID`` instances.
         9. Sequences with another tuple following the last identical element.
@@ -275,8 +275,8 @@ def encode_keys(tups, prefix='', closed=True):
     return io.getvalue()
 
 def decode_keys(s, prefix=None, first=False):
-    """Decode a bytestring produced by `encode_keys()`, returning the list of
-    tuples the string represents.
+    """Decode a bytestring produced by :py:func:`encode_keys`, returning the
+    list of tuples the string represents.
 
         `prefix`:
             If specified, a string prefix of this length will be skipped before
@@ -336,8 +336,8 @@ class Encoder(object):
             Function to deserialize an encoded value. It may be called with **a
             buffer object containing the encoded bytestring** as its argument,
             and should return the decoded value. If your encoder does not
-            support `buffer()` objects (many C extensions do), then convert the
-            buffer using `str()`.
+            support :py:func:`buffer` objects (many C extensions do), then
+            convert the buffer using :py:func:`str`.
 
         `pack`:
             Function to serialize a value. It is called with the value as its
@@ -479,7 +479,7 @@ class Record(object):
     def __init__(self, coll, data, _key=None, _batch=False,
             _txn_id=None, _index_keys=None):
         #: :py:class:`Collection` this record belongs to. This is always reset
-        #: after a successful `put()`.
+        #: after a successful :py:meth:`Collection.put`.
         self.coll = coll
         #: The actual record value. This may be user-supplied Python object
         #: recognized by the collection's value encoder.
@@ -596,8 +596,8 @@ class Collection(object):
         #: Default packer used when calls to :py:meth:`Collection.put` do not
         #: specify a `packer=` argument. Defaults to ``PLAIN_PACKER``.
         self.packer = packer or PLAIN_PACKER
-        #: Dict mapping indices added using ``add_index()`` to `Index`
-        #: instances representing them.
+        #: Dict mapping indices added using :py:meth:`Collection.add_index` to
+        #: :py:class:`Index` instances representing them.
         #:
         #: ::
         #:
@@ -608,12 +608,12 @@ class Collection(object):
     def add_index(self, name, func):
         """Associate an index with the collection. Index metadata will be
         created in the storage engine it it does not exist. Returns the `Index`
-        instance describing the index. `add_index()` may only be invoked once
-        for each unique `name` for each collection.
+        instance describing the index. This method may only be invoked once for
+        each unique `name` for each collection.
 
         *Note:* only index metadata is persistent. You must invoke
-        `add_index()` with the same arguments every time you create a
-        :py:class:`Collection` instance.
+        :py:meth:`Collection.add_index` with the same arguments every time you
+        create a :py:class:`Collection` instance.
 
         `name`:
             ASCII name for the index.
@@ -809,16 +809,17 @@ class Collection(object):
         return tuplize(self.key_func(rec.data))
 
     def puts(self, recs, txn=None, packer=None, eat=True):
-        """Invoke `put()` for each element in the iterable `recs`. If `eat` is
-        ``True``, returns the number of items processed, otherwise returns an
-        iterator that lazily calls `put()` and yields its return value."""
+        """Invoke :py:meth:`put` for each element in the iterable `recs`. If
+        `eat` is ``True``, returns the number of items processed, otherwise
+        returns an iterator that lazily calls :py:meth:`put` and yields its
+        return values."""
         return _eat(eat, (self.put(rec, txn, packer) for rec in recs), True)
 
     def putitems(self, it, txn=None, packer=None, eat=True):
-        """Invoke `put(y, key=x)` for each (x, y) in the iterable `it`. If
-        `eat` is ``True``, returns the number of items processed, otherwise
-        returns an iterator that lazily calls `put()` and yields its return
-        value."""
+        """Invoke :py:meth:`put(y, key=x)` for each (x, y) in the iterable
+        `it`. If `eat` is ``True``, returns the number of items processed,
+        otherwise returns an iterator that lazily calls :py:meth:`put` and
+        yields its return values."""
         return _eat(eat, (self.put(x, txn, packer, y) for x, y in it), True)
 
     def put(self, rec, txn=None, packer=None, key=None):
@@ -829,8 +830,8 @@ class Collection(object):
                 collection's `encoder` or a :py:class:`Record` instance, such
                 as returned by ``get(..., rec=True)``. It is strongly advised
                 to prefer use of :py:class:`Record` instances during
-                read-modify-write transactions as it allows ``put()`` to avoid
-                many database operations.
+                read-modify-write transactions as it allows :py:meth:`put` to
+                avoid many database operations.
 
             `txn`:
                 Transaction to use, or ``None`` to indicate the default
@@ -876,10 +877,11 @@ class Collection(object):
         return rec
 
     def deletes(self, objs, txn=None, eat=True):
-        """Invoke `delete()` for each element in the iterable `objs`. If `eat`
-        is ``True``, returns a tuple containing the number of keys processed,
-        and the number of records deleted, otherwise returns an iterator that
-        lazily calls `deletes()` and yields its return value.
+        """Invoke :py:meth:`delete` for each element in the iterable `objs`. If
+        `eat` is ``True``, returns a tuple containing the number of keys
+        processed, and the number of records deleted, otherwise returns an
+        iterator that lazily calls :py:meth:`delete` and yields its return
+        values.
 
         ::
 
@@ -921,11 +923,11 @@ class Collection(object):
             return rec
 
     def delete_values(self, vals, txn=None, eat=True):
-        """Invoke `delete_value()` for each element in the iterable `vals`. If
-        `eat` is ``True``, returns a tuple containing the number of keys
-        processed, and the number of records deleted, otherwise returns an
-        iterator that lazily calls `delete_value()` and yields its return
-        value."""
+        """Invoke :py:meth:`delete_value` for each element in the iterable
+        `vals`. If `eat` is ``True``, returns a tuple containing the number of
+        keys processed, and the number of records deleted, otherwise returns an
+        iterator that lazily calls :py:meth:`delete_value` and yields its
+        return values."""
         return _eat(eat, (self.delete_value(v) for v in vals))
 
     def delete_value(self, val, txn=None):
