@@ -80,13 +80,36 @@ class PlyvelEngine(object):
         return self.db.iterator(**kw)
 
 
+class KyotoEngine(object):
+    """Storage engine that uses `Kyoto Cabinet
+    <http://fallabs.com/kyotocabinet/>`. Note a treedb must be used.
+    """
+    txn_id = None
+
+    def __init__(self, db=None, path=None):
+        self.db = db
+        if not self.db:
+            import kyotocabinet
+            self.db = kyotocabinet.DB(path)
+        self.get = self.db.get
+        self.set = self.db.set
+        self.delete = self.db.remove
+
+    def iter(self, k, keys=True, values=True, reverse=False):
+        kw = dict(include_key=keys, include_value=values, include_stop=True)
+        kw.update(dict(stop=k, reverse=True) if reverse else dict(start=k))
+        return self.db.iterator(**kw)
+
+
 def make_thrift_encoder(klass, factory=None):
     """
-    Return an `Encoder` instance that serializes Thrift structs using the given
-    protocol factory.
+    Return an :py:class:`Encoder <centidb.Encoder>` instance that serializes
+    `Apache Thrift <http://thrift.apache.org/>`_ structs using a compact binary
+    representation.
 
     `klass`:
         Thrift-generated struct class the `Encoder` is for.
+
     `factory`:
         Thrift protocol factory for the desired protocol, defaults to
         `TCompactProtocolFactory`.

@@ -169,6 +169,23 @@ def decode_str(getc):
         else:
             io.write(c)
 
+def _iter(engine, txn, key=None, prefix=None, keys=True, values=True,
+          lo=None, hi=None, reverse=False, max=None):
+    txn = txn or engine
+    lo = lo or key
+    if prefix:
+        lo = prefix
+        hi = prefix + '\xff' # TODO
+    key = hi if reverse else lo
+    both = keys and values
+    it = txn.iter(key, keys=True, values=True, reverse=reverse)
+    if max:
+        it = itertools.islice(it, max) if max else it
+    for tup in it:
+        if not (lo <= tup[0] <= hi):
+            break
+        yield tup if both else tup[+values]
+
 def _eat(pred, it, total_only=False):
     if not eat:
         return it
@@ -358,12 +375,15 @@ class Index(object):
 
         `txn`:
             Transaction to use, or ``None`` to indicate the default behaviour
-            of the associated `Store`.
+            of the storage engine.
+
+        `max`:
+            Maximum number of index records to return.
     """
     def __init__(self, coll, info, func):
         self.coll = coll
         self.store = coll.store
-        self.db = self.store.db
+        self.engine = self.store.engine
         self.info = info
         self.func = func
         self.prefix = self.store.prefix + encode_int(info['idx'])
@@ -375,9 +395,8 @@ class Index(object):
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record."""
         key = encode_keys((args or (),), self.prefix, closed)
-        it = self.db.iterator(prefix=key, reverse=reverse, include_value=False)
-        if max is not None:
-            it = itertools.islice(it, max)
+        it = _iter(self.engine, txn, prefix=key, reverse=reverse, values=False,
+            max=max)
         it = itertools.imap(self._decode, it)
         return it if _lst else itertools.imap(tuple, it)
 
@@ -539,8 +558,8 @@ class Collection(object):
             counter_name=None, counter_prefix=None):
         """Create an instance; see class docstring."""
         self.store = store
-        self.db = store.db
-        if _idx:
+        self.engine = store.engine
+        if _idx is not None:
             self.info = {'name': name, 'idx': _idx, 'index_for': None}
         else:
             self.info = store._get_info(name, idx=_idx)
@@ -566,10 +585,10 @@ class Collection(object):
         self.indices = {}
 
     def add_index(self, name, func):
-        """Associate an index with the collection. The index metadata will be
-        created in the associated `Store` it it does not exist. Returns the
-        `Index` instance describing the index. `add_index()` may only be
-        invoked once for each unique `name` for each collection.
+        """Associate an index with the collection. Index metadata will be
+        created in the storage engine it it does not exist. Returns the `Index`
+        instance describing the index. `add_index()` may only be invoked once
+        for each unique `name` for each collection.
 
         *Note:* only index metadata is persistent. You must invoke
         `add_index()` with the same arguments every time you create a
@@ -616,12 +635,12 @@ class Collection(object):
             return zlib.decompress(buffer(s, 1))
         return s[1:]
 
-    def iter_phys_keys(self):
+    def iter_phys_keys(self, txn=None):
         """Yield lists of tuples representing all the physical keys that exist
         in the collection, in key order. A physical key is simply a sequence of
         logical keys. When the length of the yielded list is >1, this indicates
         multiple logical keys saved to the same physical key."""
-        it = self.db.iterator(prefix=self.prefix, include_value=False)
+        it = _iter(self.engine, txn, prefix=self.prefix, values=False)
         return (decode_keys(phys, self.prefix)[::-1] for phys in it)
 
     def _index_keys(self, key, obj):
@@ -632,12 +651,12 @@ class Collection(object):
                 idx_keys.append(encode_keys((idx_key, key), idx.prefix))
         return idx_keys
 
-    def iteritems(self, key=(), rec=False):
+    def iteritems(self, key=(), rec=False, txn=None):
         """Yield all `(key, value)` tuples in the collection, in key order. If
         `rec` is ``True``, `Record` instances are yielded instead of record
         values."""
         key = tuplize(key)
-        it = self.db.iterator(start=encode_keys((key,), self.prefix))
+        it = _iter(txn, self.engine, encode_keys((key,), self.prefix))
         for phys, data in it:
             if not phys.startswith(self.prefix):
                 break
@@ -663,7 +682,7 @@ class Collection(object):
         a `Record` instance for use when later re-saving the record, otherwise
         only the record's value is returned."""
         key = tuplize(key)
-        it = (txn or self.db).iterator(start=encode_keys((key,), self.prefix))
+        it = _iter(self.engine, txn, encode_keys((key,), self.prefix))
         phys, data = next(it, (None, None))
 
         if phys and phys.startswith(self.prefix):
@@ -676,8 +695,7 @@ class Collection(object):
 
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
-        it = self.db.iterator(
-            start=encode_keys((rec.key,), self.prefix))
+        it = _iter(self.engine, txn, encode_keys((rec.key,), self.prefix))
         phys, data = next(it, (None, None))
         keys = decode_keys(phys, self.prefix)
         assert len(keys) > 1 and rec.key in keys, \
@@ -688,7 +706,7 @@ class Collection(object):
         for i, obj in enumerate(objs):
             if keys[-(1 + i)] != rec.key:
                 self.put(Record(self, obj), txn, key=keys[-(1 + i)])
-        (txn or self.db).delete(phys)
+        (txn or self.engine).delete(phys)
         rec.key = None
         rec.batch = False
 
@@ -724,7 +742,7 @@ class Collection(object):
 
             `txn`:
                 Transaction to use, or ``None`` to indicate the default
-                behaviour of the associated `Store`.
+                behaviour of the storage engine.
 
             `packer`:
                 Encoding to use to compress the value. Defaults to
@@ -741,7 +759,7 @@ class Collection(object):
         index_keys = self._index_keys(obj_key, rec.data)
 
         if rec.coll == self and rec.key:
-            delete = (txn or self.db).delete
+            delete = (txn or self.engine).delete
             if rec.batch:
                 # Old key was part of a batch, explode the batch.
                 self._split_batch(rec, txn)
@@ -756,7 +774,7 @@ class Collection(object):
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
-        put = (txn or self.db).put
+        put = (txn or self.engine).put
         put(encode_keys((obj_key,), self.prefix),
             ' ' + self.encoder.pack(rec.data))
         for index_key in index_keys:
@@ -802,7 +820,7 @@ class Collection(object):
             if rec.batch:
                 self._split_batch(rec, txn)
             else:
-                delete = (txn or self.db).delete
+                delete = (txn or self.engine).delete
                 delete(encode_keys((rec_key,), self.prefix))
                 for index_key in rec.index_keys or ():
                     delete(index_key)
@@ -849,8 +867,8 @@ class Store(object):
             counter, metadata). This allows the storage engine's key space to
             be shared amongst several users.
     """
-    def __init__(self, db, prefix=''):
-        self.db = db
+    def __init__(self, engine, prefix=''):
+        self.engine = engine
         self.prefix = prefix
         self._info_coll = Collection(self, '\x00collections', _idx=0,
             encoder=KEY_ENCODER, key_func=lambda tup: tup[0])

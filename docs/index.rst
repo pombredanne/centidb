@@ -8,10 +8,10 @@ centidb
     :hidden:
     :maxdepth: 2
 
-`centidb` is a tiny database that provides a tradeoff between the minimalism of
-a key/value store and the convenience of SQL. It wraps any store that provides
-an ordered-map interface, adding features that often tempt developers to use
-more complex systems.
+`centidb` is a tiny database that offers a compromise between the minimalism of
+a key/value store and the convenience of SQL. It wraps any store providiing an
+ordered-map interface, adding features that often tempt developers to use more
+complex systems.
 
 Functionality is provided for forming ordered composite keys, managing and
 querying secondary indices, and a binary encoding that preserves the ordering
@@ -21,9 +21,9 @@ storage-specific protocol/language/encoding/data model, or the impedence
 mismatch that necessitates use of ORMs, it provides for a compelling
 programming experience.
 
-Few design constraints exist: there is no enforced value type or encoding, key
-scheme, compressor, or storage engine, allowing integration with whatever best
-suits or is already used by a project.
+Few constraints exist: there is no enforced value type or encoding, key scheme,
+compressor, or storage engine, allowing integration with whatever best suits or
+is already used by a project.
 
 Batch value compression is supported, trading read performance for improved
 compression ratios, while still permitting easy access to data. Arbitrary key
@@ -32,26 +32,45 @@ ranges can be selected for compression and the batch size is configurable.
 Since it is a Python library, key and index functions are written directly in
 Python rather than some unrelated language.
 
-Why `centi`-db? Because it is over 100 times smaller than alternatives with
-comparable features (<400 LOC excluding speedups vs. ~152 kLOC for Mongo).
+Why `centi`-db? Because at under 400 lines of code, it is more than 100 times
+smaller than alternatives with comparable features.
 
 
-Basics
-######
+Introduction
+############
 
-Store object
-++++++++++++
-
-The user's configured storage engine is first wrapped in a `Store` instance:
+Since the library depends on an external engine, an initial consideration might
+be which to use. Let's forgo that nasty research and settle on the bundled
+:py:class:`ListEngine <centidb.support.ListEngine>`.
 
 ::
 
-    # Use a LevelDB database for storage.
-    db = plyvel.DB('test.ldb', create_if_missing=True)
-    store = centidb.Store(PlyvelEngine(db))
+    import centidb
+    import centidb.support
 
-The store manages metadata for a set of `Collection` and `Index` objects, along
-with any compressors and counters.
+    engine = centidb.support.ListEngine()
+    store = centidb.Store(engine)
+
+:py:class:`Stores <centidb.Store>` manage metadata for a set of collections,
+along with any registered encodings and counters. Multiple
+:py:class:`Collections <centidb.Collection>` may exist, each managing
+independent sets of records, much like an SQL table. Let's create a people
+collection:
+
+::
+
+    coll = centidb.Collection(store, 'people')
+
+Behind the scenes a few things just happened. Since our in-memory engine had no
+``people`` collection registered, a 1-byte key prefix was allocated using
+:py:meth:`Store.count() <centidb.Store.count>`, and keys representing the
+counter and the collection were written to the engine:
+
+::
+    
+    >>> pprint(engine.pairs)
+    [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
+     ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
 
 treated as an independent set of
 `Collections` which access 
@@ -266,6 +285,9 @@ Predefined Engines
 .. autoclass:: centidb.support.PlyvelEngine
     :members:
 
+.. autoclass:: centidb.support.KyotoEngine
+    :members:
+
 
 Encodings
 #########
@@ -302,9 +324,6 @@ Thrift Integration
 
 Example
 -------
-
-This uses `Apache Thrift <http://thrift.apache.org/>`_ to serialize Thrift
-struct values to a compact binary representation.
 
 Create a ``myproject.thrift`` file:
 
@@ -627,12 +646,13 @@ History
 
 The first attempt came during 2011 while porting from App Engine and a
 Datastore-alike was needed. All alternatives included so much weirdness (Java?
-JavaScript? BSON? Auto-magico-sharding? ``PageFaultRetryableSection``?!?) that
-I eventually canned the project, rendered incapable of picking something as
-**simple as a database** that was *good enough*, overwhelmed by false promises,
-fake distinctions and overstated greatness in the endless PR veiled by
-marketing site designs, and driven by people for whom the embodiment of
-*elegance* is the choice of font on a Powerpoint slide.
+Erlang? JavaScript? BSON? Auto-magico-sharding?
+``PageFaultRetryableSection``?!?) that I eventually canned the project,
+rendered incapable of picking something as **simple as a database** that was
+*good enough*, overwhelmed by false promises, fake distinctions and overstated
+greatness in the endless PR veiled by marketing site designs, and driven by
+people for whom the embodiment of *elegance* is more often the choice of font
+on a Powerpoint slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
 when the B-tree appeared, also known as the core of SQLite 3, the core of
