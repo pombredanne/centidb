@@ -1,6 +1,4 @@
 
-#TODO: strings -> unicode
-
 centidb
 =======
 
@@ -11,8 +9,8 @@ centidb
     :hidden:
     :maxdepth: 2
 
-`centidb` is a tiny database that offers a compromise between the minimalism of
-a key/value store and the convenience of SQL. It wraps any store offering an
+`centidb` is a tiny database offering a compromise between the minimalism of a
+key/value store and the convenience of SQL. It wraps any store offering an
 ordered-map interface, adding features that often tempt developers to use more
 complex systems.
 
@@ -32,10 +30,10 @@ Batch value compression is supported, trading read performance for improved
 compression ratios, while still permitting easy access to data. Arbitrary key
 ranges may be selected for compression and the batch size is configurable.
 
-Since it is a Python library, key and index functions are written directly in
+Since it is a Python library, key and index functions are expressed directly in
 Python rather than some unrelated language.
 
-Why `centi`-db? Because at under 400 lines of code, it is more than 100 times
+Why `centi`-db? Because at under 400 lines of code, it is over 100 times
 smaller than alternatives with comparable features.
 
 
@@ -64,10 +62,10 @@ collection:
 
     people = centidb.Collection(store, 'people')
 
-Behind the scenes a few things just happened. Since our in-memory engine had no
-``people`` collection registered, a 1-byte key prefix was allocated using
-:py:meth:`Store.count`, and keys representing the counter and the collection
-were written to the engine:
+Underneath a few interesting things occurred. Since our in-memory engine had no
+``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
+and records representing the counter and the collection were written to the
+engine:
 
 ::
     
@@ -75,15 +73,44 @@ were written to the engine:
     [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
      ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
 
-Since we did not provide an `encoder=` argument, ``PICKLE_ENCODER`` is used by
-default, allowing values to be almost any Python object, and since `key_func=`
-was not provided, a key function was generated that uses :py:meth:`Store.count`
-to assign auto-incrementing keys, just like in SQL.
+Now let's insert some people:
 
 ::
 
-    >>
+    >>> people.put(('Buffy', 'girl'))
+    <Record people:(1) ('Buffy', 'girl')>
 
+    >>> people.put(('Willow', 'girl'))
+    <Record people:(2) ('Willow', 'girl')>
+
+    >>> people.put(('Spike', 'boy'))
+    <Record people:(3) ('Spike', 'boy')>
+
+    >>> people.get(2)
+    ('Willow', 'girl')
+
+Since we never specified an encoder when constructing the collection, the
+default ``PICKLE_ENCODER`` was used, allowing almost any record value, although
+here we just use tuples. Also because no key function was specified, the
+collection defaults to auto-incrementing keys, once again using
+:py:meth:`Store.count`.
+
+Underneath, more magic is visible:
+
+::
+
+    >>> pprint(engine.pairs)
+    [('\x00(people\x00',                    ' (people\x00\x15\n\x0f'),
+     ('\x01(\x01\x01collections_idx\x00',   ' (\x01\x01collections_idx\x00\x15\x0b'),
+     ('\x01(key:people\x00',                ' (key:people\x00\x15\x04'),
+
+     ('\n\x15\x01', ' \x80\x02U\x05Buffyq\x01U\x04girlq\x02\x86q\x03.'),
+     ('\n\x15\x02', ' \x80\x02U\x06Willowq\x01U\x04girlq\x02\x86q\x03.'),
+     ('\n\x15\x03', ' \x80\x02U\x05Spikeq\x01U\x03boyq\x02\x86q\x03.')]
+
+Notice the ``key:people`` counter key and freshly inserted people records. Pay
+attention to the record keys, occupying only 3 bytes despite their prefix also
+encoding the parent collection.
 
 
 Value compression
@@ -243,31 +270,22 @@ methods. All key and value variables below are ``NUL``-safe bytestrings:
         Set the value of `key` to `value`, overwriting any prior value.
 
     `delete(key)`:
-        Delete `key` if it exists, otherwise do nothing.
+        Delete `key` if it exists.
 
-    `iter(key, keys=True, values=True, reverse=False)`:
-        Yield records in key order, starting at `key` and moving in a fixed
-        direction. The key order is expected to match that of the C `memcmp()`
-        function.
+    `iter(key, reverse=False)`:
+        Yield `(key, value)` tuples in key order, starting at `key` and moving
+        in a fixed direction.
+
+        Key order must match the C `memcmp()
+        <http://linux.die.net/man/3/memcmp>`_ function.
 
         `key`:
-            Starting key. The first yielded value should correspond to this
-            key, or if it does not exist, to the next lexicographically greater
-            key, or the last key in the store. This is true for either
-            direction.
+            Starting key. The first yielded element should correspond to this
+            key, or if it does not exist, the nearest existent key along the
+            direction of movement.
 
-        `keys`:
-            Indicates whether keys are requested. If `keys=True` and
-            `values=False`, the yielded element is a bytestring containing the
-            key.
-
-        `values`:
-            Indicates whether values are requested. If `keys=False` and
-            `values=True`, the yielded element is a bytestring containing the
-            value.
-
-            If both `keys=True` and `values=True`, a tuple of `(key, value)`
-            is yielded.
+            If `key` is ``None`` and `reverse` is ``True``, iteration should
+            begin with the greatest key.
 
         `reverse`:
             If ``False``, iteration proceeds until the lexicographically
@@ -369,10 +387,10 @@ Now define a collection:
     coll.add_index('username', lambda person: person.username)
     coll.add_index('age_city', lambda person: (person.age, person.city))
 
-    user = Person(username='David', age=42, city='Trantor')
+    user = Person(username=u'David', age=42, city='Trantor')
     coll.put(user)
 
-    assert coll.indices['username'].get('David') == user
+    assert coll.indices['username'].get(u'David') == user
 
     # Minimal overhead:
     packed = coll.encoder.pack(Person(username='dave'))
@@ -426,10 +444,10 @@ Index Usage
 
     make_person = lambda name, city, age: dict(locals())
 
-    people.put(make_person('Alfred', 'Nairobi', 46))
-    people.put(make_person('Jemima', 'Madrid', 64))
-    people.put(make_person('Mildred', 'Paris', 34))
-    people.put(make_person('Winnifred', 'Paris', 24))
+    people.put(make_person(u'Alfred', u'Nairobi', 46))
+    people.put(make_person(u'Jemima', u'Madrid', 64))
+    people.put(make_person(u'Mildred', u'Paris', 34))
+    people.put(make_person(u'Winnifred', u'Paris', 24))
 
     # Youngest to oldest:
     pprint(list(people.indices['age'].iteritems()))
@@ -531,7 +549,7 @@ emulated by encoding the data to be covered as part of the index key:
         lambda person: (person['age'], file(person['photo']).read()))
 
 
-    coll.put({'name': 'Bob', 'age': 69, 'height': 113})
+    coll.put({'name': u'Bob', 'age': 69, 'height': 113})
 
     # Query by key but omit covered part:
     tup = next(age_height_name.itertups((69, 113)))
@@ -618,10 +636,12 @@ represent a :py:class:`Collection` as an SQL table by leveraging the `OID`
 type, or to provide exact emulation of the sort order of other databases (e.g.
 App Engine).
 
-The main difficulty with parameterizing key encoding is that :py:class:`Index`
-relies on :py:func:`encode_keys` to function. One solution might be to
-parameterize :py:class:`Index`'s key construction, or force key encodings to
-accept lists of keys as part of their interface.
+Multiple difficulties arise with parameterizing key encoding. Firstly,
+:py:class:`Index` relies on :py:func:`encode_keys` to function. One solution
+might be to parameterize :py:class:`Index`'s key construction, or force key
+encodings to accept lists of keys as part of their interface. A second issue is
+that is that the 'innocence' of the key encoding might be needed to implement
+`prefix=` queries robustly. Needs further consideration.
 
 
 Metadata
