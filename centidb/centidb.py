@@ -323,7 +323,7 @@ def decode_keys(s, prefix=None, first=False):
     return tups[0] if first else tups
 
 class Encoder(object):
-    """Instances of this class represents an encoding.
+    """Instances of this class represent an encoding.
 
         `name`:
             ASCII string uniquely identifying the encoding. A future version
@@ -518,9 +518,18 @@ class Collection(object):
 
         `key_func`, `txn_key_func`:
             Key generator for records about to be saved. `key_func` takes one
-            argument, the record's value, while `txn_key_func` also receives
-            the active transaction, to allow transactionally assigning
-            identifiers. If neither is given, keys are assigned using a
+            argument, the record's value, and should return a tuple of
+            primitive values that will become the record's key.  If the
+            function returns a lone primitive value, it will be wrapped in a
+            1-tuple.
+
+            Alternatively, `txn_key_func` may be used to access the current
+            transaction during key assignment. It is invoked as
+            `txn_key_func(txn, value)`, where `txn`  is a reference to the
+            active transaction, or :py:class:`Store`'s engine if no transaction
+            was supplied.
+
+            If neither function is given, keys are assigned using a
             transactional counter (like auto-increment in SQL). See
             `counter_name` and `counter_prefix`.
 
@@ -542,14 +551,14 @@ class Collection(object):
             as `get(rec=True)` and `put(<Record instance>)` are used.
 
         `encoder`:
-            `Encoding` used to serialize record values to bytestrings; defaults
-            to `PICKLE_ENCODER`.
+            :py:class:`Encoder` used to serialize record values to bytestrings;
+            defaults to `PICKLE_ENCODER`.
 
         `packer`:
-            `Encoding` used to compress a group of serialized records as a
-            unit. Used only if `packer=` isn't specified during `put()` or
-            `batch()`; invocations with no `packer=` will be uncompressed if a
-            default isn't given here.
+            :py:class:`Encoder` used to compress one or more serialized record
+            values as a unit. Used only if `packer=` isn't specified during
+            :py:meth:`Collection.put` or :py:meth:`Collection.batch`. Defaults
+            to ``PLAIN_PACKER`` (uncompressed).
 
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
@@ -796,7 +805,7 @@ class Collection(object):
         if rec.key and not self.derived_keys:
             return rec.key
         elif self.txn_key_func:
-            return tuplize(self.txn_key_func(txn, rec.data))
+            return tuplize(self.txn_key_func(txn or self.engine, rec.data))
         return tuplize(self.key_func(rec.data))
 
     def puts(self, recs, txn=None, packer=None, eat=True):

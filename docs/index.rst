@@ -28,7 +28,7 @@ is already used by a project.
 
 Batch value compression is supported, trading read performance for improved
 compression ratios, while still permitting easy access to data. Arbitrary key
-ranges can be selected for compression and the batch size is configurable.
+ranges may be selected for compression and the batch size is configurable.
 
 Since it is a Python library, key and index functions are written directly in
 Python rather than some unrelated language.
@@ -87,11 +87,10 @@ to assign auto-incrementing keys, just like in SQL.
 Value compression
 +++++++++++++++++
 
-Values can be compressed by passing a `packer=` argument to
-:py:meth:`Collection.put()`, or by passing a `packer=` argument to the
-:py:class:`Collection` constructor. A predefined `ZLIB_PACKER` is included,
-however adding new compressors is simply a case of constructing an
-:py:class:`Encoder`.
+Values may be compressed by passing a `packer=` argument to
+:py:meth:`Collection.put()`, or to the :py:class:`Collection` constructor. A
+predefined `ZLIB_PACKER` is included, however adding new compressors is simply
+a case of constructing an :py:class:`Encoder`.
 
 ::
 
@@ -149,7 +148,7 @@ is passed three parameters:
         the :py:attr:`Record.data` (i.e. value) attribute.
 
     `txn`:
-        The transaction this modification is a part of. Can be used to
+        The transaction this modification is a part of. May be used to
         implement transactional assignment of IDs.
 
 The returned key may be any of the supported primitive values, or a tuple of
@@ -482,7 +481,7 @@ Example:
 
 Note that if a key contains only a single value, or all the key's components
 are in descending order, then transformation is not required as the index
-itself can be iterated in reverse:
+itself may be iterated in reverse:
 
 ::
 
@@ -517,6 +516,21 @@ Performance
 ###########
 
 
+Glossary
+########
+
+    *Logical Key*
+        Refers to a single local record, which may potentially be part of a
+        batch of records sharing a single physical key.
+
+    *Physical Key*
+        Refers to a single physical record, which may potentially contain
+        multiple logical records as part of a batch.
+
+    *Primitive Value*
+        A value of any type that :py:func:`encode_keys` supports.
+
+
 Notes
 #####
 
@@ -532,7 +546,7 @@ causing surprise. If no, then a new encoding is needed, wasting ~2 bytes
 (terminator, discriminator).
 
 Another option is always treating numbers as float, but converting to int
-during decode if they can be represented exactly. This may be less surprising,
+during decode if they may be represented exactly. This may be less surprising,
 since an int will coerce to float during arithmetic, but may cause
 once-per-decade bugs: depending on a database key, the expression ``123 /
 db_val`` might perform integer or float division.
