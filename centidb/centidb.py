@@ -536,7 +536,7 @@ class Collection(object):
         `derived_keys`:
             If ``True``, indicates the key function derives the key from the
             record's value, and should be invoked for each change. If the key
-            changes the previous key and index entries are automatically
+            changes, the previous key and index entries are automatically
             deleted.
 
             ::
@@ -552,7 +552,7 @@ class Collection(object):
 
         `encoder`:
             :py:class:`Encoder` used to serialize record values to bytestrings;
-            defaults to `PICKLE_ENCODER`.
+            defaults to ``PICKLE_ENCODER``.
 
         `packer`:
             :py:class:`Encoder` used to compress one or more serialized record

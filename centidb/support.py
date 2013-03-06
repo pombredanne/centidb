@@ -25,7 +25,7 @@ class ListEngine(object):
 
     def get(self, k):
         idx = bisect.bisect_left(self.pairs, (k,))
-        if idx < len(self.pairs):
+        if idx < len(self.pairs) and self.pairs[idx][0] == k:
             return self.pairs[idx][1]
 
     def put(self, k, v):
@@ -46,7 +46,7 @@ class ListEngine(object):
     def iter(self, k, keys=True, values=True, reverse=False):
         idx = bisect.bisect_left(self.pairs, (k,))
         if reverse:
-            idx -= len(self.pairs) == idx
+            idx -= len(self.pairs) == idx or self.pairs[idx][0] > k
             xr = xrange(idx, -1, -1)
         else:
             xr = xrange(idx, len(self.pairs))
@@ -75,14 +75,17 @@ class PlyvelEngine(object):
         self.delete = self.db.delete
 
     def iter(self, k, keys=True, values=True, reverse=False):
-        kw = dict(include_key=keys, include_value=values, include_stop=True)
-        kw.update(dict(stop=k, reverse=True) if reverse else dict(start=k))
-        return self.db.iterator(**kw)
+        it = self.db.iterator(include_key=keys, include_value=values,
+                              reverse=reverse)
+        if reverse:
+            k += '\x00'
+        it.seek(k)
+        return it
 
 
 class KyotoEngine(object):
     """Storage engine that uses `Kyoto Cabinet
-    <http://fallabs.com/kyotocabinet/>`. Note a treedb must be used.
+    <http://fallabs.com/kyotocabinet/>`_. Note a treedb must be used.
     """
     txn_id = None
 
