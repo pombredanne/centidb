@@ -64,8 +64,7 @@ collection:
 
 Underneath a few interesting things occurred. Since our in-memory engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
-and records representing the counter and the collection were written to the
-engine:
+and records representing the counter and the collection were written:
 
 ::
     
@@ -89,13 +88,12 @@ Now let's insert some people:
     >>> people.get(2)
     ('Willow', 'girl')
 
-Since we never specified an encoder when constructing the collection, the
-default ``PICKLE_ENCODER`` was used, allowing almost any record value, although
-here we just use tuples. Also because no key function was specified, the
-collection defaults to auto-incrementing keys, once again using
-:py:meth:`Store.count`.
+Since we didn't specify an encoder during construction, the default pickle
+encoder is used which allows almost any Python value, although here we use
+tuples. Since no key function was given, the collection defaults to
+auto-incrementing keys.
 
-Underneath, more magic is visible:
+More magic is visible underneath:
 
 ::
 
@@ -108,9 +106,21 @@ Underneath, more magic is visible:
      ('\n\x15\x02', ' \x80\x02U\x06Willowq\x01U\x04girlq\x02\x86q\x03.'),
      ('\n\x15\x03', ' \x80\x02U\x05Spikeq\x01U\x03boyq\x02\x86q\x03.')]
 
-Notice the ``key:people`` counter key and freshly inserted people records. Pay
+Notice the ``key:people`` counter and freshly inserted people records. Pay
 attention to the record keys, occupying only 3 bytes despite their prefix also
-encoding the parent collection.
+encoding the collection.
+
+
+Keys
+++++
+
+We are not limited to simple auto-incrementing keys, in fact keys are always
+treated as tuples containing one or more :py:func:`primitive values
+<encode_keys>`. The method used to encode the tuples for the storage engine
+results in a binary order that is identical to how the tuples would sort in
+Python, making working with them very intuitive.
+
+Let's recreate the ``people`` collection, this time 
 
 
 Value compression
@@ -136,30 +146,6 @@ part of the operation.
 Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
 batching can occur, although this restriction may be removed in future.
-
-
-Common Parameters
-#################
-
-In addition to those described later, each function accepts the following
-optional parameters:
-
-``key``:
-  Indicates a function (in the style of ``sorted(..., key=)``) that maps lines
-  to ordered values to be used for comparison. Provide ``key`` to extract a
-  unique ID or timestamp. Lines are compared lexicographically by default.
-
-``lo``:
-  Lowest offset in bytes, useful for skipping headers or to constrain a search
-  using a previous search. For line oriented search, one byte prior to this
-  offset is included in order to ensure the first line is considered complete.
-  Defaults to ``0``.
-
-``hi``:
-  Highest offset in bytes. If the file being searched is weird (e.g. a UNIX
-  special device), specifies the highest bound to access. By default
-  ``getsize()`` is used to probe the file size.
-
 
 
 Keys & Indices

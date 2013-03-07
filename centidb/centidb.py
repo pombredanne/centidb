@@ -192,15 +192,20 @@ def _iter(engine, txn, key=None, prefix=None, lo=None, hi=None, reverse=False,
         hi = prefix_bound(prefix)
 
     #pprint(dict(locals()))
+    #print ((hi if reverse else lo) or key, reverse)
+
     it = (txn or engine).iter((hi if reverse else lo) or key, reverse)
-    for tup in itertools.islice(it, max) if max else it:
+    if max:
+        it = itertools.islice(it, max)
+
+    for tup in it:
         k = tup[0]
         if (lo and lo > k) or (hi and hi < k):
             break
         yield tup
 
 def _eat(pred, it, total_only=False):
-    if not eat:
+    if not pred:
         return it
     total = 0
     true = 0
@@ -685,12 +690,12 @@ class Collection(object):
                 idx_keys.append(encode_keys((idx_key, key), idx.prefix))
         return idx_keys
 
-    def iteritems(self, key=(), rec=False, txn=None):
+    def iteritems(self, key=(), rec=False, txn=None, reverse=False):
         """Yield all `(key, value)` tuples in the collection, in key order. If
         `rec` is ``True``, :py:class:`Record` instances are yielded instead of
         record values."""
-        key = tuplize(key)
-        it = _iter(txn, self.engine, encode_keys((key,), self.prefix))
+        prefix = encode_keys((tuplize(key),), self.prefix)
+        it = _iter(txn, self.engine, prefix=prefix, reverse=reverse)
         for phys, data in it:
             if not phys.startswith(self.prefix):
                 break
@@ -699,6 +704,11 @@ class Collection(object):
             if rec:
                 obj = Record(self, obj, keys[-1], len(keys) > 1)
             yield keys[-(1)], obj
+
+    def iterkeys(self, reverse=False):
+        """Yield all key tuples in the collection, in key order."""
+        return itertools.imap(operator.itemgetter(0),
+                              self.iteritems(reverse=reverse))
 
     def itervalues(self, key, rec=False):
         """Yield all values in the collection, in key order. If `rec` is
@@ -919,7 +929,7 @@ class Collection(object):
         """
         if isinstance(obj, Record):
             rec = obj
-        elif isinstance(obj, tuple):
+        else:
             rec = self.get(obj, rec=True)
         if rec:
             rec_key = rec.key or self._reassign_key(rec, txn)
