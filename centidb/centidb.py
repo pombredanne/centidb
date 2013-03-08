@@ -36,7 +36,7 @@ import zlib
 
 __all__ = '''invert Store Collection Record Index decode_keys encode_keys
     decode_int encode_int Encoder KEY_ENCODER PICKLE_ENCODER PLAIN_PACKER
-    ZLIB_PACKER'''.split()
+    ZLIB_PACKER next_greater'''.split()
 
 KIND_NULL = chr(15)
 KIND_NEG_INTEGER = chr(20)
@@ -147,9 +147,10 @@ def decode_int(getc, read):
     elif o == 255:
         return struct.unpack('>Q', read(8))[0]
 
+_encode_pat = re.compile(r'[\x00\x01]')
+_encode_subber = lambda m: '\x01\x01' if m.group(0) == '\x00' else '\x01\x02'
 def encode_str(s):
-    subber = lambda m: '\x01\x01' if m.group(0) == '\x00' else '\x01\x02'
-    return re.sub(r'[\x00\x01]', subber, s)
+    return _encode_pat.sub(_encode_subber, s)
 
 def decode_str(getc):
     io = cStringIO.StringIO()
@@ -167,29 +168,29 @@ def decode_str(getc):
         else:
             io.write(c)
 
-
-def prefix_bound(s):
+def next_greater(s):
     """Given a bytestring `s`, return the most compact bytestring that is
     greater than any value prefixed with `s`, but lower than any other value.
 
     ::
 
-        '' == '\x00'
-        '\x00' == '\x01'
-        '\xff
-        assert next_greater('\x00\x00') == '\x00\x01')
-        assert next_greater('\x00\xff') == '\x01')
-        assert next_greater('\xff\xff') == '\x01')
+        >>> assert next_greater('') == '\\x00'
+        >>> assert next_greater('\\x00') == '\\x01'
+        >>> assert next_greater('\\xff') == '\\xff\\x00'
+        >>> assert next_greater('\\x00\\x00') == '\\x00\\x01')
+        >>> assert next_greater('\\x00\\xff') == '\\x01')
+        >>> assert next_greater('\\xff\\xff') == '\\x01')
 
     """
+    # Based on the Plyvel `bytes_increment()` function.
     s2 = s.rstrip('\xff')
     return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
 
 def _iter(engine, txn, key=None, prefix=None, lo=None, hi=None, reverse=False,
-        max=None):
+        max=None, values=True):
     if prefix:
         lo = prefix
-        hi = prefix_bound(prefix)
+        hi = next_greater(prefix)
 
     #pprint(dict(locals()))
     #print ((hi if reverse else lo) or key, reverse)
@@ -197,6 +198,8 @@ def _iter(engine, txn, key=None, prefix=None, lo=None, hi=None, reverse=False,
     it = (txn or engine).iter((hi if reverse else lo) or key, reverse)
     if max:
         it = itertools.islice(it, max)
+    if not values:
+        it = itertools.imap(operator.itemgetter(0), it)
 
     for tup in it:
         k = tup[0]
@@ -217,7 +220,7 @@ def _eat(pred, it, total_only=False):
     return total, true
 
 def tuplize(o):
-    return o if isinstance(o, tuple) else (o,)
+    return o if type(o) is tuple else (o,)
 
 def encode_keys(tups, prefix='', closed=True):
     """Encode a sequence of tuples of primitive values to a bytestring that
@@ -253,9 +256,11 @@ def encode_keys(tups, prefix='', closed=True):
         8. ``uuid.UUID`` instances.
         9. Sequences with another tuple following the last identical element.
     """
-    io = cStringIO.StringIO()
-    w = io.write
-    w(prefix)
+    ba = bytearray()
+    w = ba.append
+    e = ba.extend
+
+    e(prefix)
     last = len(tups) - 1
     for i, tup in enumerate(tups):
         if i:
@@ -263,34 +268,36 @@ def encode_keys(tups, prefix='', closed=True):
         tup = tuplize(tup)
         tlast = len(tup) - 1
         for j, arg in enumerate(tup):
+            type_ = type(arg)
             if arg is None:
                 w(KIND_NULL)
-            elif isinstance(arg, bool):
+            elif type_ is bool:
                 w(KIND_BOOL)
-                w(encode_int(arg))
-            elif isinstance(arg, (int, long)):
+                e(encode_int(arg))
+            elif type_ is int or type_ is long:
                 if arg < 0:
                     w(KIND_NEG_INTEGER)
-                    w(encode_int(-arg))
+                    e(encode_int(-arg))
                 else:
                     w(KIND_INTEGER)
-                    w(encode_int(arg))
-            elif isinstance(arg, uuid.UUID):
+                    e(encode_int(arg))
+            elif type_ is uuid.UUID:
                 w(KIND_UUID)
-                w(encode_str(arg.get_bytes()))
-            elif isinstance(arg, str):
+                e(encode_str(arg.get_bytes()))
+                w('\x00')
+            elif type_ is str:
                 w(KIND_BLOB)
-                w(encode_str(arg))
+                e(encode_str(arg))
                 if closed or i != last or j != tlast:
                     w('\x00')
-            elif isinstance(arg, unicode):
+            elif type_ is unicode:
                 w(KIND_TEXT)
-                w(encode_str(arg.encode('utf-8')))
+                e(encode_str(arg.encode('utf-8')))
                 if closed or i != last or j != tlast:
                     w('\x00')
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
-    return io.getvalue()
+    return str(ba) #io.getvalue()
 
 def decode_keys(s, prefix=None, first=False):
     """Decode a bytestring produced by :py:func:`encode_keys`, returning the
@@ -471,7 +478,7 @@ class Index(object):
         for p in self.iteritems(args, reverse, txn, rec, 1, closed):
             return p[1]
         if rec and default is not None:
-            return Record(self.coll, default)
+            return Record_(self.coll, default)
         return default
 
 class Record(object):
@@ -512,8 +519,6 @@ class Record(object):
         #: Transaction ID this record was visible in. Used internally to
         #: ensure records from distinct transactions aren't mixed.
         self.txn_id = _txn_id
-        if _key and _index_keys is None:
-            _index_keys = coll._index_keys(_key, data)
         self.index_keys = _index_keys
 
     def __repr__(self):
@@ -552,8 +557,8 @@ class Collection(object):
             `counter_name` and `counter_prefix`.
 
         `derived_keys`:
-            If ``True``, indicates the key function derives the key from the
-            record's value, and should be invoked for each change. If the key
+            If ``True``, indicates the key function derives a record's key from
+            its value, and should be re-invoked for each change. If the key
             changes, the previous key and index entries are automatically
             deleted.
 
@@ -565,8 +570,18 @@ class Collection(object):
                     key_func=lambda person: person['name'],
                     derived_keys=True)
 
-            If ``False`` then record keys are preserved across saves, so long
-            as `get(rec=True)` and `put(<Record instance>)` are used.
+            If ``False``, record keys are preserved across saves, so long as
+            `get(rec=True)` and `put(<Record instance>)` are used. In either
+            case, `put(..., key=...)` may be used to override default behavior.
+
+        `virgin_keys`:
+            If ``True``, indicates the key function never reassigns the same
+            key twice, for example when using a time-based key. In this case,
+            checks for old records with the same key may be safely skipped,
+            significantly improving performance.
+
+            This mode is always active when a collection has no indices
+            defined, and does not need explicitly set in that case.
 
         `encoder`:
             :py:class:`Encoder` used to serialize record values to bytestrings;
@@ -591,8 +606,8 @@ class Collection(object):
             specified.
     """
     def __init__(self, store, name, key_func=None, txn_key_func=None,
-            derived_keys=False, encoder=None, packer=None, _idx=None,
-            counter_name=None, counter_prefix=None):
+            derived_keys=False, virgin_keys=False, encoder=None, packer=None,
+            _idx=None, counter_name=None, counter_prefix=None):
         """Create an instance; see class docstring."""
         self.store = store
         self.engine = store.engine
@@ -610,6 +625,7 @@ class Collection(object):
         self.key_func = key_func
         self.txn_key_func = txn_key_func
         self.derived_keys = derived_keys
+        self.virgin_keys = virgin_keys
         self.encoder = encoder or PICKLE_ENCODER
         #: Default packer used when calls to :py:meth:`Collection.put` do not
         #: specify a `packer=` argument. Defaults to ``PLAIN_PACKER``.
@@ -667,6 +683,8 @@ class Collection(object):
         info = self.store._get_info(info_name, index_for=self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
+        if IndexKeyBuilder:
+            self._index_keys = IndexKeyBuilder(self.indices.values()).build
         return index
 
     def _decompress(self, s):
@@ -702,7 +720,7 @@ class Collection(object):
             keys = decode_keys(phys, self.prefix)
             obj = self.encoder.unpack(self._decompress(data))
             if rec:
-                obj = Record(self, obj, keys[-1], len(keys) > 1)
+                obj = Record_(self, obj, keys[-1], len(keys) > 1)
             yield keys[-(1)], obj
 
     def iterkeys(self, reverse=False):
@@ -845,7 +863,7 @@ class Collection(object):
         yields its return values."""
         return _eat(eat, (self.put(x, txn, packer, y) for x, y in it), True)
 
-    def put(self, rec, txn=None, packer=None, key=None):
+    def put(self, rec, txn=None, packer=None, key=None, virgin=False):
         """Create or overwrite a record.
 
             `rec`:
@@ -867,33 +885,45 @@ class Collection(object):
             `key`:
                 If specified, overrides the use of collection's key function
                 and forces a specific key. Use with caution.
+
+            `virgin`:
+                If ``True``, skip checks for any old record assigned the same
+                key. Automatically enabled when a collection has no indices, or
+                when `virgin_keys=` is passed to :py:class:`Collection`'s
+                constructor.
+
+                While this significantly improves performance, enabling it for
+                a collection with indices and in the presence of old records
+                with the same key will lead to inconsistent indices.
+                :py:meth:`Index.iteritems` will issue a warning and discard
+                obsolete keys when this is detected, however other index
+                methods will not.
         """
-        if not isinstance(rec, Record):
+        if type(rec) is not Record:
             rec = Record(self, rec)
         obj_key = key or self._reassign_key(rec, txn)
         index_keys = self._index_keys(obj_key, rec.data)
+        txn = txn or self.engine
 
-        if rec.coll == self and rec.key:
-            delete = (txn or self.engine).delete
+        if rec.coll is self and rec.key:
             if rec.batch:
                 # Old key was part of a batch, explode the batch.
                 self._split_batch(rec, txn)
             elif rec.key != obj_key:
                 # New version has changed key, delete old.
-                delete(encode_keys((rec.key,), self.prefix))
+                txn.delete(encode_keys((rec.key,), self.prefix))
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
-                    delete(index_key)
-        else:
+                    txn.delete(index_key)
+        elif self.indices and not (virgin or self.virginal_keys):
             # TODO: delete() may be unnecessary when no indices are defined
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
-        put = (txn or self.engine).put
-        put(encode_keys((obj_key,), self.prefix),
-            ' ' + self.encoder.pack(rec.data))
+        txn.put(encode_keys((obj_key,), self.prefix),
+                ' ' + self.encoder.pack(rec.data))
         for index_key in index_keys:
-            put(index_key, '')
+            txn.put(index_key, '')
         rec.coll = self
         rec.key = obj_key
         rec.index_keys = index_keys
@@ -931,13 +961,12 @@ class Collection(object):
             rec = obj
         else:
             rec = self.get(obj, rec=True)
-        if rec:
-            rec_key = rec.key or self._reassign_key(rec, txn)
+        if rec and rec.key: # todo rec.key must be set
             if rec.batch:
                 self._split_batch(rec, txn)
             else:
                 delete = (txn or self.engine).delete
-                delete(encode_keys((rec_key,), self.prefix))
+                delete(encode_keys((rec.key,), self.prefix))
                 for index_key in rec.index_keys or ():
                     delete(index_key)
             rec.key = None
@@ -997,7 +1026,7 @@ class Store(object):
         if not t:
             idx = idx or self.count('\x00collections_idx', init=10)
             t = self._info_coll.put((name, idx, index_for)).data
-        assert t == (name, idx or tup[1], index_for)
+        assert t == (name, idx or t[1], index_for)
         return dict((self._INFO_KEYS[i], v) for i, v in enumerate(t))
 
     def count(self, name, n=1, init=1, txn=None):
@@ -1024,3 +1053,8 @@ class Store(object):
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
         return val
+
+try:
+    from _centidb import *
+except ImportError:
+    IndexKeyBuilder = None
