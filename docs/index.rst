@@ -14,17 +14,16 @@ key/value store and the convenience of SQL. It wraps any store offering an
 ordered-map interface, adding features that often tempt developers to use more
 complex systems.
 
-Functionality is provided for forming ordered compound keys, managing and
-querying secondary indices, and a binary encoding that preserves the ordering
-of tuples of primitive values. Combining the simplicity of a key/value store
-with the convenience of a DBMS indexing system, while absent of any
-storage-specific protocol/language/encoding/data model, or the impedence
-mismatch that necessitates use of ORMs, it provides for a compelling
-programming experience.
+Functionality is provided to form ordered compound keys, create and query
+indices, and a binary tuple encoding that preserves the ordering of its
+elements. Combining the simplicity of a key/value store with the convenience of
+DBMS indexing, while absent of any storage-specific
+protocol/language/encoding/data model, or the impedence mismatch that
+necessitates use of ORMs, it provides for a compelling programming experience.
 
 Few constraints exist: there is no enforced value type or encoding, key scheme,
-compressor, or storage engine, allowing integration with whatever best suits or
-is already used by a project.
+compressor, or storage engine, allowing integration with whatever best suits a
+project.
 
 Batch value compression is supported, trading read performance for improved
 compression ratios, while still permitting easy access to data. Arbitrary key
@@ -548,7 +547,38 @@ entries as part of the API.
 Performance
 ###########
 
-TBD.
+All tests run on a Mid 2010 Macbook Pro with Crucial M4 512GB SSD (SATA II
+mode). Dataset size is ~80mb.
+
+Setup:
+
+* LevelDB default options (async mode) via `Plyvel
+  <http://plyvel.readthedocs.org/>`_
+* `msgpack <http://msgpack.org/>`_ encoder
+* :py:meth:`Collection.put` with `virgin=True`
+* 236,000 200 byte dict records with 3 string keys and string values, third
+  value containing 150 bytes random data.
+* Collection `key_func` returning one string value from the record.
+* 2 1-tuple ~8 byte string index functions defined, each producing a single
+  index entry per record.
+
+Result:
+
+    +-------------------------------------+-----------------------------------+
+    | *Without speedups*                  | *With speedups*                   |
+    +-------------------+-----------------+---------------------+-------------+
+    | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
+    +-------------------+-----------------+---------------------+-------------+
+    | 10,500            | ~30,000         | 19,900              | ~59,000     |
+    +-------------------+-----------------+---------------------+-------------+
+
+When running with the speedups module installed, the test becomes very
+sensitive to changes in the index function, as non-accelerated code consumes an
+increasingly large proportion of runtime. Thus the library's runtime footprint
+is already likely dwarfed by the Python code comprising an even moderately
+complex host application.
+
+
 
 * Read performance
 * Batch compression read performance
@@ -779,10 +809,9 @@ Probably:
    configuration)
 6. Smaller
 7. Safer
-8. Enough speedups to make a viable middleweight production store
-9. C++ library
-10. Key splitting (better support DBs that dislike large records)
-11. putbatch()
+8. C++ library
+9. Key splitting (better support DBs that dislike large records)
+10. putbatch()
 
 Maybe:
 
