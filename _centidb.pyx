@@ -1,4 +1,7 @@
-# 
+#cython: embedsignature=False
+#cython: boundscheck=False
+#cython: cdivision=True
+#
 # Copyright 2013 The Python-lmdb authors, all rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -19,8 +22,94 @@
 # Additional information about OpenLDAP can be obtained at
 # <http://www.openldap.org/>.
 
+#include "cpython/string.pxd"
+
 from uuid import UUID
 from struct import pack
+
+cdef extern from "Python.h":
+    ctypedef struct PyObject
+    void *PyString_FromStringAndSize(const unsigned char *v, int len)
+    int _PyString_Resize(void*, Py_ssize_t)
+    unsigned char *PyString_AS_STRING(void *string)
+    Py_ssize_t PyString_GET_SIZE(void *)
+    unsigned char *PyString_AS_STRING(void *string)
+    void *memcpy(void *s1, const void *s2, size_t n)
+    void Py_DECREF(void *o)
+
+
+cdef class StringWriter:
+    """
+    Represents efficient append-only access to a bytestring's internal
+    buffer, enabling zero copy incremental string construction. Only available
+    when speedups module is installed.
+    
+    Usually a separate buffer is built before calling
+    :py:func:`PyString_FromStringAndSize`, however the CPython API sanctions
+    mutating a string's internal buffer so long as its reference count is 1.
+    This class guarantees that by preventing further writes to the string after
+    a reference to it has been taken.
+
+        `initial_size`:
+            Initial buffer size in bytes. When this is exceeded, the buffer is
+            doubled until it reaches 512 bytes, after which it grows in 512
+            byte increments.
+
+            Larger sizes cause fewer initial reallocations, but is more likely
+            to cause the allocator to move the string while truncating it to
+            its final size.
+    """
+    cdef void *s
+    cdef size_t pos
+
+    def __init__(self, size_t initial=20):
+        self.s = PyString_FromStringAndSize(NULL, initial)
+        if self.s is NULL:
+            raise MemoryError()
+        self.pos = 0
+
+    def __dealloc__(self):
+        if self.s is not NULL:
+            Py_DECREF(self.s)
+        self.s = NULL
+
+    cdef _grow(self):
+        cdef size_t cursize = PyString_GET_SIZE(self.s)
+        cdef size_t newsize = cursize + max(512, cursize * 2)
+        if -1 == _PyString_Resize(&self.s, newsize):
+            raise MemoryError()
+
+    cpdef putc(self, unsigned char o):
+        """Append a single ordinal `o` to the buffer, growing it as
+        necessary."""
+        assert self.s is not NULL
+        if (1 + self.pos) == PyString_GET_SIZE(self.s):
+            self._grow()
+        cdef unsigned char *s = PyString_AS_STRING(self.s)
+        s[self.pos] = o
+        self.pos += 1
+
+    cpdef putbytes(self, bytes b):
+        """Append a bytestring to the buffer, growing it as necessary."""
+        assert self.s is not NULL
+        cdef size_t blen = len(b)
+        while (PyString_GET_SIZE(self.s) - self.pos) < (blen + 1):
+            self._grow()
+        cdef unsigned char *s = PyString_AS_STRING(self.s)
+        memcpy(s + self.pos, <unsigned char *> b, blen)
+        self.pos += blen
+
+    cpdef object finalize(self):
+        # It should be possible to do better than this.
+        #print 'before:', <int>self.s
+        if -1 == _PyString_Resize(&self.s, self.pos):
+            raise MemoryError
+        #print 'after:', <int>self.s
+        cdef object ss = <object> self.s
+        Py_DECREF(self.s)
+        self.s = NULL
+        return ss
+
 
 cdef enum ElementKind:
     KIND_NULL = 15
@@ -38,7 +127,7 @@ def tuplize(o):
         o = (o,)
     return o
 
-cdef encode_int(puts, putc, v):
+cdef encode_int(StringWriter sw, v):
     """Given some positive integer of 64-bits or less, return a variable length
     bytestring representation that preserves the integer's order. The
     bytestring size is such that:
@@ -65,56 +154,54 @@ cdef encode_int(puts, putc, v):
         + 9 bytes     | <= (2**64)-1           |
         +-------------+------------------------+
     """
-    cdef char[9] b
     cdef unsigned int vi
 
     if v < 240:
-        putc(v)
+        sw.putc(v)
     elif v <= 2287:
         v -= 240
         d, m = divmod(v, 256)
-        putc(241 + d)
-        putc(m)
+        sw.putc(241 + d)
+        sw.putc(m)
     elif v <= 67823:
         v -= 2288
         d, m = divmod(v, 256)
-        b[0] = 0xf9
-        b[1] = d
-        b[2] = m
-        puts(b[:3])
+        sw.putc(0xf9)
+        sw.putc(d)
+        sw.putc(m)
     elif v <= 16777215:
-        putc(0xfa)
-        puts(pack('>L', v)[-3:])
+        sw.putc(0xfa)
+        sw.putbytes(pack('>L', v)[-3:])
     elif v <= 4294967295:
-        putc(0xfb)
-        puts(pack('>L', v))
+        sw.putc(0xfb)
+        sw.putbytes(pack('>L', v))
     elif v <= 1099511627775:
-        putc(0xfc)
-        puts(pack('>Q', v)[-5:])
+        sw.putc(0xfc)
+        sw.putbytes(pack('>Q', v)[-5:])
     elif v <= 281474976710655:
-        putc(0xfd)
-        puts(pack('>Q', v)[-6:])
+        sw.putc(0xfd)
+        sw.putbytes(pack('>Q', v)[-6:])
     elif v <= 72057594037927935:
-        putc(0xfe)
-        puts(pack('>Q', v)[-7:])
+        sw.putc(0xfe)
+        sw.putbytes(pack('>Q', v)[-7:])
     else:
         assert v.bit_length() <= 64
-        putc(0xff)
-        puts(pack('>Q', v))
+        sw.putc(0xff)
+        sw.putbytes(pack('>Q', v))
 
-cdef object encode_str(puts, putc, bytes s):
-    cdef char *p = s
-    cdef int length = len(s)
-    cdef char c
+cdef object encode_str(StringWriter sw, bytes s):
+    cdef unsigned char *p = s
+    cdef size_t length = len(s)
+    cdef unsigned char c
 
     for i in range(length):
         c = s[i]
         if c == 0:
-            puts('\x01\x01')
+            sw.putbytes(b'\x01\x01')
         elif c == 1:
-            puts('\x01\x02')
+            sw.putbytes(b'\x01\x02')
         else:
-            putc(c)
+            sw.putc(c)
 
 cpdef object encode_keys(tups, bytes prefix=None, closed=True):
     """Encode a sequence of tuples of primitive values to a bytestring that
@@ -150,48 +237,46 @@ cpdef object encode_keys(tups, bytes prefix=None, closed=True):
         8. ``uuid.UUID`` instances.
         9. Sequences with another tuple following the last identical element.
     """
-    cdef object out = bytearray()
-    putc = out.append
-    puts = out.extend
+    cdef StringWriter sw = StringWriter()
 
     last = len(tups) - 1
     for i, tup in enumerate(tups):
         if i:
-            putc(KIND_SEP)
+            sw.putc(KIND_SEP)
         if type(tup) is not tuple:
             tup = (tup,)
         tlast = len(tup) - 1
         for j, arg in enumerate(tup):
             type_ = type(arg)
             if arg is None:
-                putc(KIND_NULL)
-            elif type_ is bool:
-                putc(KIND_BOOL)
-                encode_int(puts, putc, arg)
+                sw.putc(KIND_NULL)
+            elif arg is True or arg is False:
+                sw.putc(KIND_BOOL)
+                encode_int(sw, arg)
             elif type_ is long or type_ is int:
                 if arg < 0:
-                    putc(KIND_NEG_INTEGER)
-                    encode_int(puts, putc, -arg)
+                    sw.putc(KIND_NEG_INTEGER)
+                    encode_int(sw, -arg)
                 else:
-                    putc(KIND_INTEGER)
-                    encode_int(puts, putc, arg)
+                    sw.putc(KIND_INTEGER)
+                    encode_int(sw, arg)
             elif type_ is UUID:
-                putc(KIND_UUID)
-                encode_str(puts, putc, arg.get_bytes())
-                putc('\x00')
+                sw.putc(KIND_UUID)
+                encode_str(sw, arg.get_bytes())
+                sw.putc('\x00')
             elif isinstance(arg, str):
-                putc(KIND_BLOB)
-                encode_str(puts, putc, arg)
+                sw.putc(KIND_BLOB)
+                encode_str(sw, arg)
                 if closed or i != last or j != tlast:
-                    putc('\x00')
+                    sw.putc('\x00')
             elif type_ is unicode:
-                putc(KIND_TEXT)
-                encode_str(puts, putc, arg.encode('utf-8'))
+                sw.putc(KIND_TEXT)
+                encode_str(sw, arg.encode('utf-8'))
                 if closed or i != last or j != tlast:
-                    putc('\x00')
+                    sw.putc('\x00')
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
-    return str(out)
+    return sw.finalize()
 
 cdef class IndexKeyBuilder:
     cdef list indices

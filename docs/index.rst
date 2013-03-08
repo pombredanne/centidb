@@ -389,10 +389,16 @@ These functions are based on `SQLite 4's key encoding
 * Varints are used for integers.
 * Strings use a more scripting-friendly encoding.
 
-.. autofunction:: centidb.encode_keys
+.. autofunction:: centidb.encode_keys (tups, prefix='', closed=True)
 .. autofunction:: centidb.decode_keys
 .. autofunction:: centidb.invert
 .. autofunction:: centidb.next_greater
+
+
+String Construction
++++++++++++++++++++
+
+.. autoclass:: _centidb.StringWriter
 
 
 Varint functions
@@ -600,7 +606,7 @@ Setup:
     +-------------------+-----------------+---------------------+-------------+
     | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
     +-------------------+-----------------+---------------------+-------------+
-    | 10,500            | ~30,000         | 20,600              | ~61,800     |
+    | 10,500            | ~30,000         | 25,407              | ~76,221     |
     +-------------------+-----------------+---------------------+-------------+
 
 When running with the speedups module installed, the test becomes very

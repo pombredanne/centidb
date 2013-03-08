@@ -372,8 +372,8 @@ class Encoder(object):
         vars(self).update(locals())
 
 #: Encode Python tuples using encode_keys()/decode_keys().
-KEY_ENCODER = Encoder('key', lambda s: decode_keys(s, first=True),
-                             lambda o: encode_keys((o,)))
+KEY_ENCODER = Encoder('key', functools.partial(decode_keys, first=True),
+                             encode_keys)
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,
