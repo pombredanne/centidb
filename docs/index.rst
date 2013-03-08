@@ -279,13 +279,9 @@ methods. All key and value variables below are ``NUL``-safe bytestrings:
             is reached.
 
     **txn_id** *= None*
-        Property that is expected to uniquely name the transaction represented
-        by the object; may be any Python value. For storage engines, or for
-        "transaction objects" that do not really support transactions, simply
-        set it to `None`.
-
-        Used to ensure cached index keys are valid during
-        :py:meth:`Collection.put`. If your engine supports transactions but
+        Name for the transaction represented by the object; may be any Python
+        value. Omit the attribute for engines or "transaction objects" that do
+        not support transactions. If your engine supports transactions but
         cannot provide an ID, simply set it to :py:func:`time.time`.
 
 
@@ -397,6 +393,7 @@ These functions are based on `SQLite 4's key encoding
 .. autofunction:: centidb.encode_keys
 .. autofunction:: centidb.decode_keys
 .. autofunction:: centidb.invert
+.. autofunction:: centidb.next_greater
 
 
 Varint functions
@@ -784,15 +781,22 @@ Probably:
 7. Safer
 8. Enough speedups to make a viable middleweight production store
 9. C++ library
+10. Key splitting (better support DBs that dislike large records)
+11. putbatch()
 
 Maybe:
 
-1. Value compressed covered indices
-2. `Query` object to simplify index intersections.
-3. Configurable key scheme
-4. Make key/value scheme prefix optional
-5. Make indices work as :py:class:`Collection` observers, instead of hard-wired
-6. Convert :py:class:`Index` to reuse :py:class:`Collection`
+1. "Pure keys" mode: when a collection's key is based entirely on the record
+   value (e.g. log line timestamp) or a common prefix, batches need only store
+   the highest and lowest member keys in their key, since member record keys
+   can be perfectly reconstructed. Lookup would expand varint offset array then
+   logarithmic bisect+decode until desired member is found.
+2. Value compressed covered indices
+3. `Query` object to simplify index intersections.
+4. Configurable key scheme
+5. Make key/value scheme prefix optional
+6. Make indices work as :py:class:`Collection` observers, instead of hard-wired
+7. Convert :py:class:`Index` to reuse :py:class:`Collection`
 
 Probably not:
 
