@@ -553,30 +553,61 @@ mode). Dataset size is ~80mb.
 Setup:
 
 * LevelDB default options (async mode) via `Plyvel
-  <http://plyvel.readthedocs.org/>`_
-* `msgpack <http://msgpack.org/>`_ encoder
-* :py:meth:`Collection.put` with `virgin=True`
-* 236,000 200 byte dict records with 3 string keys and string values, third
-  value containing 150 bytes random data.
-* Collection `key_func` returning one string value from the record.
-* 2 1-tuple ~8 byte string index functions defined, each producing a single
-  index entry per record.
+  <http://plyvel.readthedocs.org/>`_:
 
-Result:
+    ::
+
+        engine = centidb.support.PlyvelEngine(name='test.ldb')
+        store = centidb.Store(engine)
+
+* `msgpack <http://msgpack.org/>`_ encoder:
+
+    ::
+
+        encoder = centidb.Encoder('msgpack', msgpack.loads, msgpack.dumps)
+
+* :py:meth:`Collection.put` with `virgin=True`
+
+* 236,000 200 byte dict records with 3 string keys and string values, third
+  value containing 150 bytes mostly random data:
+
+    ::
+
+        {'stub': '1001155 [.....] 5273067200649406939020424757',
+         'name': 'undergrown',
+         'location': 'UNDERGROWN'}
+
+* Collection `key_func` returning two string values from the record:
+
+    ::
+
+        key_func = operator.itemgetter('name', 'location')
+
+* 2 1-tuple ~8 byte string index functions defined, each producing a single
+  index entry per record:
+
+    ::
+
+        coll.add_index('rev_name', lambda p: p['name'][::-1])
+        coll.add_index('rev_location', lambda p: p['location'][::-1])
+
+
+`put(virgin=True)`
+++++++++++++++++++
 
     +-------------------------------------+-----------------------------------+
     | *Without speedups*                  | *With speedups*                   |
     +-------------------+-----------------+---------------------+-------------+
     | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
     +-------------------+-----------------+---------------------+-------------+
-    | 10,500            | ~30,000         | 19,900              | ~59,000     |
+    | 10,500            | ~30,000         | 20,600              | ~61,800     |
     +-------------------+-----------------+---------------------+-------------+
 
 When running with the speedups module installed, the test becomes very
 sensitive to changes in the index function, as non-accelerated code consumes an
-increasingly large proportion of runtime. Thus the library's runtime footprint
-is already likely dwarfed by the Python code comprising an even moderately
-complex host application.
+increasing proportion of runtime. Thus the library's runtime footprint is
+already likely dwarfed by the Python code comprising an even moderately complex
+host application.
 
 
 
@@ -649,12 +680,17 @@ represent a :py:class:`Collection` as an SQL table by leveraging the `OID`
 type, or to provide exact emulation of the sort order of other databases (e.g.
 App Engine).
 
-Multiple difficulties arise with parameterizing key encoding. Firstly,
+Several difficulties arise with parameterizing key encoding. Firstly,
 :py:class:`Index` relies on :py:func:`encode_keys` to function. One solution
 might be to parameterize :py:class:`Index`'s key construction, or force key
 encodings to accept lists of keys as part of their interface. A second issue is
 that is that the 'innocence' of the key encoding might be needed to implement
-`prefix=` queries robustly. Needs further consideration.
+`prefix=` queries robustly.
+
+Another option would be to allow alternative key encodings for
+:py:class:`Collection` only, with the restriction that keys must still always
+be tuples in order to remain compatible with :py:class:`Index`. Needs further
+consideration.
 
 
 Metadata
@@ -774,12 +810,12 @@ people for whom the embodiment of *elegance* is more often the choice of font
 on a Powerpoint slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
-when the B-tree appeared, also known as the core of SQLite 3, the core of
-MongoDB, and just about 90% of all DBMS wheel reinventions existing in the 40
-years since. Yet today when faced with a B-tree adulterated with JavaScript and
-a million more dumb concepts, upon rejecting it as **junk** we are instantly
-drowned in the torrential cries of a million: *"you just don't get it!"*. I
-fear I do get it, all too well, and I hate it.
+when the B-tree appeared, variants of which comprise the core of SQLite 3, the
+core of MongoDB, and just about 90% of all DBMS wheel reinventions existing in
+the 40 years since. Yet today when faced with a B-tree adulterated with
+JavaScript and a million more dumb concepts, upon rejecting it as **junk** we
+are instantly drowned in the torrential cries of a million: *"you just don't
+get it!"*. I fear I do get it, all too well, and I hate it.
 
 So this module is borne out of frustration. On a recent project while
 experimenting with compression, I again found myself partially implementing
@@ -826,6 +862,9 @@ Maybe:
 5. Make key/value scheme prefix optional
 6. Make indices work as :py:class:`Collection` observers, instead of hard-wired
 7. Convert :py:class:`Index` to reuse :py:class:`Collection`
+8. User-defined key blob types. Allocate a small range from the key encoding to
+   logic that looks up a name for the byte from metadata, then looks up that
+   name in a list of factories registered with the store.
 
 Probably not:
 
