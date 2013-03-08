@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012, David Wilson
+# Copyright 2013, David Wilson
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,20 @@
 """sortedfile distutils script.
 """
 
-from setuptools import setup
+from distutils.core import setup
+from distutils.extension import Extension
+
+# Install Cython's builder if available, otherwise use the pre-generated C file
+# in the repository.
+try:
+    import Cython.Distutils
+    kwargs = dict(cmdclass={
+        'build_ext': Cython.Distutils.build_ext
+    })
+    mod_filename = '_centidb.pyx'
+except ImportError:
+    kwargs = {}
+    mod_filename = '_centidb.c'
 
 
 setup(
@@ -29,5 +42,9 @@ setup(
     author_email =  'dw@botanicus.net',
     license =       'Apache 2',
     url =           'http://github.com/dw/centidb/',
-    py_packages =   ['centidb']
+    packages =      ['centidb'],
+    ext_modules = [
+        Extension("_centidb", sources=[mod_filename])
+    ],
+    **kwargs
 )
