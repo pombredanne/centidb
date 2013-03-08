@@ -547,7 +547,7 @@ entries as part of the API.
 Performance
 ###########
 
-All tests run on a Mid 2010 Macbook Pro with Crucial M4 512GB SSD (SATA II
+All tests run on a mid-2010 Macbook Pro with Crucial M4 512GB SSD (SATA II
 mode). Dataset size is ~80mb.
 
 Setup:
