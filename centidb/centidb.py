@@ -29,6 +29,7 @@ import itertools
 import operator
 import re
 import struct
+import sys
 import time
 import uuid
 import warnings
@@ -196,7 +197,7 @@ def _iter(engine, txn, key=None, prefix=None, lo=None, hi=None, reverse=False,
     #print ((hi if reverse else lo) or key, reverse)
 
     it = (txn or engine).iter((hi if reverse else lo) or key, reverse)
-    if max:
+    if max is not None:
         it = itertools.islice(it, max)
     if not values:
         it = itertools.imap(operator.itemgetter(0), it)
@@ -371,20 +372,6 @@ class Encoder(object):
     def __init__(self, name, unpack, pack):
         vars(self).update(locals())
 
-#: Encode Python tuples using encode_keys()/decode_keys().
-KEY_ENCODER = Encoder('key', functools.partial(decode_keys, first=True),
-                             encode_keys)
-
-#: Encode Python objects using the cPickle version 2 protocol."""
-PICKLE_ENCODER = Encoder('pickle', pickle.loads,
-                         functools.partial(pickle.dumps, protocol=2))
-
-#: Perform no compression at all.
-PLAIN_PACKER = Encoder('plain', str, buffer)
-
-#: Compress bytestrings using zlib.compress()/zlib.decompress().
-ZLIB_PACKER = Encoder('zlib', zlib.compress, zlib.decompress)
-
 class Index(object):
     """Provides query and manipulation access to a single index on a
     Collection. You should not create this class directly, instead use
@@ -416,6 +403,7 @@ class Index(object):
         self.engine = self.store.engine
         self.info = info
         self.func = func
+        print 'info is:', info['idx']
         self.prefix = self.store.prefix + encode_int(info['idx'])
         self._decode = functools.partial(decode_keys, prefix=self.prefix)
 
@@ -683,8 +671,8 @@ class Collection(object):
         info = self.store._get_info(info_name, index_for=self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
-        if IndexKeyBuilder:
-            self._index_keys = IndexKeyBuilder(self.indices.values()).build
+        if _centidb:
+            self._index_keys = _centidb.KeyBuilder(self.indices.values()).build
         return index
 
     def _decompress(self, s):
@@ -713,8 +701,9 @@ class Collection(object):
         `rec` is ``True``, :py:class:`Record` instances are yielded instead of
         record values."""
         prefix = encode_keys((tuplize(key),), self.prefix)
-        it = _iter(txn, self.engine, prefix=prefix, reverse=reverse)
+        it = _iter(self.engine, txn, prefix=prefix, reverse=reverse)
         for phys, data in it:
+            print 'zoink', (phys, data, self.prefix)
             if not phys.startswith(self.prefix):
                 break
             keys = decode_keys(phys, self.prefix)
@@ -915,7 +904,7 @@ class Collection(object):
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     txn.delete(index_key)
-        elif self.indices and not (virgin or self.virginal_keys):
+        elif self.indices and not (virgin or self.virgin_keys):
             # TODO: delete() may be unnecessary when no indices are defined
             # Old key might already exist, so delete it.
             self.delete(obj_key)
@@ -1054,7 +1043,24 @@ class Store(object):
         self._counter_coll.put(rec)
         return val
 
-try:
-    from _centidb import *
-except ImportError:
-    IndexKeyBuilder = None
+# Hack: instead of duplicating docstrings, disable _centidb if it looks like
+# the user is reading docstrings.
+if all(k not in sys.modules for k in ('sphinx', 'pydoc')):
+    try:
+        from _centidb import *
+    except ImportError:
+        _centidb = None
+
+#: Encode Python tuples using encode_keys()/decode_keys().
+KEY_ENCODER = Encoder('key', functools.partial(decode_keys, first=True),
+                             encode_keys)
+
+#: Encode Python objects using the cPickle version 2 protocol."""
+PICKLE_ENCODER = Encoder('pickle', pickle.loads,
+                         functools.partial(pickle.dumps, protocol=2))
+
+#: Perform no compression at all.
+PLAIN_PACKER = Encoder('plain', str, buffer)
+
+#: Compress bytestrings using zlib.compress()/zlib.decompress().
+ZLIB_PACKER = Encoder('zlib', zlib.compress, zlib.decompress)

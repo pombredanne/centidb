@@ -7,25 +7,31 @@
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted only as authorized by the OpenLDAP
 # Public License.
-# 
+#
 # A copy of this license is available in the file LICENSE in the
 # top-level directory of the distribution or, alternatively, at
 # <http://www.OpenLDAP.org/license.html>.
-# 
+#
 # OpenLDAP is a registered trademark of the OpenLDAP Foundation.
-# 
+#
 # Individual files and/or contributed packages may be copyright by
 # other parties and/or subject to additional restrictions.
-# 
+#
 # This work also contains materials derived from public sources.
-# 
+#
 # Additional information about OpenLDAP can be obtained at
 # <http://www.openldap.org/>.
 
 #include "cpython/string.pxd"
+include "libc/stdint.pxd"
 
 from uuid import UUID
 from struct import pack
+from struct import unpack
+
+cdef extern from "arpa/inet.h":
+    uint32_t ntohl(uint32_t n)
+
 
 cdef extern from "Python.h":
     ctypedef struct PyObject
@@ -38,17 +44,76 @@ cdef extern from "Python.h":
     void Py_DECREF(void *o)
 
 
+cdef class StringReader:
+    """
+    Basic StringIO-alike class except it can be accessed efficiently from
+    Cython.
+
+        `buf`:
+            Bytestring to read from.
+    """
+    cdef bytes buf
+    cdef size_t size
+    cdef size_t pos
+
+    def __init__(self, bytes buf):
+        self.buf = buf
+        self.size = len(buf)
+        self.pos = 0
+
+    cdef int getchar(self, unsigned char *ch):
+        if self.pos < self.size:
+            ch[0] = self.buf[self.pos]
+            self.pos += 1
+            return 1
+        return 0
+
+    cdef unsigned char getchar_(self):
+        cdef unsigned char ch
+        assert self.getchar(&ch)
+        return ch
+
+    cdef int getinto(self, unsigned char *s, n):
+        cdef int ok = 1
+        while n:
+            if not self.getchar(s):
+                return 0
+            s += 1
+            n -= 1
+        return 1
+
+    cpdef bytes getc(self):
+        """Fetch a single byte of input as a bytestring. Returns the empty
+        string at EOF."""
+        cdef unsigned char c
+        if self.getchar(&c):
+            return c
+        return b''
+
+    cpdef bytes gets(self, size_t n):
+        """
+        gets(n)
+
+        Fetch `n` multiple bytes of input. Returns the empty string at EOF.
+        """
+        cdef bytes s
+        if self.pos < self.size:
+            s = self.buf[self.pos:self.pos + n]
+            self.pos += n
+            return s
+        return b''
+
 cdef class StringWriter:
     """
     Represents efficient append-only access to a bytestring's internal
     buffer, enabling zero copy incremental string construction. Only available
     when speedups module is installed.
-    
+
     Usually a separate buffer is built before calling
-    :py:func:`PyString_FromStringAndSize`, however the CPython API sanctions
+    :py:func:`PyString_FromStringAndSize`, however the CPython API allows for
     mutating a string's internal buffer so long as its reference count is 1.
-    This class guarantees that by preventing further writes to the string after
-    a reference to it has been taken.
+    This class guarantees the reference count is 1 by preventing further writes
+    after a reference to it has been taken via :py:meth:`StringWriter.finalize`.
 
         `initial_size`:
             Initial buffer size in bytes. When this is exceeded, the buffer is
@@ -80,8 +145,9 @@ cdef class StringWriter:
             raise MemoryError()
 
     cpdef putc(self, unsigned char o):
-        """Append a single ordinal `o` to the buffer, growing it as
-        necessary."""
+        """putc(o)
+
+        Append a single ordinal `o` to the buffer, growing it as necessary."""
         assert self.s is not NULL
         if (1 + self.pos) == PyString_GET_SIZE(self.s):
             self._grow()
@@ -90,7 +156,10 @@ cdef class StringWriter:
         self.pos += 1
 
     cpdef putbytes(self, bytes b):
-        """Append a bytestring to the buffer, growing it as necessary."""
+        """
+        putbytes(b)
+
+        Append a bytestring `b` to the buffer, growing it as necessary."""
         assert self.s is not NULL
         cdef size_t blen = len(b)
         while (PyString_GET_SIZE(self.s) - self.pos) < (blen + 1):
@@ -100,11 +169,15 @@ cdef class StringWriter:
         self.pos += blen
 
     cpdef object finalize(self):
+        """
+        finalize()
+
+        Resize the string to its final size, and return it. The StringWriter
+        should be discarded after calling finalize().
+        """
         # It should be possible to do better than this.
-        #print 'before:', <int>self.s
         if -1 == _PyString_Resize(&self.s, self.pos):
             raise MemoryError
-        #print 'after:', <int>self.s
         cdef object ss = <object> self.s
         Py_DECREF(self.s)
         self.s = NULL
@@ -123,37 +196,13 @@ cdef enum ElementKind:
     KIND_SEP = 102
 
 def tuplize(o):
+    """Please view module docstrings via Sphinx or pydoc."""
     if type(o) is not tuple:
         o = (o,)
     return o
 
-cdef encode_int(StringWriter sw, v):
-    """Given some positive integer of 64-bits or less, return a variable length
-    bytestring representation that preserves the integer's order. The
-    bytestring size is such that:
-
-        +-------------+------------------------+
-        + *Size*      | *Largest integer*      |
-        +-------------+------------------------+
-        + 1 byte      | <= 240                 |
-        +-------------+------------------------+
-        + 2 bytes     | <= 2287                |
-        +-------------+------------------------+
-        + 3 bytes     | <= 67823               |
-        +-------------+------------------------+
-        + 4 bytes     | <= 16777215            |
-        +-------------+------------------------+
-        + 5 bytes     | <= 4294967295          |
-        +-------------+------------------------+
-        + 6 bytes     | <= 1099511627775       |
-        +-------------+------------------------+
-        + 7 bytes     | <= 281474976710655     |
-        +-------------+------------------------+
-        + 8 bytes     | <= 72057594037927935   |
-        +-------------+------------------------+
-        + 9 bytes     | <= (2**64)-1           |
-        +-------------+------------------------+
-    """
+cpdef encode_int(StringWriter sw, v):
+    """Please view module docstrings via Sphinx or pydoc."""
     cdef unsigned int vi
 
     if v < 240:
@@ -190,6 +239,7 @@ cdef encode_int(StringWriter sw, v):
         sw.putbytes(pack('>Q', v))
 
 cdef object encode_str(StringWriter sw, bytes s):
+    """Please view module docstrings via Sphinx or pydoc."""
     cdef unsigned char *p = s
     cdef size_t length = len(s)
     cdef unsigned char c
@@ -204,39 +254,7 @@ cdef object encode_str(StringWriter sw, bytes s):
             sw.putc(c)
 
 cpdef object encode_keys(tups, bytes prefix=None, closed=True):
-    """Encode a sequence of tuples of primitive values to a bytestring that
-    preserves a meaningful lexicographical sort order.
-
-        `prefix`:
-            Initial prefix for the bytestring, if any.
-
-        `closed`:
-            If ``False``, indicates that if the last element of the last tuple
-            is a string or blob, its terminator should be omitted. This allows
-            open-ended queries on substrings:
-
-            ::
-
-                a_open = encode_keys('a', closed=False) # 0x28 0x61
-                a_closed = encode_keys('a')             # 0x28 0x61 0x00
-                aa = encode_keys('aa')                  # 0x28 0x61 0x61 0x00
-                assert not aa.startswith(a_closed)
-                assert aa.startswith(a_open)
-
-    A bytestring is returned such that elements of different types at the same
-    position within distinct sequences with otherwise identical prefixes will
-    sort in the following order.
-
-        1. ``None``
-        2. Negative integers
-        3. Positive integers
-        4. ``False``
-        5. ``True``
-        6. Bytestrings (i.e. :py:func:`str`).
-        7. Unicode strings.
-        8. ``uuid.UUID`` instances.
-        9. Sequences with another tuple following the last identical element.
-    """
+    """Please view module docstrings via Sphinx or pydoc."""
     cdef StringWriter sw = StringWriter()
 
     last = len(tups) - 1
@@ -276,9 +294,11 @@ cpdef object encode_keys(tups, bytes prefix=None, closed=True):
                     sw.putc('\x00')
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
-    return sw.finalize()
+    cdef object out = sw.finalize()
+    return out
 
-cdef class IndexKeyBuilder:
+
+cdef class KeyBuilder:
     cdef list indices
 
     def __init__(self, indices):
@@ -295,25 +315,7 @@ cdef class IndexKeyBuilder:
         return idx_keys
 
 cdef class Record:
-    """Wraps a record value with its last saved key, if any.
-
-    :py:class:`Record` instances are usually created by the
-    :py:class:`Collection` and :py:class:`Index`
-    ``get()``/``put()``/``iter*()`` functions. They are primarily used to track
-    index keys that were valid for the record when it was loaded, allowing many
-    operations to be avoided if the user deletes or modifies it within the same
-    transaction. The class is only required when modifying existing records.
-
-    It is possible to avoid using the class when `Collection.derived_keys =
-    True`, however this hurts perfomance as it forces :py:meth:`Collectionput`
-    to first check for any existing record with the same key, and therefore for
-    any existing index keys that must first be deleted.
-
-    *Note:* you may create :py:class:`Record` instances directly, **but you
-    must not modify any attributes except** :py:attr:`Record.data`, or
-    construct it using any arguments except `coll` and `data`, otherwise index
-    corruption will likely occur.
-    """
+    """Please view module docstrings via Sphinx or pydoc."""
     cdef public object coll
     cdef public object data
     cdef public object key
@@ -333,3 +335,143 @@ cdef class Record:
     def __repr__(self):
         s = ','.join(map(repr, self.key or ()))
         return '<Record %s:(%s) %r>' % (self.coll.info['name'], s, self.data)
+
+
+cpdef decode_int(StringReader sr):
+    """Please view module docstrings via Sphinx or pydoc."""
+    cdef unsigned char ch
+    cdef unsigned char ch2
+    cdef uint8_t buf[8]
+    cdef uint64_t u64 = 0
+
+    assert sr.getchar(&ch)
+    if ch <= 240:
+        u64 = ch
+    elif ch <= 248:
+        assert sr.getchar(&ch2)
+        u64 = 240 + (256 * (ch - 241) + sr.getchar_())
+    elif ch == 249:
+        u64 = 2288 + (256 * sr.getchar_()) + sr.getchar_()
+    elif ch == 250:
+        buf[0] = 0
+        assert sr.getinto(buf, 3)
+        u64 = ntohl((<uint32_t *>buf)[0])
+    elif ch == 251:
+        assert sr.getinto(buf, 4)
+        u64 = ntohl((<uint32_t *>buf)[0])
+    elif ch == 252:
+        return unpack('>Q', '\x00\x00\x00' + sr.gets(5))[0]
+    elif ch == 253:
+        return unpack('>Q', '\x00\x00' + sr.gets(6))[0]
+    elif ch == 254:
+        return unpack('>Q', '\x00' + sr.gets(7))[0]
+    elif ch == 255:
+        return unpack('>Q', sr.gets(8))[0]
+    return u64
+
+cdef bytes decode_str(StringReader sr):
+    """Please view module docstrings via Sphinx or pydoc."""
+    cdef StringWriter sw = StringWriter()
+    cdef unsigned char ch
+    while sr.getchar(&ch):
+        if ch == 0:
+            break
+        elif ch == 1:
+            assert sr.getchar(&ch)
+            if ch == 1:
+                sw.putc(0)
+            else:
+                assert ch == 2
+                sw.putc(1)
+        else:
+            sw.putc(ch)
+    return sw.finalize()
+
+
+cpdef decode_keys(s, prefix=None, first=False):
+    """Please view module docstrings via Sphinx or pydoc."""
+    cdef StringReader sr = StringReader(s)
+    if prefix:
+        assert len(sr.gets(len(prefix))) == len(prefix)
+
+    tups = []
+    tup = []
+    cdef unsigned char c
+    while sr.getchar(&c):
+        if c == KIND_NULL:
+            arg = None
+        elif c == KIND_INTEGER:
+            arg = decode_int(sr)
+        elif c == KIND_NEG_INTEGER:
+            arg = -decode_int(sr)
+        elif c == KIND_BOOL:
+            arg = bool(decode_int(sr))
+        elif c == KIND_BLOB:
+            arg = decode_str(sr)
+        elif c == KIND_TEXT:
+            arg = decode_str(sr).decode('utf-8')
+        elif c == KIND_UUID:
+            arg = UUID(decode_str(sr))
+        elif c == KIND_SEP:
+            if tup:
+                tups.append(tuple(tup))
+            if first:
+                return tups[0]
+            tup = []
+            continue
+        else:
+            raise ValueError('bad kind %r; key corrupt? %r' % (c, tup))
+        tup.append(arg)
+    tups.append(tuple(tup))
+    return tups[0] if first else tups
+
+
+"""
+cdef class Iter:
+    cdef object it
+    cdef size_t i
+    cdef ssize_t max
+    cdef bytes hi
+    cdef bytes lo
+    cdef int values
+
+    def __init__(self, engine, txn, key=None, prefix=None, lo=None, hi=None,
+        reverse=False, max=None, values=True):
+        from centidb import next_greater
+        if prefix:
+            self.lo = prefix
+            self.hi = next_greater(prefix)
+        else:
+            self.lo = None
+            self.hi = None
+
+        self.i = 0
+        self.max = max or -1
+        self.values = values
+        self.it = (txn or engine).iter(
+            (self.hi if reverse else self.lo) or key, reverse)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        cdef int i = 0
+        cdef bytes k
+        cdef object tup = next(self.it)
+        if self.max >= 0 and i > max:
+            raise StopIteration
+        k = tup[0]
+        if ((self.lo is not None) and (k < self.lo)) \
+                or ((self.hi is not None) and (k > self.hi)):
+            raise StopIteration
+        i += 1
+        if self.values:
+            return tup
+        else:
+            return k
+
+_iter = Iter
+"""
+
+__all__ = ['Record', 'StringReader', 'StringWriter', 'encode_keys',
+           'encode_int', 'decode_int', 'decode_keys', 'KeyBuilder', 'tuplize']
