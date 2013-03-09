@@ -52,12 +52,14 @@ cdef class StringReader:
         `buf`:
             Bytestring to read from.
     """
-    cdef bytes buf
+    cdef bytes buf_
+    cdef char *buf
     cdef size_t size
     cdef size_t pos
 
-    def __init__(self, bytes buf):
-        self.buf = buf
+    def __init__(self, bytes buf not None):
+        self.buf_ = buf
+        self.buf = <char *> buf
         self.size = len(buf)
         self.pos = 0
 
@@ -201,8 +203,7 @@ def tuplize(o):
         o = (o,)
     return o
 
-cpdef encode_int(StringWriter sw, v):
-    """Please view module docstrings via Sphinx or pydoc."""
+cdef c_encode_int(StringWriter sw, v):
     cdef unsigned int vi
 
     if v < 240:
@@ -238,6 +239,12 @@ cpdef encode_int(StringWriter sw, v):
         sw.putc(0xff)
         sw.putbytes(pack('>Q', v))
 
+def encode_int(v):
+    """Please view module docstrings via Sphinx or pydoc."""
+    cdef StringWriter sw = StringWriter()
+    c_encode_int(sw, v)
+    return sw.finalize()
+
 cdef object encode_str(StringWriter sw, bytes s):
     """Please view module docstrings via Sphinx or pydoc."""
     cdef unsigned char *p = s
@@ -270,14 +277,14 @@ cpdef object encode_keys(tups, bytes prefix=None, closed=True):
                 sw.putc(KIND_NULL)
             elif arg is True or arg is False:
                 sw.putc(KIND_BOOL)
-                encode_int(sw, arg)
+                c_encode_int(sw, arg)
             elif type_ is long or type_ is int:
                 if arg < 0:
                     sw.putc(KIND_NEG_INTEGER)
-                    encode_int(sw, -arg)
+                    c_encode_int(sw, -arg)
                 else:
                     sw.putc(KIND_INTEGER)
-                    encode_int(sw, arg)
+                    c_encode_int(sw, arg)
             elif type_ is UUID:
                 sw.putc(KIND_UUID)
                 encode_str(sw, arg.get_bytes())
@@ -474,4 +481,4 @@ _iter = Iter
 """
 
 __all__ = ['Record', 'StringReader', 'StringWriter', 'encode_keys',
-           'encode_int', 'decode_int', 'decode_keys', 'KeyBuilder', 'tuplize']
+           'encode_int', 'decode_keys', 'KeyBuilder', 'tuplize']
