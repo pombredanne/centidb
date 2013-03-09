@@ -1,12 +1,12 @@
 #
 # Copyright 2013, David Wilson.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #    http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,11 +22,11 @@ See http://centidb.readthedocs.org/
 from __future__ import absolute_import
 
 import cPickle as pickle
-from pprint import pprint
 import cStringIO
 import functools
 import itertools
 import operator
+import os
 import re
 import struct
 import sys
@@ -49,6 +49,7 @@ KIND_UUID = chr(90)
 KIND_KEY = chr(95)
 KIND_SEP = chr(102)
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
+IndexKeyBuilder = None
 
 def invert(s):
     """Invert the bits in the bytestring `s`.
@@ -224,7 +225,7 @@ def tuplize(o):
     return o if type(o) is tuple else (o,)
 
 def encode_keys(tups, prefix='', closed=True):
-    """Encode a sequence of tuples of primitive values to a bytestring that
+    """Encode a list of tuples of primitive values to a bytestring that
     preserves a meaningful lexicographical sort order.
 
         `prefix`:
@@ -256,10 +257,26 @@ def encode_keys(tups, prefix='', closed=True):
         7. Unicode strings.
         8. ``uuid.UUID`` instances.
         9. Sequences with another tuple following the last identical element.
+
+    If `tups` is not exactly a list, it is assumed to a be single key, and will
+    be treated as if it were wrapped in a list.
+
+    If the type of any list element is not exactly a tuple, it is assumed to be
+    a single primitive value, and will be treated as if it were a 1-tuple key.
+
+    ::
+
+        >>> encode_keys(1)      # Treated like encode_keys([(1,)])
+        >>> encode_keys((1,))   # Treated like encode_keys([(1,)])
+        >>> encode_keys([1])    # Treated like encode_keys([(1,)])
+        >>> encode_keys([(1,)]) # Treated like encode_keys([(1,)])
     """
     ba = bytearray()
     w = ba.append
     e = ba.extend
+
+    if type(tups) is not list:
+        tups = [tups]
 
     e(prefix)
     last = len(tups) - 1
@@ -298,7 +315,7 @@ def encode_keys(tups, prefix='', closed=True):
                     w('\x00')
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
-    return str(ba) #io.getvalue()
+    return str(ba)
 
 def decode_keys(s, prefix=None, first=False):
     """Decode a bytestring produced by :py:func:`encode_keys`, returning the
@@ -403,7 +420,6 @@ class Index(object):
         self.engine = self.store.engine
         self.info = info
         self.func = func
-        print 'info is:', info['idx']
         self.prefix = self.store.prefix + encode_int(info['idx'])
         self._decode = functools.partial(decode_keys, prefix=self.prefix)
 
@@ -412,7 +428,7 @@ class Index(object):
         """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record."""
-        key = encode_keys((args or (),), self.prefix, closed)
+        key = encode_keys([args or ()], self.prefix, closed)
         it = _iter(self.engine, txn, prefix=key, reverse=reverse, values=False,
             max=max)
         it = itertools.imap(self._decode, it)
@@ -466,7 +482,7 @@ class Index(object):
         for p in self.iteritems(args, reverse, txn, rec, 1, closed):
             return p[1]
         if rec and default is not None:
-            return Record_(self.coll, default)
+            return Record(self.coll, default)
         return default
 
 class Record(object):
@@ -508,6 +524,11 @@ class Record(object):
         #: ensure records from distinct transactions aren't mixed.
         self.txn_id = _txn_id
         self.index_keys = _index_keys
+
+    def __eq__(self, other):
+        return isinstance(other, Record) and \
+            other.coll is self.coll and other.data == self.data and \
+            other.key == self.key
 
     def __repr__(self):
         s = ','.join(map(repr, self.key or ()))
@@ -671,8 +692,8 @@ class Collection(object):
         info = self.store._get_info(info_name, index_for=self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
-        if _centidb:
-            self._index_keys = _centidb.KeyBuilder(self.indices.values()).build
+        if IndexKeyBuilder:
+            self._index_keys = IndexKeyBuilder(self.indices.values()).build
         return index
 
     def _decompress(self, s):
@@ -693,23 +714,22 @@ class Collection(object):
         for idx in self.indices.itervalues():
             lst = idx.func(obj)
             for idx_key in lst if type(lst) is list else [lst]:
-                idx_keys.append(encode_keys((idx_key, key), idx.prefix))
+                idx_keys.append(encode_keys([idx_key, key], idx.prefix))
         return idx_keys
 
     def iteritems(self, key=(), rec=False, txn=None, reverse=False):
         """Yield all `(key, value)` tuples in the collection, in key order. If
         `rec` is ``True``, :py:class:`Record` instances are yielded instead of
         record values."""
-        prefix = encode_keys((tuplize(key),), self.prefix)
+        prefix = encode_keys([key], self.prefix)
         it = _iter(self.engine, txn, prefix=prefix, reverse=reverse)
         for phys, data in it:
-            print 'zoink', (phys, data, self.prefix)
             if not phys.startswith(self.prefix):
                 break
             keys = decode_keys(phys, self.prefix)
             obj = self.encoder.unpack(self._decompress(data))
             if rec:
-                obj = Record_(self, obj, keys[-1], len(keys) > 1)
+                obj = Record(self, obj, keys[-1], len(keys) > 1)
             yield keys[-(1)], obj
 
     def iterkeys(self, reverse=False):
@@ -734,7 +754,7 @@ class Collection(object):
         a :py:class:`Record` instance for use when later re-saving the record,
         otherwise only the record's value is returned."""
         key = tuplize(key)
-        it = _iter(self.engine, txn, encode_keys((key,), self.prefix))
+        it = _iter(self.engine, txn, encode_keys(key, self.prefix))
         phys, data = next(it, (None, None))
 
         if phys and phys.startswith(self.prefix):
@@ -816,7 +836,7 @@ class Collection(object):
 
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
-        it = _iter(self.engine, txn, encode_keys((rec.key,), self.prefix))
+        it = _iter(self.engine, txn, encode_keys(rec.key, self.prefix))
         phys, data = next(it, (None, None))
         keys = decode_keys(phys, self.prefix)
         assert len(keys) > 1 and rec.key in keys, \
@@ -900,7 +920,7 @@ class Collection(object):
                 self._split_batch(rec, txn)
             elif rec.key != obj_key:
                 # New version has changed key, delete old.
-                txn.delete(encode_keys((rec.key,), self.prefix))
+                txn.delete(encode_keys(rec.key, self.prefix))
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     txn.delete(index_key)
@@ -909,7 +929,7 @@ class Collection(object):
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
-        txn.put(encode_keys((obj_key,), self.prefix),
+        txn.put(encode_keys(obj_key, self.prefix),
                 ' ' + self.encoder.pack(rec.data))
         for index_key in index_keys:
             txn.put(index_key, '')
@@ -955,7 +975,7 @@ class Collection(object):
                 self._split_batch(rec, txn)
             else:
                 delete = (txn or self.engine).delete
-                delete(encode_keys((rec.key,), self.prefix))
+                delete(encode_keys(rec.key, self.prefix))
                 for index_key in rec.index_keys or ():
                     delete(index_key)
             rec.key = None
@@ -1043,13 +1063,13 @@ class Store(object):
         self._counter_coll.put(rec)
         return val
 
-# Hack: instead of duplicating docstrings, disable _centidb if it looks like
-# the user is reading docstrings.
-if all(k not in sys.modules for k in ('sphinx', 'pydoc')):
+# Hack: disable speedups while testing or reading docstrings.
+if not (any(k in sys.modules for k in ('sphinx', 'pydoc')) or \
+        os.getenv('NO_SPEEDUPS') is not None):
     try:
         from _centidb import *
     except ImportError:
-        _centidb = None
+        pass
 
 #: Encode Python tuples using encode_keys()/decode_keys().
 KEY_ENCODER = Encoder('key', functools.partial(decode_keys, first=True),

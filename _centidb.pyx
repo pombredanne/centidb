@@ -260,9 +260,14 @@ cdef object encode_str(StringWriter sw, bytes s):
         else:
             sw.putc(c)
 
-cpdef object encode_keys(tups, bytes prefix=None, closed=True):
+cpdef bytes encode_keys(tups, bytes prefix=None, closed=True):
     """Please view module docstrings via Sphinx or pydoc."""
     cdef StringWriter sw = StringWriter()
+    if prefix:
+        sw.putbytes(prefix)
+
+    if type(tups) is not list:
+        tups = [tups]
 
     last = len(tups) - 1
     for i, tup in enumerate(tups):
@@ -301,11 +306,10 @@ cpdef object encode_keys(tups, bytes prefix=None, closed=True):
                     sw.putc('\x00')
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
-    cdef object out = sw.finalize()
-    return out
+    return sw.finalize()
 
 
-cdef class KeyBuilder:
+cdef class IndexKeyBuilder:
     cdef list indices
 
     def __init__(self, indices):
@@ -338,6 +342,12 @@ cdef class Record:
         self.batch = _batch
         self.txn_id = _txn_id
         self.index_keys = _index_keys
+
+    def __cmp__(self, other):
+        if type(other) is Record:
+            return cmp((self.coll, self.data, self.key),
+                       (other.coll, other.data, other.key))
+        return -1
 
     def __repr__(self):
         s = ','.join(map(repr, self.key or ()))
@@ -480,5 +490,5 @@ cdef class Iter:
 _iter = Iter
 """
 
-__all__ = ['Record', 'StringReader', 'StringWriter', 'encode_keys',
-           'encode_int', 'decode_keys', 'KeyBuilder', 'tuplize']
+__all__ = ['Record', 'StringWriter', 'encode_keys', 'encode_int',
+           'decode_keys', 'IndexKeyBuilder', 'tuplize']
