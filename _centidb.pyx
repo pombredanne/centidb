@@ -25,9 +25,17 @@
 #include "cpython/string.pxd"
 include "libc/stdint.pxd"
 
-from uuid import UUID
-from struct import pack
-from struct import unpack
+import uuid
+import struct
+
+cimport cython
+
+cimport cpython
+
+
+cdef object UUID = uuid.UUID
+cdef object pack = struct.pack
+cdef object unpack = struct.unpack
 
 cdef extern from "arpa/inet.h":
     uint32_t ntohl(uint32_t n)
@@ -41,9 +49,13 @@ cdef extern from "Python.h":
     Py_ssize_t PyString_GET_SIZE(void *)
     unsigned char *PyString_AS_STRING(void *string)
     void *memcpy(void *s1, const void *s2, size_t n)
+    void Py_INCREF(void *o)
     void Py_DECREF(void *o)
+    PyObject *PyTuple_New(Py_ssize_t len)
 
 
+@cython.final
+@cython.internal
 cdef class StringReader:
     """
     Basic StringIO-alike class except it can be accessed efficiently from
@@ -105,6 +117,8 @@ cdef class StringReader:
             return s
         return b''
 
+@cython.final
+@cython.internal
 cdef class StringWriter:
     """
     Represents efficient append-only access to a bytestring's internal
@@ -146,7 +160,7 @@ cdef class StringWriter:
         if -1 == _PyString_Resize(&self.s, newsize):
             raise MemoryError()
 
-    cpdef putc(self, unsigned char o):
+    cdef void putc(self, unsigned char o):
         """putc(o)
 
         Append a single ordinal `o` to the buffer, growing it as necessary."""
@@ -157,18 +171,17 @@ cdef class StringWriter:
         s[self.pos] = o
         self.pos += 1
 
-    cpdef putbytes(self, bytes b):
+    cdef void putbytes(self, unsigned char *s, size_t size):
         """
         putbytes(b)
 
         Append a bytestring `b` to the buffer, growing it as necessary."""
         assert self.s is not NULL
-        cdef size_t blen = len(b)
-        while (PyString_GET_SIZE(self.s) - self.pos) < (blen + 1):
+        while (PyString_GET_SIZE(self.s) - self.pos) < (size + 1):
             self._grow()
-        cdef unsigned char *s = PyString_AS_STRING(self.s)
-        memcpy(s + self.pos, <unsigned char *> b, blen)
-        self.pos += blen
+        cdef unsigned char *ss = PyString_AS_STRING(self.s)
+        memcpy(ss + self.pos, <unsigned char *> s, size)
+        self.pos += size
 
     cpdef object finalize(self):
         """
@@ -197,14 +210,15 @@ cdef enum ElementKind:
     KIND_KEY = 95
     KIND_SEP = 102
 
-def tuplize(o):
+cpdef tuplize(o):
     """Please view module docstrings via Sphinx or pydoc."""
     if type(o) is not tuple:
         o = (o,)
     return o
 
-cdef c_encode_int(StringWriter sw, v):
+cdef c_encode_int(StringWriter sw, uint64_t v):
     cdef unsigned int vi
+    cdef bytes tmp
 
     if v < 240:
         sw.putc(v)
@@ -221,26 +235,32 @@ cdef c_encode_int(StringWriter sw, v):
         sw.putc(m)
     elif v <= 16777215:
         sw.putc(0xfa)
-        sw.putbytes(pack('>L', v)[-3:])
+        tmp = pack('>L', v)[-3:]
+        sw.putbytes(tmp, 3)
     elif v <= 4294967295:
         sw.putc(0xfb)
-        sw.putbytes(pack('>L', v))
+        tmp = pack('>L', v)
+        sw.putbytes(tmp, 4)
     elif v <= 1099511627775:
         sw.putc(0xfc)
-        sw.putbytes(pack('>Q', v)[-5:])
+        tmp = pack('>Q', v)[-5:]
+        sw.putbytes(tmp, 5)
     elif v <= 281474976710655:
         sw.putc(0xfd)
-        sw.putbytes(pack('>Q', v)[-6:])
+        tmp = pack('>Q', v)[-6:]
+        sw.putbytes(tmp, 6)
     elif v <= 72057594037927935:
         sw.putc(0xfe)
-        sw.putbytes(pack('>Q', v)[-7:])
+        tmp = pack('>Q', v)[-7:]
+        sw.putbytes(tmp, 7)
     else:
-        assert v.bit_length() <= 64
         sw.putc(0xff)
-        sw.putbytes(pack('>Q', v))
+        tmp = pack('>Q', v)
+        sw.putbytes(tmp, 8)
 
 def encode_int(v):
     """Please view module docstrings via Sphinx or pydoc."""
+    assert (v >= 0) and (v.bit_length() <= 64), repr(v)
     cdef StringWriter sw = StringWriter()
     c_encode_int(sw, v)
     return sw.finalize()
@@ -251,78 +271,149 @@ cdef object encode_str(StringWriter sw, bytes s):
     cdef size_t length = len(s)
     cdef unsigned char c
 
+    cdef int i
     for i in range(length):
-        c = s[i]
+        c = p[i]
         if c == 0:
-            sw.putbytes(b'\x01\x01')
+            sw.putbytes("\x01\x01", 2)
         elif c == 1:
-            sw.putbytes(b'\x01\x02')
+            sw.putbytes("\x01\x02", 2)
         else:
             sw.putc(c)
 
-cpdef bytes encode_keys(tups, bytes prefix=None, closed=True):
+
+cdef c_encode_value(StringWriter sw, object arg, int closed):
+    type_ = type(arg)
+    if arg is None:
+        sw.putc(KIND_NULL)
+    elif type_ is int:
+        i64 = arg
+        if i64 < 0:
+            sw.putc(KIND_NEG_INTEGER)
+            c_encode_int(sw, -i64)
+        else:
+            sw.putc(KIND_INTEGER)
+            c_encode_int(sw, i64)
+    elif type_ is str:
+        sw.putc(KIND_BLOB)
+        encode_str(sw, arg)
+        if closed:
+            sw.putc('\x00')
+    elif type_ is unicode:
+        sw.putc(KIND_TEXT)
+        encode_str(sw, arg.encode('utf-8'))
+        if closed:
+            sw.putc('\x00')
+    elif type_ is bool:
+        sw.putc(KIND_BOOL)
+        c_encode_int(sw, arg is True)
+    elif type_ is long:
+        assert arg.bit_length() <= 64
+        i64 = arg
+        if i64 < 0:
+            sw.putc(KIND_NEG_INTEGER)
+            c_encode_int(sw, -i64)
+        else:
+            sw.putc(KIND_INTEGER)
+            c_encode_int(sw, i64)
+    elif type_ is UUID:
+        sw.putc(KIND_UUID)
+        encode_str(sw, arg.get_bytes())
+        sw.putc('\x00')
+    else:
+        raise TypeError('unsupported type: %r' % (arg,))
+
+
+cdef c_encode_key(StringWriter sw, object tup, int closed):
+    cdef int i
+    cdef int j
+    cdef int64_t i64
+
+    cdef size_t tlast = len(tup) - 1
+    for j, arg in enumerate(tup):
+        c_encode_value(sw, arg, closed and tlast != j)
+
+
+def encode_keys(tups, bytes prefix=None, int closed=1):
     """Please view module docstrings via Sphinx or pydoc."""
     cdef StringWriter sw = StringWriter()
-    if prefix:
-        sw.putbytes(prefix)
+    cdef size_t llast
+
+    if prefix is not None:
+        sw.putbytes(prefix, len(prefix))
 
     if type(tups) is not list:
-        tups = [tups]
-
-    last = len(tups) - 1
-    for i, tup in enumerate(tups):
-        if i:
-            sw.putc(KIND_SEP)
-        if type(tup) is not tuple:
-            tup = (tup,)
-        tlast = len(tup) - 1
-        for j, arg in enumerate(tup):
-            type_ = type(arg)
-            if arg is None:
-                sw.putc(KIND_NULL)
-            elif arg is True or arg is False:
-                sw.putc(KIND_BOOL)
-                c_encode_int(sw, arg)
-            elif type_ is long or type_ is int:
-                if arg < 0:
-                    sw.putc(KIND_NEG_INTEGER)
-                    c_encode_int(sw, -arg)
-                else:
-                    sw.putc(KIND_INTEGER)
-                    c_encode_int(sw, arg)
-            elif type_ is UUID:
-                sw.putc(KIND_UUID)
-                encode_str(sw, arg.get_bytes())
-                sw.putc('\x00')
-            elif isinstance(arg, str):
-                sw.putc(KIND_BLOB)
-                encode_str(sw, arg)
-                if closed or i != last or j != tlast:
-                    sw.putc('\x00')
-            elif type_ is unicode:
-                sw.putc(KIND_TEXT)
-                encode_str(sw, arg.encode('utf-8'))
-                if closed or i != last or j != tlast:
-                    sw.putc('\x00')
+        if type(tups) is tuple:
+            c_encode_key(sw, tups, closed)
+        else:
+            c_encode_value(sw, tups, closed)
+    else:
+        llast = len(tups) - 1
+        for i, tup in enumerate(tups):
+            if i:
+                sw.putc(KIND_SEP)
+            if type(tup) is tuple:
+                c_encode_key(sw, tup, closed and i != llast)
             else:
-                raise TypeError('unsupported type: %r' % (arg,))
+                c_encode_value(sw, tup, closed and i != llast)
+
     return sw.finalize()
 
 
+cdef c_encode_index_entry(size_t initial, unsigned char *prefix_p,
+                          size_t prefix_size, object entry,
+                          unsigned char *key_p, size_t key_size):
+    cdef StringWriter sw = StringWriter(initial)
+    sw.putbytes(prefix_p, prefix_size)
+    if type(entry) is tuple:
+        c_encode_key(sw, entry, 0)
+    else:
+        c_encode_value(sw, entry, 0)
+    sw.putc(KIND_SEP)
+    sw.putbytes(key_p, key_size)
+    return sw.finalize()
+
+
+@cython.final
 cdef class IndexKeyBuilder:
     cdef list indices
 
-    def __init__(self, indices):
+    def __init__(self, list indices not None):
         self.indices = indices
 
     def build(self, key, obj):
-        idx_keys = []
+        cdef StringWriter key_sw = StringWriter()
+        c_encode_key(key_sw, key, 1)
+        cdef bytes key_enc = key_sw.finalize()
+        cdef unsigned char * key_enc_p = key_enc
+        cdef size_t key_size = len(key_enc)
+        cdef size_t initial = key_size + 20
+
+        cdef bytes prefix
+        cdef unsigned char *prefix_p
+        cdef size_t prefix_size
+
+        cdef StringWriter sw2
+
+        cdef list idx_keys = []
+        cdef tuple args = (obj,)
+        cdef object lst
+
         for idx in self.indices:
-            lst = idx.func(obj)
+            prefix = idx.prefix
+            prefix_p = prefix
+            prefix_size = len(prefix)
+
+            lst = idx.func(*args)
+
             if type(lst) is not list:
-                lst = [lst]
-            for idx_key in lst:
-                idx_keys.append(encode_keys((idx_key, key), idx.prefix))
+                idx_keys.append(c_encode_index_entry(
+                    initial, prefix_p, prefix_size, lst, key_enc_p, key_size))
+            else:
+                for idx_key in lst:
+                    idx_keys.append(c_encode_index_entry(
+                        initial, prefix_p, prefix_size, idx_key, key_enc_p,
+                        key_size))
         return idx_keys
 
 cdef class Record:
@@ -405,14 +496,18 @@ cdef bytes decode_str(StringReader sr):
     return sw.finalize()
 
 
-cpdef decode_keys(s, prefix=None, first=False):
+cpdef decode_keys(s, bytes prefix=None, int first=False):
     """Please view module docstrings via Sphinx or pydoc."""
     cdef StringReader sr = StringReader(s)
     if prefix:
         assert len(sr.gets(len(prefix))) == len(prefix)
 
-    tups = []
-    tup = []
+    cdef list tups
+    if not first:
+        tups = []
+    cdef PyObject *tup = NULL
+    cdef size_t pos = 0
+
     cdef unsigned char c
     while sr.getchar(&c):
         if c == KIND_NULL:
@@ -430,17 +525,36 @@ cpdef decode_keys(s, prefix=None, first=False):
         elif c == KIND_UUID:
             arg = UUID(decode_str(sr))
         elif c == KIND_SEP:
-            if tup:
-                tups.append(tuple(tup))
             if first:
-                return tups[0]
-            tup = []
+                break
+            if pos != cpython.PyTuple_GET_SIZE(<object> tup):
+                assert -1 != cpython._PyTuple_Resize(&tup, pos)
+            Py_INCREF(tup)
+            tups.append(<object> tup)
+            Py_DECREF(tup)
+            tup = NULL
             continue
         else:
-            raise ValueError('bad kind %r; key corrupt? %r' % (c, tup))
-        tup.append(arg)
-    tups.append(tuple(tup))
-    return tups[0] if first else tups
+            raise ValueError('bad kind %r; key corrupt? %r' % (c, <object>tup))
+
+        if tup is NULL:
+            tup = <PyObject *> PyTuple_New(3)
+            assert tup
+            pos = 0
+        if pos == cpython.PyTuple_GET_SIZE(<object> tup):
+            assert -1 != cpython._PyTuple_Resize(&tup, cpython.PyTuple_GET_SIZE(<object> tup) + 2)
+        #Py_INCREF(<void *> arg)
+        cpython.PyTuple_SET_ITEM(<object> tup, pos, arg)
+        pos += 1
+
+    if pos != cpython.PyTuple_GET_SIZE(<object> tup):
+        assert -1 != cpython._PyTuple_Resize(&tup, pos)
+    #Py_INCREF(tup)
+    if first:
+        return <object>tup
+    tups.append(<object> tup)
+    Py_DECREF(tup)
+    return tups
 
 
 """
@@ -490,5 +604,5 @@ cdef class Iter:
 _iter = Iter
 """
 
-__all__ = ['Record', 'StringWriter', 'encode_keys', 'encode_int',
-           'decode_keys', 'IndexKeyBuilder', 'tuplize']
+__all__ = ['Record', 'encode_keys', 'encode_int', 'decode_keys',
+           'IndexKeyBuilder', 'tuplize']
