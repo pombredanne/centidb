@@ -1,3 +1,4 @@
 docs/_build
 test.ldb
 build
+_centidb.so
