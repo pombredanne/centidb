@@ -266,11 +266,8 @@ methods. All key and value variables below are ``NUL``-safe bytestrings:
 
         `key`:
             Starting key. The first yielded element should correspond to this
-            key, or if it does not exist, the nearest existent key along the
-            direction of movement.
-
-            If `key` is ``None`` and `reverse` is ``True``, iteration should
-            begin with the greatest key.
+            key if it exists, or the next highest key, or the highest key in
+            the store.
 
         `reverse`:
             If ``False``, iteration proceeds until the lexicographically
@@ -288,6 +285,9 @@ Predefined Engines
 ++++++++++++++++++
 
 .. autoclass:: centidb.support.ListEngine
+    :members:
+
+.. autoclass:: centidb.support.SkiplistEngine
     :members:
 
 .. autoclass:: centidb.support.PlyvelEngine
@@ -378,6 +378,15 @@ Now define a collection:
     assert packed == '\x18\x04dave\x00'
 
 
+Other Encoders
+++++++++++++++
+
+The `centidb.support` module includes helpers for a few more encodings.
+
+.. autofunction:: centidb.support.make_json_encoder
+.. autofunction:: centidb.support.make_msgpack_encoder
+
+
 Key functions
 +++++++++++++
 
@@ -393,12 +402,6 @@ These functions are based on `SQLite 4's key encoding
 .. autofunction:: centidb.decode_keys
 .. autofunction:: centidb.invert
 .. autofunction:: centidb.next_greater
-
-
-String Construction
-+++++++++++++++++++
-
-.. autoclass:: _centidb.StringWriter
 
 
 Varint functions
@@ -570,7 +573,7 @@ Setup:
 
     ::
 
-        encoder = centidb.Encoder('msgpack', msgpack.loads, msgpack.dumps)
+        encoder = centidb.support.make_msgpack_encoder()
 
 * :py:meth:`Collection.put` with `virgin=True`
 
@@ -601,12 +604,24 @@ Setup:
 `put(virgin=True)`
 ++++++++++++++++++
 
+Indices enabled:
+
     +-------------------------------------+-----------------------------------+
     | *Without speedups*                  | *With speedups*                   |
     +-------------------+-----------------+---------------------+-------------+
     | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
     +-------------------+-----------------+---------------------+-------------+
-    | 10,500            | ~30,000         | 25,407              | ~76,221     |
+    | 10,500            | ~30,000         | 41,573              | 124,719     |
+    +-------------------+-----------------+---------------------+-------------+
+
+Indices disabled:
+
+    +-------------------------------------+-----------------------------------+
+    | *Without speedups*                  | *With speedups*                   |
+    +-------------------+-----------------+---------------------+-------------+
+    | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
+    +-------------------+-----------------+---------------------+-------------+
+    | 28,041            | 28,041          | 52,129              | 52,129      |
     +-------------------+-----------------+---------------------+-------------+
 
 When running with the speedups module installed, the test becomes very
@@ -615,6 +630,29 @@ increasing proportion of runtime. Thus the library's runtime footprint is
 already likely dwarfed by the Python code comprising an even moderately complex
 host application.
 
+
+`put(virgin=False)`
++++++++++++++++++++
+
+Indices enabled:
+
+    +-------------------------------------+-----------------------------------+
+    | *Without speedups*                  | *With speedups*                   |
+    +-------------------+-----------------+---------------------+-------------+
+    | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
+    +-------------------+-----------------+---------------------+-------------+
+    | 4,915             | ~19,660         | 10,803              | ~43,212     |
+    +-------------------+-----------------+---------------------+-------------+
+
+Indices disabled:
+
+    +-------------------------------------+-----------------------------------+
+    | *Without speedups*                  | *With speedups*                   |
+    +-------------------+-----------------+---------------------+-------------+
+    | Records/sec       | Keys/sec        | Records/sec         | Keys/sec    |
+    +-------------------+-----------------+---------------------+-------------+
+    | 27,928            | 55,856          | 52,594              | 105,188     |
+    +-------------------+-----------------+---------------------+-------------+
 
 
 * Read performance
@@ -801,7 +839,6 @@ The following entries always exist (*not yet implemented*):
 +-------------------+---------+---------------------------------------------+
 
 
-
 History
 +++++++
 
@@ -847,13 +884,14 @@ Probably:
 2. Avoid key decoding when only used for comparison
 3. Unique index constraints, or validation callbacks
 4. Better documentation
-5. Index and collection type signatures (prevent writes using an inconsistent
+5. Index and collection type signatures (prevent writes using broken
    configuration)
 6. Smaller
 7. Safer
 8. C++ library
 9. Key splitting (better support DBs that dislike large records)
 10. putbatch()
+11. More future proof metadata format.
 
 Maybe:
 
@@ -861,7 +899,7 @@ Maybe:
    value (e.g. log line timestamp) or a common prefix, batches need only store
    the highest and lowest member keys in their key, since member record keys
    can be perfectly reconstructed. Lookup would expand varint offset array then
-   logarithmic bisect+decode until desired member is found.
+   bisect+decode until desired member is found.
 2. Value compressed covered indices
 3. `Query` object to simplify index intersections.
 4. Configurable key scheme
@@ -880,4 +918,9 @@ Probably not:
 4. `Engine` that distributes keyspace using configurable scheme
 5. :py:class:`Index` and :py:class:`Query` classes that integrate with richer
    APIs, e.g. App Engine
-
+6. MVCC 'middleware' for non-transactional stores
+7. :py:class:`Index` and :py:class:`Collection` variants that store the index
+   in a single key. Would permit use with non-ordered stores, e.g. filesystem
+   dir with SHA1(key)
+8. Be generic enough to allow indices and constraints on purely in-memory
+   collections, without encoding overhead.

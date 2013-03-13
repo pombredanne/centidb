@@ -1,17 +1,49 @@
+
 import cStringIO
 import operator
 import os
-import unittest
+import pdb
 import shutil
-
-from itertools import imap
-from operator import itemgetter
+import unittest
 
 from pprint import pprint
+from unittest import TestCase
 
 import centidb
 import centidb.centidb
 import centidb.support
+import _centidb
+
+
+#
+# Module reloads are necessary because KEY_ENCODER & co bind whatever
+# encode_keys() & so happens to exist before we get a chance to interfere. It
+# also improves the chance of noticing any not-planned-for speedups related
+# side effects, rather than relying on explicit test coverage.
+# 
+# There are nicer approaches to this (e.g. make_key_encoder()), but these would
+# optimize for the uncommon case of running tests.
+#
+
+class PythonMixin:
+    """Reload modules with speedups disabled."""
+    @classmethod
+    def setUpClass(cls):
+        global centidb
+        os.environ['NO_SPEEDUPS'] = '1'
+        centidb.centidb = reload(centidb.centidb)
+        centidb = reload(centidb)
+        getattr(cls, '_setUpClass', lambda: None)()
+
+class NativeMixin:
+    """Reload modules with speedups enabled."""
+    @classmethod
+    def setUpClass(cls):
+        global centidb
+        os.environ.pop('NO_SPEEDUPS', None)
+        centidb.centidb = reload(centidb.centidb)
+        centidb = reload(centidb)
+        getattr(cls, '_setUpClass', lambda: None)()
 
 
 def ddb():
@@ -22,23 +54,23 @@ def copy(it, dst):
         dst.put(*tup)
 
 
-def make_ass(op, ops):
+def make_asserter(op, ops):
     def ass(x, y, msg='', *a):
         if msg:
             if a:
                 msg %= a
             msg = ' (%s)' % msg
 
-        f = '%r %r %r%s'
+        f = '%r %s %r%s'
         assert op(x, y), f % (x, ops, y, msg)
     return ass
 
-lt = make_ass(operator.lt, '<')
-eq = make_ass(operator.eq, '==')
-le = make_ass(operator.le, '<=')
+lt = make_asserter(operator.lt, '<')
+eq = make_asserter(operator.eq, '==')
+le = make_asserter(operator.le, '<=')
 
 
-class IterTestCase(unittest.TestCase):
+class IterTestBase:
     KEYS = ('aa', 'cc', 'd', 'dd', 'de')
     ITEMS = [(k, '') for k in KEYS]
     REVERSE = ITEMS[::-1]
@@ -90,69 +122,107 @@ class IterTestCase(unittest.TestCase):
     def testReverseSeekBeyondFirst(self):
         eq([], self.riter('a'))
 
+class PythonIterTestCase(PythonMixin, IterTestBase, TestCase):
+    pass
+
+class NativeIterTestCase(NativeMixin, IterTestBase, TestCase):
+    pass
+
+
+
+class SkiplistTestCase(unittest.TestCase):
+    def testFindLess(self):
+        sl = centidb.support.SkipList()
+        update = sl._update[:]
+        assert sl._findLess(update, 'missing') is sl.head
+
+        sl.insert('dave', 'dave')
+        assert sl._findLess(update, 'dave') is sl.head
+
+        sl.insert('dave2', 'dave')
+        assert sl._findLess(update, 'dave2')[0] == 'dave'
+
+        assert sl._findLess(update, 'dave3')[0] == 'dave2'
+        print sl.reprNode(sl._findLess(update, 'dave3')[3])
+
+
 
 class EngineTestBase:
     def testGetPutOverwrite(self):
         assert self.e.get('dave') is None
-        self.e.put('dave', '1')
-        self.assertEqual(self.e.get('dave'), '1')
+        self.e.put('dave', '')
+        self.assertEqual(self.e.get('dave'), '')
         self.e.put('dave', '2')
         self.assertEqual(self.e.get('dave'), '2')
 
     def testDelete(self):
         self.e.delete('dave')
         assert self.e.get('dave') is None
-        self.e.put('dave', '1')
-        self.assertEqual(self.e.get('dave'), '1')
+        self.e.put('dave', '')
+        self.assertEqual(self.e.get('dave'), '')
         self.e.delete('dave')
         self.assertEqual(self.e.get('dave'), None)
-
-    def testIterReverseEmptyNone(self):
-        eq(list(self.e.iter(None, reverse=True)), [])
-
-    def testIterReverseFullNone(self):
-        self.e.put('a', '')
-        self.e.put('b', '')
-        eq(list(self.e.iter(None, reverse=True)), [('b', ''), ('a', '')])
 
     def testIterForwardEmpty(self):
         assert list(self.e.iter('')) == []
         assert list(self.e.iter('x')) == []
 
     def testIterForwardFilled(self):
-        self.e.put('dave', '1')
-        assert list(self.e.iter('dave')) == [('dave', '1')]
-        assert list(self.e.iter('davee')) == []
+        self.e.put('dave', '')
+        eq(list(self.e.iter('dave')), [('dave', '')])
+        eq(list(self.e.iter('davee')), [])
 
     def testIterReverseEmpty(self):
         eq(list(self.e.iter('', reverse=True)), [])
         eq(list(self.e.iter('x', reverse=True)), [])
 
+    def testIterReverseAtEnd(self):
+        self.e.put('a', '')
+        self.e.put('b', '')
+        eq(list(self.e.iter('b', reverse=True)), [('b', ''), ('a', '')])
+
+    def testIterReversePastEnd(self):
+        self.e.put('a', '')
+        self.e.put('b', '')
+        eq(list(self.e.iter('c', reverse=True)), [('b', ''), ('a', '')])
+
     def testIterReverseFilled(self):
-        self.e.put('dave', '1')
-        eq(list(self.e.iter('davee', reverse=True)), [('dave', '1')])
+        self.e.put('dave', '')
+        eq(list(self.e.iter('davee', reverse=True)), [('dave', '')])
 
     def testIterForwardMiddle(self):
-        self.e.put('a', '1')
-        self.e.put('c', '1')
-        self.e.put('d', '1')
-        assert list(self.e.iter('b')) == [('c', '1'), ('d', '1')]
-        assert list(self.e.iter('c')) == [('c', '1'), ('d', '1')]
+        self.e.put('a', '')
+        self.e.put('c', '')
+        self.e.put('d', '')
+        assert list(self.e.iter('b')) == [('c', ''), ('d', '')]
+        assert list(self.e.iter('c')) == [('c', ''), ('d', '')]
 
     def testIterReverseMiddle(self):
-        self.e.put('a', '1')
-        self.e.put('b', '1')
-        self.e.put('d', '1')
-        eq(list(self.e.iter('c', reverse=True)), [('b', '1'), ('a', '1')])
-        assert list(self.e.iter('b', reverse=True)) == [('b', '1'), ('a', '1')]
+        self.e.put('a', '')
+        self.e.put('b', '')
+        self.e.put('d', '')
+        eq(list(self.e.iter('c', reverse=True)),
+           [('d', ''), ('b', ''), ('a', '')])
 
-class ListEngineTestCase(unittest.TestCase, EngineTestBase):
+class PythonListEngineTestCase(PythonMixin, TestCase, EngineTestBase):
     def setUp(self):
         self.e = centidb.support.ListEngine()
 
-class PlyvelEngineTestCase(unittest.TestCase, EngineTestBase):
+class NativeListEngineTestCase(NativeMixin, TestCase, EngineTestBase):
+    def setUp(self):
+        self.e = centidb.support.ListEngine()
+
+class PythonSkiplistEngineTestCase(PythonMixin, TestCase, EngineTestBase):
+    def setUp(self):
+        self.e = centidb.support.SkiplistEngine()
+
+class NativeSkiplistEngineTestCase(NativeMixin, TestCase, EngineTestBase):
+    def setUp(self):
+        self.e = centidb.support.SkiplistEngine()
+
+class PlyvelEngineTestBase(EngineTestBase):
     @classmethod
-    def setUpClass(cls):
+    def _setUpClass(cls):
         if os.path.exists('test.ldb'):
             shutil.rmtree('test.ldb')
         cls.e = centidb.support.PlyvelEngine(
@@ -167,7 +237,13 @@ class PlyvelEngineTestCase(unittest.TestCase, EngineTestBase):
         cls.e = None
         shutil.rmtree('test.ldb')
 
-class KeysTestCase(unittest.TestCase):
+class PlyvelPythonTestCase(PythonMixin, PlyvelEngineTestBase, TestCase):
+    pass
+
+class PlyvelNativeTestCase(NativeMixin, PlyvelEngineTestBase, TestCase):
+    pass
+
+class KeysTestBase:
     SINGLE_VALS = [
         None,
         1,
@@ -178,6 +254,16 @@ class KeysTestCase(unittest.TestCase):
         -1
     ]
 
+    def _enc(self, *args, **kwargs):
+        return centidb.encode_keys(*args, **kwargs)
+
+    def _dec(self, *args, **kwargs):
+        return centidb.decode_keys(*args, **kwargs)
+
+    def test_counter(self):
+        s = self._enc(('dave', 1))
+        eq([('dave', 1)], self._dec(s))
+
     def test_single(self):
         for val in self.SINGLE_VALS:
             encoded = centidb.encode_keys((val,))
@@ -187,10 +273,29 @@ class KeysTestCase(unittest.TestCase):
     def test_single_sort_lower(self):
         for val in self.SINGLE_VALS:
             e1 = centidb.encode_keys((val,))
-            e2 = centidb.encode_keys(((val, val),))
+            e2 = centidb.encode_keys([(val, val),])
             lt(e1, e2, 'eek %r' % (val,))
 
-class EncodeIntTestCase(unittest.TestCase):
+class PythonKeysTestCase(PythonMixin, KeysTestBase, TestCase):
+    pass
+
+class NativeKeysTestCase(NativeMixin, KeysTestBase, TestCase):
+    pass
+
+class TuplizeTestBase:
+    def test_already_tuple(self):
+        eq((), self.tuplize(()))
+
+    def test_not_already_tuple(self):
+        eq(("",), self.tuplize(""))
+
+class PythonTuplizeTestCase(TuplizeTestBase, TestCase):
+    tuplize = staticmethod(centidb.centidb.tuplize)
+
+class NativeTuplizeTestCase(TuplizeTestBase, TestCase):
+    tuplize = staticmethod(_centidb.tuplize)
+
+class EncodeIntTestBase:
     INTS = [0, 1, 240, 241, 2286, 2287, 2288,
             67823, 67824, 16777215, 16777216,
             4294967295, 4294967296,
@@ -200,25 +305,122 @@ class EncodeIntTestCase(unittest.TestCase):
 
     def testInts(self):
         for i in self.INTS:
-            io = cStringIO.StringIO(centidb.encode_int(i))
-            j = centidb.decode_int(lambda: io.read(1), io.read)
+            io = cStringIO.StringIO(self.encode_int(i))
+            j = self.decode_int(lambda: io.read(1), io.read)
             assert j == i, (i, j, io.getvalue())
 
-class TupleTestCase(unittest.TestCase):
-    def testTuples(self):
-        strs = ['dave', 'dave\x00', 'dave\x01', 'davee\x01']
-        prefix = '\x01'
-        for s in strs:
-            encoded = centidb.encode_keys((s, 69, u'unicod', None), prefix)
-            hexed = ' '.join('%02x' % ord(c) for c in encoded[0])
-            #print '%-30s %d    %-30s' % (repr(s), len(encoded), hexed)
-            #print decode_tuple(encoded)[1]
-            #print
+class PythonEncodeIntTestCase(EncodeIntTestBase, TestCase):
+    encode_int = staticmethod(centidb.encode_int)
+    decode_int = staticmethod(centidb.decode_int)
 
-        encodeds = [centidb.encode_keys((s,)) for s in strs]
-        encodeds.sort()
-        decodeds = [centidb.decode_keys(s)[0] for s in encodeds]
-        eq(encodeds, decodeds)
+class NativeEncodeIntTestCase(EncodeIntTestBase, TestCase):
+    encode_int = staticmethod(_centidb.encode_int)
+    decode_int = staticmethod(centidb.decode_int)
+
+
+class TupleTestCase(TestCase):
+    def assertOrder(self, tups):
+        tups = [centidb.centidb.tuplize(x) for x in tups]
+        encs = map(centidb.encode_keys, tups)
+        encs.sort()
+        eq(tups, [centidb.decode_keys(x, first=True) for x in encs])
+
+    def testStringSorting(self):
+        strs = [(x,) for x in ('dave', 'dave\x00', 'dave\x01', 'davee\x01')]
+        encs = map(centidb.encode_keys, strs)
+        encs.sort()
+        eq(strs, [centidb.decode_keys(x, first=True) for x in encs])
+
+    def testTupleNonTuple(self):
+        pass
+
+class CollBasicTestBase:
+    def setUp(self):
+        self.e = centidb.support.ListEngine()
+        self.store = centidb.Store(self.e)
+        self.coll = centidb.Collection(self.store, 'coll1')
+
+    def _record(self, *args):
+        return centidb.Record(self.coll, *args)
+
+    def testGetNoExist(self):
+        eq(None, self.coll.get('missing'))
+
+    def testGetNoExistRec(self):
+        eq(None, self.coll.get('missing', rec=True))
+
+    def testGetNoExistDefault(self):
+        eq('dave', self.coll.get('missing', default='dave'))
+
+    def testGetNoExistDefaultRec(self):
+        eq(self._record("dave"),
+           self.coll.get('missing', default='dave', rec=True))
+
+    def testGetExist(self):
+        rec = self.coll.put('')
+        eq(rec.key, (1,))
+        eq('', self.coll.get(1))
+        rec = self.coll.put('x')
+        eq(rec.key, (2,))
+        eq('x', self.coll.get(2))
+
+    def testIterItemsExist(self):
+        rec = self.coll.put('')
+        eq([((1,), '')], list(self.coll.iteritems()))
+
+    def testIterKeysExist(self):
+        rec = self.coll.put('')
+        rec2 = self.coll.put('')
+        eq([rec.key, rec2.key], list(self.coll.iterkeys()))
+
+    def testIterValuesExist(self):
+        rec = self.coll.put('')
+        eq([''], list(self.coll.itervalues()))
+
+
+class PythonCollBasicTestCase(PythonMixin, CollBasicTestBase, TestCase):
+    pass
+
+class NativeCollBasicTestCase(NativeMixin, CollBasicTestBase, TestCase):
+    pass
+
+
+
+class Bag(object):
+    def __init__(self, **kwargs):
+        vars(self).update(kwargs)
+
+
+class IndexKeyBuilderTestCase(NativeMixin, TestCase):
+    def _keys(self, func):
+        idx = Bag(prefix='\x10', func=func)
+        ikb = _centidb.IndexKeyBuilder([idx])
+        return ikb.build((1,), {})
+
+    def testSingleValue(self):
+        eq(['\x10\x15\x01\x66\x15\x01'], self._keys(lambda obj: 1))
+
+    def testListSingleValue(self):
+        eq(self._keys(lambda obj: ['foo']), ['\x10(foof\x15\x01'])
+
+    def testListTuple(self):
+        eq(self._keys(lambda obj: ['foo', 'bar']),
+                      ['\x10(foof\x15\x01', '\x10(barf\x15\x01'])
+
+
+
+class RecordTestBase:
+    def test_basic(self):
+        self.assertRaises(TypeError, centidb.Record)
+        centidb.Record('ok', 'ok')
+
+
+class PythonRecordTestCase(PythonMixin, RecordTestBase, TestCase):
+    pass
+
+class NativeRecordTestCase(NativeMixin, RecordTestBase, TestCase):
+    pass
+
 
 def x():
     db = plyvel.DB('test.ldb', create_if_missing=True)
@@ -232,7 +434,6 @@ def x():
     feed = iotypes.Feed(url='http://dave', title='mytitle', id=69)
     feeds.put(feed)
 
-    print list(feeds.values())
 
 if __name__ == '__main__':
     unittest.main()

@@ -353,8 +353,7 @@ def decode_keys(s, prefix=None, first=False):
         elif c == KIND_UUID:
             arg = uuid.UUID(decode_str(getc))
         elif c == KIND_SEP:
-            if tup:
-                tups.append(tuple(tup))
+            tups.append(tuple(tup))
             if first:
                 return tups[0]
             tup = []
@@ -364,6 +363,9 @@ def decode_keys(s, prefix=None, first=False):
         tup.append(arg)
     tups.append(tuple(tup))
     return tups[0] if first else tups
+
+def decode_key(s, prefix=''):
+    return decode_keys(s, prefix, True)
 
 class Encoder(object):
     """Instances of this class represent an encoding.
@@ -737,7 +739,7 @@ class Collection(object):
         return itertools.imap(operator.itemgetter(0),
                               self.iteritems(reverse=reverse))
 
-    def itervalues(self, key, rec=False):
+    def itervalues(self, key=(), rec=False):
         """Yield all values in the collection, in key order. If `rec` is
         ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
@@ -1058,6 +1060,9 @@ class Store(object):
         """
         default = (name, init)
         rec = self._counter_coll.get(name, default, rec=True, txn=txn)
+        if rec.data == ('key:coll1\x15\x02',):
+            import pdb
+            #pdb.set_trace()
         val = rec.data[1]
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
@@ -1072,8 +1077,7 @@ if not (any(k in sys.modules for k in ('sphinx', 'pydoc')) or \
         pass
 
 #: Encode Python tuples using encode_keys()/decode_keys().
-KEY_ENCODER = Encoder('key', functools.partial(decode_keys, first=True),
-                             encode_keys)
+KEY_ENCODER = Encoder('key', decode_key, encode_keys)
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,
