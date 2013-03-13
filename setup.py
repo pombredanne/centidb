@@ -21,18 +21,6 @@
 from distutils.core import setup
 from distutils.extension import Extension
 
-# Install Cython's builder if available, otherwise use the pre-generated C file
-# in the repository.
-try:
-    import Cython.Distutils
-    kwargs = dict(cmdclass={
-        'build_ext': Cython.Distutils.build_ext
-    })
-    mod_filename = '_centidb.pyx'
-except ImportError:
-    kwargs = {}
-    mod_filename = '_centidb.c'
-
 
 setup(
     name =          'centidb',
@@ -44,7 +32,6 @@ setup(
     url =           'http://github.com/dw/centidb/',
     packages =      ['centidb'],
     ext_modules = [
-        Extension("_centidb", sources=[mod_filename])
-    ],
-    **kwargs
-)
+        Extension("_centidb", sources=['_centidb.c'],
+                  extra_compile_args=['-std=c99', '-O2'])
+    ])
