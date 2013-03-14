@@ -193,7 +193,10 @@ class ListEngine(object):
             return []
         idx = bisect.bisect_left(self.pairs, (k,)) if k else 0
         if reverse:
-            xr = xrange(idx - (len(self.pairs) == idx), -1, -1)
+            idx -= len(self.pairs) == idx
+            if self.pairs and self.pairs[idx][0] > k:
+                idx -= 1
+            xr = xrange(idx, -1, -1)
         else:
             xr = xrange(idx, len(self.pairs))
         return imap(self.pairs.__getitem__, xr)

@@ -45,6 +45,17 @@ class NativeMixin:
         centidb = reload(centidb)
         getattr(cls, '_setUpClass', lambda: None)()
 
+def register(python=True, native=True):
+    def fn(klass):
+        if python:
+            name = 'Python' + klass.__name__
+            globals()[name] = type(name, (klass, PythonMixin, TestCase), {})
+        if native:
+            name = 'Native' + klass.__name__
+            globals()[name] = type(name, (klass, NativeMixin, TestCase), {})
+        return klass
+    return fn
+
 
 def ddb():
     pprint(list(db))
@@ -70,7 +81,8 @@ eq = make_asserter(operator.eq, '==')
 le = make_asserter(operator.le, '<=')
 
 
-class IterTestBase:
+@register()
+class IterTest:
     KEYS = ('aa', 'cc', 'd', 'dd', 'de')
     ITEMS = [(k, '') for k in KEYS]
     REVERSE = ITEMS[::-1]
@@ -122,15 +134,9 @@ class IterTestBase:
     def testReverseSeekBeyondFirst(self):
         eq([], self.riter('a'))
 
-class PythonIterTestCase(PythonMixin, IterTestBase, TestCase):
-    pass
 
-class NativeIterTestCase(NativeMixin, IterTestBase, TestCase):
-    pass
-
-
-
-class SkiplistTestCase(unittest.TestCase):
+@register(native=False)
+class SkiplistTest:
     def testFindLess(self):
         sl = centidb.support.SkipList()
         update = sl._update[:]
@@ -143,8 +149,7 @@ class SkiplistTestCase(unittest.TestCase):
         assert sl._findLess(update, 'dave2')[0] == 'dave'
 
         assert sl._findLess(update, 'dave3')[0] == 'dave2'
-        print sl.reprNode(sl._findLess(update, 'dave3')[3])
-
+        #print sl.reprNode(sl._findLess(update, 'dave3')[3])
 
 
 class EngineTestBase:
@@ -201,26 +206,19 @@ class EngineTestBase:
         self.e.put('a', '')
         self.e.put('b', '')
         self.e.put('d', '')
+        self.e.put('e', '')
         eq(list(self.e.iter('c', reverse=True)),
-           [('d', ''), ('b', ''), ('a', '')])
+           [('b', ''), ('a', '')])
 
-class PythonListEngineTestCase(PythonMixin, TestCase, EngineTestBase):
+
+@register()
+class ListEngineTest(EngineTestBase):
     def setUp(self):
         self.e = centidb.support.ListEngine()
 
-class NativeListEngineTestCase(NativeMixin, TestCase, EngineTestBase):
-    def setUp(self):
-        self.e = centidb.support.ListEngine()
 
-class PythonSkiplistEngineTestCase(PythonMixin, TestCase, EngineTestBase):
-    def setUp(self):
-        self.e = centidb.support.SkiplistEngine()
-
-class NativeSkiplistEngineTestCase(NativeMixin, TestCase, EngineTestBase):
-    def setUp(self):
-        self.e = centidb.support.SkiplistEngine()
-
-class PlyvelEngineTestBase(EngineTestBase):
+@register()
+class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
         if os.path.exists('test.ldb'):
@@ -237,13 +235,10 @@ class PlyvelEngineTestBase(EngineTestBase):
         cls.e = None
         shutil.rmtree('test.ldb')
 
-class PlyvelPythonTestCase(PythonMixin, PlyvelEngineTestBase, TestCase):
-    pass
 
-class PlyvelNativeTestCase(NativeMixin, PlyvelEngineTestBase, TestCase):
-    pass
 
-class KeysTestBase:
+@register()
+class KeysTest:
     SINGLE_VALS = [
         None,
         1,
@@ -276,24 +271,31 @@ class KeysTestBase:
             e2 = centidb.encode_keys([(val, val),])
             lt(e1, e2, 'eek %r' % (val,))
 
-class PythonKeysTestCase(PythonMixin, KeysTestBase, TestCase):
-    pass
 
-class NativeKeysTestCase(NativeMixin, KeysTestBase, TestCase):
-    pass
+@register()
+class StringEncodingTest:
+    def do_test(self, k):
+        eq(k, centidb.centidb.decode_key(centidb.encode_keys(k)))
 
-class TuplizeTestBase:
+    def test_simple(self):
+        self.do_test(('dave',))
+
+    def test_escapes(self):
+        self.do_test(('dave\x00\x00',))
+        self.do_test(('dave\x00\x01',))
+        self.do_test(('dave\x01\x01',))
+        self.do_test(('dave\x01\x02',))
+        self.do_test(('dave\x01',))
+
+
+@register()
+class TuplizeTest:
     def test_already_tuple(self):
-        eq((), self.tuplize(()))
+        eq((), centidb.centidb.tuplize(()))
 
     def test_not_already_tuple(self):
-        eq(("",), self.tuplize(""))
+        eq(("",), centidb.centidb.tuplize(""))
 
-class PythonTuplizeTestCase(TuplizeTestBase, TestCase):
-    tuplize = staticmethod(centidb.centidb.tuplize)
-
-class NativeTuplizeTestCase(TuplizeTestBase, TestCase):
-    tuplize = staticmethod(_centidb.tuplize)
 
 class EncodeIntTestBase:
     INTS = [0, 1, 240, 241, 2286, 2287, 2288,
@@ -318,23 +320,27 @@ class NativeEncodeIntTestCase(EncodeIntTestBase, TestCase):
     decode_int = staticmethod(centidb.decode_int)
 
 
-class TupleTestCase(TestCase):
+
+@register()
+class TupleTest:
     def assertOrder(self, tups):
         tups = [centidb.centidb.tuplize(x) for x in tups]
         encs = map(centidb.encode_keys, tups)
         encs.sort()
-        eq(tups, [centidb.decode_keys(x, first=True) for x in encs])
+        eq(tups, [centidb.centidb.decode_key(x) for x in encs])
 
     def testStringSorting(self):
         strs = [(x,) for x in ('dave', 'dave\x00', 'dave\x01', 'davee\x01')]
         encs = map(centidb.encode_keys, strs)
         encs.sort()
-        eq(strs, [centidb.decode_keys(x, first=True) for x in encs])
+        eq(strs, [centidb.centidb.decode_key(x) for x in encs])
 
     def testTupleNonTuple(self):
         pass
 
-class CollBasicTestBase:
+
+@register()
+class CollBasicTest:
     def setUp(self):
         self.e = centidb.support.ListEngine()
         self.store = centidb.Store(self.e)
@@ -378,20 +384,13 @@ class CollBasicTestBase:
         eq([''], list(self.coll.itervalues()))
 
 
-class PythonCollBasicTestCase(PythonMixin, CollBasicTestBase, TestCase):
-    pass
-
-class NativeCollBasicTestCase(NativeMixin, CollBasicTestBase, TestCase):
-    pass
-
-
-
 class Bag(object):
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
 
 
-class IndexKeyBuilderTestCase(NativeMixin, TestCase):
+@register(python=False)
+class IndexKeyBuilderTest:
     def _keys(self, func):
         idx = Bag(prefix='\x10', func=func)
         ikb = _centidb.IndexKeyBuilder([idx])
@@ -408,18 +407,11 @@ class IndexKeyBuilderTestCase(NativeMixin, TestCase):
                       ['\x10(foof\x15\x01', '\x10(barf\x15\x01'])
 
 
-
-class RecordTestBase:
+@register()
+class RecordTest:
     def test_basic(self):
         self.assertRaises(TypeError, centidb.Record)
         centidb.Record('ok', 'ok')
-
-
-class PythonRecordTestCase(PythonMixin, RecordTestBase, TestCase):
-    pass
-
-class NativeRecordTestCase(NativeMixin, RecordTestBase, TestCase):
-    pass
 
 
 def x():
