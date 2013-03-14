@@ -119,7 +119,7 @@ class SkipList:
                 if update[i][3 + i] is not node:
                     break
                 update[i][3 + i] = node[3 + i]
-            while self.level > 1 and self.head[3 + self.level].key is None:
+            while self.level > 0 and self.head[3 + self.level][0] is None:
                 self.level -= 1
             if self.tail is node:
                 self.tail = node[2]

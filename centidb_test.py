@@ -4,6 +4,7 @@ import operator
 import os
 import pdb
 import shutil
+import time
 import unittest
 
 from pprint import pprint
@@ -177,6 +178,24 @@ class SkiplistTest:
 
         assert sl._findLess(update, 'dave3')[0] == 'dave2'
         #print sl.reprNode(sl._findLess(update, 'dave3')[3])
+
+
+@register(native=False)
+class SkipListTest:
+    def testDeleteDepth(self):
+        # Ensure 'shallowing' works correctly.
+        sl = centidb.support.SkipList()
+        keys = []
+        while sl.level < 4:
+            k = time.time()
+            keys.append(k)
+            sl.insert(k, k)
+
+        print 'keys = ', len(keys)
+
+        while keys:
+            assert sl.delete(keys.pop())
+        assert sl.level == 0, sl.level
 
 
 class EngineTestBase:
