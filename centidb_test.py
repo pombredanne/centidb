@@ -191,8 +191,6 @@ class SkipListTest:
             keys.append(k)
             sl.insert(k, k)
 
-        print 'keys = ', len(keys)
-
         while keys:
             assert sl.delete(keys.pop())
         assert sl.level == 0, sl.level
