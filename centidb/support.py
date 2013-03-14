@@ -6,6 +6,7 @@ import random
 import bisect
 import functools
 import operator
+from itertools import chain
 from itertools import ifilter
 from itertools import imap
 from operator import itemgetter
@@ -152,7 +153,14 @@ class SkiplistEngine(object):
         self.get = self.sl.search
         self.put = self.sl.insert
         self.delete = self.sl.delete
-        self.iter = self.sl.items
+
+    def iter(self, k, reverse=False):
+        it = self.sl.items(k, reverse)
+        if reverse:
+            tup = next(it, None)
+            if tup and tup[0] <= k:
+                return chain((tup,), it)
+        return it
 
 
 class ListEngine(object):
@@ -194,8 +202,8 @@ class ListEngine(object):
         idx = bisect.bisect_left(self.pairs, (k,)) if k else 0
         if reverse:
             idx -= len(self.pairs) == idx
-            if self.pairs and self.pairs[idx][0] > k:
-                idx -= 1
+            if self.pairs:
+                idx -= self.pairs[idx][0] > k
             xr = xrange(idx, -1, -1)
         else:
             xr = xrange(idx, len(self.pairs))
