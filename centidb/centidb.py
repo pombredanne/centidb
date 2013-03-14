@@ -190,7 +190,7 @@ def next_greater(s):
     return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
 
 def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
-          max=None, include=False, values=True):
+          max=None, include=False, values=True, is_index=False):
     txn = txn or obj.engine
 
     if lo is None:
@@ -204,10 +204,20 @@ def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
             include = False
     else:
         hi = encode_keys(hi, obj.prefix)
+        if is_index:
+            # This is a broken mess. When doing reverse queries on an index we
+            # must account for the key component of the index key. Reusing
+            # next_greater() will most likely fail to do the right thing if the
+            # last byte of the index tuple is 0xff. Needs a better solution.
+            hi = next_greater(hi) # TODO WTF
+            assert hi
 
     if key is not None:
         if reverse:
             hi = encode_keys(key, obj.prefix)
+            if is_index:
+                hi = next_greater(hi) # TODO WTF
+                assert hi
             include = True
         else:
             lo = encode_keys(key, obj.prefix)
@@ -220,15 +230,13 @@ def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
             tup = next(it)
             k = tup[0]
             if lo <= k and k < hi:
-                yield tup
+                yield tup if values else tup[0]
     else:
         it = txn.iter(lo, False)
         pred = hi.__ge__ if include else hi.__gt__
 
     if max is not None:
         it = itertools.islice(it, max)
-    if not values:
-        it = itertools.imap(operator.itemgetter(0), it)
 
     for tup in it:
         if not pred(tup[0]):
@@ -236,7 +244,7 @@ def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
         elif values:
             yield tup
         else:
-            yield tup[1]
+            yield tup[0]
 
 def _eat(pred, it, total_only=False):
     if not pred:
@@ -435,7 +443,7 @@ class Index(object):
         self.info = info
         self.func = func
         self.prefix = self.store.prefix + encode_int(info['idx'])
-        self._decode = functools.partial(decode_keys, prefix=self.prefix)
+        self._decode = lambda s: decode_keys(s, self.prefix)
 
     def iterpairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None):
@@ -445,7 +453,8 @@ class Index(object):
         
         `Note:` the yielded sequence is a list, not a tuple."""
         return itertools.imap(self._decode,
-            _iter(self, txn, args, lo, hi, reverse, max, include, False))
+            _iter(self, txn, args, lo, hi, reverse, max, include, False,
+                  True))
 
     def itertups(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None):
@@ -470,7 +479,7 @@ class Index(object):
                                            include, txn):
             obj = self.coll.get(key, txn=txn, rec=rec)
             if obj:
-                yield idx_key, obj
+                yield key, obj
             else:
                 warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
@@ -487,7 +496,12 @@ class Index(object):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
         it = self.itervalues(args, lo, hi, reverse, None, include, txn, rec)
-        return next(it, default)
+        try:
+            return it.next()
+        except StopIteration:
+            if rec and default is not None:
+                return Record(self.coll, default)
+            return default
 
     def get(self, x, txn=None, rec=None, default=None):
         """Return the first matching record referred to by the index, in tuple
@@ -501,7 +515,7 @@ class Index(object):
 
     def gets(self, xs, txn=None, rec=None, default=None):
         """Yield `get(x)` for each `x` in the iterable `xs`."""
-        return (self.get(x, txn, rec, default) for x in args)
+        return (self.get(x, txn, rec, default) for x in xs)
 
 class Record(object):
     """Wraps a record value with its last saved key, if any.
@@ -649,6 +663,7 @@ class Collection(object):
             txn_key_func = lambda txn, _: \
                 (counter_prefix + (store.count(counter_name, txn=txn),))
             derived_keys = False
+            virgin_keys = True
         self.key_func = key_func
         self.txn_key_func = txn_key_func
         self.derived_keys = derived_keys
@@ -759,7 +774,9 @@ class Collection(object):
         return itertools.imap(operator.itemgetter(1), self.iteritems(key, rec))
 
     def gets(self, keys, default=None, rec=False, txn=None):
-        """Yield `get(k)` for each `k` in the iterable `keys`."""
+        """Yield `get(k)` for each `k` in the iterable `keys`, filtering out
+        missing 
+        ``False``, filter """
         return (self.get(x, default, rec, txn) for k in keys)
 
     def get(self, key, default=None, rec=False, txn=None):
@@ -771,12 +788,16 @@ class Collection(object):
         key = tuplize(key)
         it = _iter(self, txn, key)
         phys, data = next(it, (None, None))
+        txn_id = getattr(txn or self.engine, 'txn_id', None)
 
         if phys and phys.startswith(self.prefix):
             keys = decode_keys(phys, self.prefix)
             obj = self.encoder.unpack(self._decompress(data))
             if keys[-1] == key:
-                return Record(self, obj, key, len(keys)>1) if rec else obj
+                if rec:
+                    obj = Record(self, obj, key, len(keys) > 1,
+                                 txn_id, self._index_keys(key, obj))
+                return obj
         if default is not None:
             return Record(self, default) if rec else default
 

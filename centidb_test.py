@@ -339,7 +339,8 @@ class TuplizeTest:
         eq(("",), centidb.centidb.tuplize(""))
 
 
-class EncodeIntTestBase:
+@register()
+class EncodeIntTest:
     INTS = [0, 1, 240, 241, 2286, 2287, 2288,
             67823, 67824, 16777215, 16777216,
             4294967295, 4294967296,
@@ -349,18 +350,9 @@ class EncodeIntTestBase:
 
     def testInts(self):
         for i in self.INTS:
-            io = cStringIO.StringIO(self.encode_int(i))
-            j = self.decode_int(lambda: io.read(1), io.read)
+            io = cStringIO.StringIO(centidb.encode_int(i))
+            j = centidb.decode_int(lambda: io.read(1), io.read)
             assert j == i, (i, j, io.getvalue())
-
-class PythonEncodeIntTestCase(EncodeIntTestBase, TestCase):
-    encode_int = staticmethod(centidb.encode_int)
-    decode_int = staticmethod(centidb.decode_int)
-
-class NativeEncodeIntTestCase(EncodeIntTestBase, TestCase):
-    encode_int = staticmethod(_centidb.encode_int)
-    decode_int = staticmethod(centidb.decode_int)
-
 
 
 @register()
@@ -424,6 +416,79 @@ class CollBasicTest:
     def testIterValuesExist(self):
         rec = self.coll.put('')
         eq([''], list(self.coll.itervalues()))
+
+
+@register()
+class IndexTest:
+    def setUp(self):
+        self.e = centidb.support.ListEngine()
+        self.store = centidb.Store(self.e)
+        self.coll = centidb.Collection(self.store, 'stuff')
+        self.i = self.coll.add_index('idx', lambda obj: (69, obj))
+
+        self.key = self.coll.put('dave').key
+        self.key2 = self.coll.put('dave2').key
+        self.expect = [(69, 'dave'), self.key]
+        self.expect2 = [(69, 'dave2'), self.key2]
+        self.first = [self.expect]
+        self.second = [self.expect2]
+        self.both = [self.expect, self.expect2]
+
+    # iterpairs
+    def testIterPairs(self):
+        eq(self.both, list(self.i.iterpairs()))
+        eq(self.both, list(self.i.iterpairs(68)))
+        eq(self.both, list(self.i.iterpairs((69, 'dave'))))
+        eq(self.second, list(self.i.iterpairs((69, 'dave2'))))
+        eq([], list(self.i.iterpairs(80)))
+
+        eq(self.both[::-1], list(self.i.iterpairs(reverse=True)))
+
+        self.coll.deletes(self.key)
+        eq(self.second, list(self.i.iterpairs()))
+        self.coll.deletes(self.key2)
+        eq([], list(self.i.iterpairs()))
+
+    # itertups
+    def testIterTups(self):
+        eq([(69, 'dave'), (69, 'dave2')], list(self.i.itertups()))
+        eq([(69, 'dave2'), (69, 'dave')], list(self.i.itertups(reverse=True)))
+
+    # iterkeys
+    def testIterKeys(self):
+        eq([self.key, self.key2], list(self.i.iterkeys()))
+        eq([self.key2, self.key], list(self.i.iterkeys(reverse=True)))
+
+    # iteritems
+    def testIterItems(self):
+        item1 = (self.key, 'dave')
+        item2 = (self.key2, 'dave2')
+        eq([item1, item2], list(self.i.iteritems()))
+        eq([item2, item1], list(self.i.iteritems(reverse=True)))
+
+    # itervalues
+    def testIterValues(self):
+        eq(['dave', 'dave2'], list(self.i.itervalues()))
+        eq(['dave2', 'dave'], list(self.i.itervalues(reverse=True)))
+
+    # find
+    def testFind(self):
+        eq('dave', self.i.find())
+        eq('dave2', self.i.find(reverse=True))
+        eq('dave2', self.i.find((69, 'dave2')))
+        eq('dave2', self.i.find(hi=(69, 'dave2'), reverse=True))
+
+    # get
+    def testGet(self):
+        eq(None, self.i.get('missing'))
+        eq('dave', self.i.get((69, 'dave')))
+        eq('dave2', self.i.get((69, 'dave2')))
+
+    # gets
+    def testGets(self):
+        eq([None, None], list(self.i.gets(('missing', 'missing2'))))
+        eq(['dave', None], list(self.i.gets([(69, 'dave'), 'missing'])))
+
 
 
 class Bag(object):
