@@ -18,7 +18,7 @@
 """sortedfile distutils script.
 """
 
-from distutils.core import setup
+from setuptools import setup
 from distutils.extension import Extension
 
 
@@ -30,6 +30,7 @@ setup(
     author_email =  'dw@botanicus.net',
     license =       'Apache 2',
     url =           'http://github.com/dw/centidb/',
+    zip_safe = False,
     packages =      ['centidb'],
     ext_modules = [
         Extension("_centidb", sources=['_centidb.c'],
