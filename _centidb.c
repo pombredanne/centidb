@@ -902,6 +902,7 @@ static PyObject *decode_str(struct reader *rdr)
             } else {
                 ret = writer_putc(&wtr, 1);
             }
+            break;
         default:
             ret = writer_putc(&wtr, ch);
         }
