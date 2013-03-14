@@ -348,7 +348,7 @@ static PyObject *encode_int(PyObject *self, PyObject *arg)
 
 
 static int encode_str(struct writer *wtr, uint8_t *p, Py_ssize_t length,
-                      enum ElementKind kind, int closed)
+                      enum ElementKind kind)
 {
     if(kind) {
         if(! writer_putc(wtr, kind)) {
@@ -371,14 +371,11 @@ static int encode_str(struct writer *wtr, uint8_t *p, Py_ssize_t length,
         }
     }
 
-    if(closed) {
-        ret = writer_putc(wtr, 0);
-    }
-    return ret;
+    return writer_putc(wtr, 0);
 }
 
 
-static int c_encode_value(struct writer *wtr, PyObject *arg, int closed)
+static int c_encode_value(struct writer *wtr, PyObject *arg)
 {
     int ret = 0;
     PyTypeObject *type = Py_TYPE(arg);
@@ -394,13 +391,13 @@ static int c_encode_value(struct writer *wtr, PyObject *arg, int closed)
         }
     } else if(type == &PyString_Type) {
         ret = encode_str(wtr, (uint8_t *)PyString_AS_STRING(arg),
-                              PyString_GET_SIZE(arg), KIND_BLOB, closed);
+                              PyString_GET_SIZE(arg), KIND_BLOB);
     } else if(type == &PyUnicode_Type) {
         PyObject *utf8 = PyUnicode_EncodeUTF8(PyUnicode_AS_UNICODE(arg),
             PyUnicode_GET_SIZE(arg), "strict");
         if(utf8) {
             ret = encode_str(wtr, (uint8_t *)PyString_AS_STRING(utf8),
-                                  PyString_GET_SIZE(utf8), KIND_TEXT, closed);
+                                  PyString_GET_SIZE(utf8), KIND_TEXT);
             Py_DECREF(utf8);
         }
     } else if(type == &PyBool_Type) {
@@ -420,7 +417,7 @@ static int c_encode_value(struct writer *wtr, PyObject *arg, int closed)
         if(ss) {
             assert(Py_TYPE(ss) == &PyString_Type);
             ret = encode_str(wtr, (uint8_t *)PyString_AS_STRING(ss),
-                                  PyString_GET_SIZE(ss), KIND_UUID, 1);
+                                  PyString_GET_SIZE(ss), KIND_UUID);
             Py_DECREF(ss);
         }
     } else {
@@ -432,13 +429,11 @@ static int c_encode_value(struct writer *wtr, PyObject *arg, int closed)
 }
 
 
-static int c_encode_key(struct writer *wtr, PyObject *tup, int closed)
+static int c_encode_key(struct writer *wtr, PyObject *tup)
 {
     int ret = 1;
-    Py_ssize_t tlast = PyTuple_GET_SIZE(tup) - 1;
-    for(Py_ssize_t i = 0; ret && i <= tlast; i++) {
-        ret = c_encode_value(wtr, PyTuple_GET_ITEM(tup, i),
-                             !((!closed) && tlast == i));
+    for(Py_ssize_t i = 0; ret && i < PyTuple_GET_SIZE(tup); i++) {
+        ret = c_encode_value(wtr, PyTuple_GET_ITEM(tup, i));
     }
     return ret;
 }
@@ -448,12 +443,11 @@ static PyObject *encode_keys(PyObject *self, PyObject *args)
 {
     uint8_t *prefix = NULL;
     Py_ssize_t prefix_size;
-    int closed = 1;
 
     Py_ssize_t arg_count = PyTuple_GET_SIZE(args);
-    if(arg_count == 0 || arg_count > 3) {
+    if(arg_count == 0 || arg_count > 2) {
         PyErr_SetString(PyExc_TypeError,
-            "encode_keys() takes between 1 and 3 arguments.");
+            "encode_keys() takes between 1 and 2 arguments.");
         return NULL;
     }
     if(arg_count > 1) {
@@ -467,9 +461,6 @@ static PyObject *encode_keys(PyObject *self, PyObject *args)
             prefix = (uint8_t *) PyString_AS_STRING(py_prefix);
             prefix_size = PyString_GET_SIZE(py_prefix);
         }
-    }
-    if(arg_count > 2) {
-        closed = PyObject_IsTrue(PyTuple_GET_ITEM(args, 2));
     }
 
     struct writer wtr;
@@ -489,22 +480,21 @@ static PyObject *encode_keys(PyObject *self, PyObject *args)
 
     if(type != &PyList_Type) {
         if(type != &PyTuple_Type) {
-            ret = c_encode_value(&wtr, tups, closed);
+            ret = c_encode_value(&wtr, tups);
         } else {
-            ret = c_encode_key(&wtr, tups, closed);
+            ret = c_encode_key(&wtr, tups);
         }
     } else {
-        Py_ssize_t llast = PyList_GET_SIZE(tups) - 1;
-        for(int i = 0; ret && i <= llast; i++) {
+        for(int i = 0; ret && i < PyList_GET_SIZE(tups); i++) {
             if(i) {
                 ret = writer_putc(&wtr, KIND_SEP);
             }
             PyObject *elem = PyList_GET_ITEM(tups, i);
             type = Py_TYPE(elem);
             if(type != &PyTuple_Type) {
-                ret = c_encode_value(&wtr, elem, closed && i != llast);
+                ret = c_encode_value(&wtr, elem);
             } else {
-                ret = c_encode_key(&wtr, elem, closed && i != llast);
+                ret = c_encode_key(&wtr, elem);
             }
         }
     }
@@ -526,9 +516,9 @@ static PyObject *c_encode_index_entry(size_t initial, PyObject *prefix,
 
     writer_puts(&wtr, PyString_AS_STRING(prefix), PyString_GET_SIZE(prefix));
     if(Py_TYPE(entry) == &PyTuple_Type) {
-        c_encode_key(&wtr, entry, 0);
+        c_encode_key(&wtr, entry);
     } else {
-        c_encode_value(&wtr, entry, 0);
+        c_encode_value(&wtr, entry);
     }
 
     writer_puts(&wtr, PyString_AS_STRING(suffix), PyString_GET_SIZE(suffix));
@@ -600,7 +590,7 @@ static PyObject *builder_build(PyObject *self_, PyObject *args)
     }
 
     writer_putc(&wtr, KIND_SEP);
-    if(! c_encode_key(&wtr, PyTuple_GET_ITEM(args, 0), 1)) {
+    if(! c_encode_key(&wtr, PyTuple_GET_ITEM(args, 0))) {
         return NULL;
     }
 
