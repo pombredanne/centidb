@@ -48,10 +48,10 @@ class NativeMixin:
 def register(python=True, native=True):
     def fn(klass):
         if python:
-            name = 'Python' + klass.__name__
+            name = 'Py' + klass.__name__
             globals()[name] = type(name, (klass, PythonMixin, TestCase), {})
         if native:
-            name = 'Native' + klass.__name__
+            name = 'C' + klass.__name__
             globals()[name] = type(name, (klass, NativeMixin, TestCase), {})
         return klass
     return fn
@@ -83,17 +83,26 @@ le = make_asserter(operator.le, '<=')
 
 @register()
 class IterTest:
-    KEYS = ('aa', 'cc', 'd', 'dd', 'de')
+    prefix = 'Y'
+    KEYS = [centidb.encode_keys(x, prefix)
+            for x in ('aa', 'cc', 'd', 'dd', 'de')]
     ITEMS = [(k, '') for k in KEYS]
     REVERSE = ITEMS[::-1]
 
+    def _encode(self, s):
+        return centidb.encode_keys(s, self.prefix)
+
     def setUp(self):
         self.e = centidb.support.ListEngine()
+        self.e.put('X', '')
         for key in self.KEYS:
             self.e.put(key, '')
+        self.e.put('Z', '')
+
+        self.engine = self.e
 
     def iter(self, *args, **kwargs):
-        return list(centidb.centidb._iter(self.e, self.e, *args, **kwargs))
+        return list(centidb.centidb._iter(self, None, *args, **kwargs))
 
     def testForward(self):
         eq(self.ITEMS, self.iter())
@@ -108,7 +117,7 @@ class IterTest:
         eq(self.ITEMS[1:], self.iter('cc'))
 
     def testForwardSkipMostExist(self):
-        eq([('de', '')], self.iter('de'))
+        eq([(self._encode('de'), '')], self.iter('de'))
 
     def testForwardSeekBeyondNoExist(self):
         eq([], self.iter('df'))
@@ -117,22 +126,40 @@ class IterTest:
         return self.iter(reverse=True, *args, **kwargs)
 
     def testReverse(self):
-        eq(self.REVERSE, self.riter())
+        eq(self.REVERSE[1:], self.riter(hi='de'))
+
+    def testReverseAutoInclude(self):
+        eq(self.REVERSE, self.riter('de'))
 
     def testReverseSeekLast(self):
-        eq(self.REVERSE, self.riter('de'))
+        eq(self.REVERSE[1:], self.riter(hi='de'))
+
+    def testReverseSeekLastInclude(self):
+        eq(self.REVERSE, self.riter('de', include=True))
 
     def testReverseSeekNoExist(self):
         eq(self.REVERSE[1:], self.riter('ddd'))
 
+    def testReverseSeekNoExistInclude(self):
+        eq(self.REVERSE[1:], self.riter('ddd'))
+
     def testReverseSeekExist(self):
-        eq(self.REVERSE[1:], self.riter('dd'))
+        eq(self.REVERSE[2:], self.riter(hi='dd'))
+
+    def testReverseSeekExistInclude(self):
+        eq(self.REVERSE[1:], self.riter(hi='dd', include=True))
 
     def testReverseSkipMostExist(self):
-        eq([('aa', '')], self.riter('ab'))
+        eq([(self._encode('aa'), '')], self.riter('ab'))
 
     def testReverseSeekBeyondFirst(self):
         eq([], self.riter('a'))
+
+    def testForwardPrefix(self):
+        eq(self.ITEMS, self.iter())
+
+    def testReversePrefix(self):
+        eq(self.REVERSE, self.riter())
 
 
 @register(native=False)
@@ -177,6 +204,11 @@ class EngineTestBase:
         eq(list(self.e.iter('dave')), [('dave', '')])
         eq(list(self.e.iter('davee')), [])
 
+    def testIterForwardBeyondNoExist(self):
+        self.e.put('aa', '')
+        self.e.put('bb', '')
+        eq([], list(self.e.iter('df')))
+
     def testIterReverseEmpty(self):
         eq(list(self.e.iter('', reverse=True)), [])
         eq(list(self.e.iter('x', reverse=True)), [])
@@ -215,6 +247,12 @@ class EngineTestBase:
 class ListEngineTest(EngineTestBase):
     def setUp(self):
         self.e = centidb.support.ListEngine()
+
+
+@register()
+class SkiplistEngineTest(EngineTestBase):
+    def setUp(self):
+        self.e = centidb.support.SkiplistEngine()
 
 
 @register()
@@ -270,6 +308,10 @@ class KeysTest:
             e1 = centidb.encode_keys((val,))
             e2 = centidb.encode_keys([(val, val),])
             lt(e1, e2, 'eek %r' % (val,))
+
+    def test_list(self):
+        lst = [(1,), (2,)]
+        eq(lst, self._dec(self._enc(lst)))
 
 
 @register()
@@ -400,11 +442,11 @@ class IndexKeyBuilderTest:
         eq(['\x10\x15\x01\x66\x15\x01'], self._keys(lambda obj: 1))
 
     def testListSingleValue(self):
-        eq(self._keys(lambda obj: ['foo']), ['\x10(foof\x15\x01'])
+        eq(self._keys(lambda obj: ['foo']), ['\x10(foo\x00f\x15\x01'])
 
     def testListTuple(self):
         eq(self._keys(lambda obj: ['foo', 'bar']),
-                      ['\x10(foof\x15\x01', '\x10(barf\x15\x01'])
+                      ['\x10(foo\x00f\x15\x01', '\x10(bar\x00f\x15\x01'])
 
 
 @register()
