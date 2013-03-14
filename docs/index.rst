@@ -211,6 +211,41 @@ integer was wrapped in a 1-tuple.
 
 
 
+
+Query Parameters
+++++++++++++++++
+
+The following parameters are supported everywhere some kind of key enumeration
+may occur using the `Collection` or `Index` classes, for example all `iter*()`
+methods.
+
+    `lo`:
+        Lowest key returned. All returned keys will be `>= lo`. If unspecified,
+        defaults to the lowest key in the index or collection.
+
+    `hi`:
+        Highest key returned. If `include=False`, all returned keys wil be `<
+        hi`, otherwise they will be `<= hi`. If unspecified, defaults to the
+        highest key in the index or collection.
+
+    `key`, `args`:
+        Key or index tuple to begin iteration from. Equivalent to `hi` when
+        `reverse=True` or `lo` when `reverse=False`. When given and
+        `reverse=True`, `include` is automatically set to ``True``.
+
+    `reverse`:
+        Iterate from the end of the range to the start. If unspecified,
+        iterates from the start of the range to the end.
+
+    `include`:
+        Using `hi` in iteration range. If ``True``, indicates all keys are `<=
+        hi`, otherwise they are `< hi`.
+
+    `max`:
+        Specifies the maximum number of records to be returned. Defaults to
+        ``None``, meaning unlimited.
+
+
 Reference
 #########
 
@@ -398,7 +433,7 @@ These functions are based on `SQLite 4's key encoding
 * Varints are used for integers.
 * Strings use a more scripting-friendly encoding.
 
-.. autofunction:: centidb.encode_keys (tups, prefix='', closed=True)
+.. autofunction:: centidb.encode_keys (tups, prefix='')
 .. autofunction:: centidb.decode_keys
 .. autofunction:: centidb.invert
 .. autofunction:: centidb.next_greater
