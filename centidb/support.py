@@ -42,7 +42,7 @@ class SkipList:
 
     def _randomLevel(self):
         lvl = 0
-        max_level = self.level + 1
+        max_level = min(self.max_level, self.level + 1)
         while random.random() < self.p and lvl < max_level:
             lvl += 1
         return lvl
