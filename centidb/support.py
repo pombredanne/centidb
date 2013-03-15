@@ -1,20 +1,17 @@
 
 from __future__ import absolute_import
 
-import math
-import random
 import bisect
 import functools
+import itertools
+import math
 import operator
-from itertools import chain
-from itertools import ifilter
-from itertools import imap
-from operator import itemgetter
+import random
 
 import centidb
 
 
-class SkipList:
+class SkipList(object):
     """Doubly linked non-indexable skip list, providing logarithmic insertion
     and deletion. Keys are any orderable Python object.
 
@@ -141,12 +138,17 @@ class SkipList:
 
 class SkiplistEngine(object):
     """Storage engine that backs onto a `Skip List
-    <http://en.wikipedia.org/wiki/Skip_list>`_. Both lookup and insertion
-    are logarithmic.
+    <http://en.wikipedia.org/wiki/Skip_list>`_. Lookup and insertion are
+    logarithmic.
+
+    This is like :py:class:`ListEngine` but scales well, with overhead
+    approaching a regular dict (113 bytes/record vs. 69 bytes/record on amd64).
+    Supports around 23k inserts/second or 44k lookups/second,  and tested up to
+    2.8 million keys.
 
         `maxsize`:
-            Maximum expected number of elements. Inserting more than this will
-            result in performance degradation.
+            Maximum expected number of elements. Inserting more will result in
+            performance degradation.
     """
     def __init__(self, maxsize=65535):
         self.sl = SkipList(maxsize)
@@ -159,7 +161,7 @@ class SkiplistEngine(object):
         if reverse:
             tup = next(it, None)
             if tup and tup[0] <= k:
-                return chain((tup,), it)
+                return itertools.chain((tup,), it)
         return it
 
 
@@ -207,7 +209,7 @@ class ListEngine(object):
             xr = xrange(idx, -1, -1)
         else:
             xr = xrange(idx, len(self.pairs))
-        return imap(self.pairs.__getitem__, xr)
+        return itertools.imap(self.pairs.__getitem__, xr)
 
 
 class PlyvelEngine(object):

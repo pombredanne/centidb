@@ -149,6 +149,10 @@ def decode_int(getc, read):
     elif o == 255:
         return struct.unpack('>Q', read(8))[0]
 
+def decode_int_s(s):
+    io = cStringIO.StringIO(s)
+    return decode_int(lambda: io.read(1), io.read)
+
 _encode_pat = re.compile(r'[\x00\x01]')
 _encode_subber = lambda m: '\x01\x01' if m.group(0) == '\x00' else '\x01\x02'
 def encode_str(s):
@@ -191,8 +195,6 @@ def next_greater(s):
 
 def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
           max=None, include=False, values=True, is_index=False):
-    txn = txn or obj.engine
-
     if lo is None:
         lo = obj.prefix
     else:
@@ -207,8 +209,8 @@ def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
         if is_index:
             # This is a broken mess. When doing reverse queries on an index we
             # must account for the key component of the index key. Reusing
-            # next_greater() will most likely fail to do the right thing if the
-            # last byte of the index tuple is 0xff. Needs a better solution.
+            # next_greater() will most likely fail if the last byte of the
+            # index tuple is 0xff. Needs a better solution.
             hi = next_greater(hi) # TODO WTF
             assert hi
 
@@ -222,9 +224,8 @@ def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
         else:
             lo = encode_keys(key, obj.prefix)
 
-    txn = txn or obj.engine
     if reverse:
-        it = txn.iter(hi, True)
+        it = (txn or obj.engine).iter(hi, True)
         pred = lo.__le__
         if not include:
             tup = next(it)
@@ -232,7 +233,7 @@ def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
             if lo <= k and k < hi:
                 yield tup if values else tup[0]
     else:
-        it = txn.iter(lo, False)
+        it = (txn or obj.engine).iter(lo, False)
         pred = hi.__ge__ if include else hi.__gt__
 
     if max is not None:
@@ -667,6 +668,7 @@ class Collection(object):
         self.derived_keys = derived_keys
         self.virgin_keys = virgin_keys
         self.encoder = encoder or PICKLE_ENCODER
+        self.encoder_prefix = self.store.add_encoder(self.encoder)
         #: Default packer used when calls to :py:meth:`Collection.put` do not
         #: specify a `packer=` argument. Defaults to ``PLAIN_PACKER``.
         self.packer = packer or PLAIN_PACKER
@@ -728,9 +730,8 @@ class Collection(object):
         return index
 
     def _decompress(self, s):
-        if s.startswith('Z'):
-            return zlib.decompress(buffer(s, 1))
-        return s[1:]
+        encoder = self.store.get_encoder(s[0])
+        return encoder.unpack(buffer(s, 1))
 
     def iter_phys_keys(self, txn=None):
         """Yield lists of tuples representing all the physical keys that exist
@@ -976,8 +977,10 @@ class Collection(object):
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
+        packer = packer or self.packer
+        packer_prefix = self.store.add_encoder(packer)
         txn.put(encode_keys(obj_key, self.prefix),
-                ' ' + self.encoder.pack(rec.data))
+                packer_prefix + packer.pack(self.encoder.pack(rec.data)))
         for index_key in index_keys:
             txn.put(index_key, '')
         rec.coll = self
@@ -1071,6 +1074,12 @@ class Store(object):
     def __init__(self, engine, prefix=''):
         self.engine = engine
         self.prefix = prefix
+        self._encoder_prefix = (
+            dict((e, encode_int(1+i)) for i, e in enumerate(_ENCODERS)))
+        self._prefix_encoder = (
+            dict((encode_int(1+i), e) for i, e in enumerate(_ENCODERS)))
+        self._encoder_coll = Collection(self, '\x00encoders', _idx=2,
+            encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
         self._info_coll = Collection(self, '\x00collections', _idx=0,
             encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
         self._counter_coll = Collection(self, '\x00counters', _idx=1,
@@ -1083,7 +1092,32 @@ class Store(object):
             idx = idx or self.count('\x00collections_idx', init=10)
             t = self._info_coll.put((name, idx, index_for)).data
         assert t == (name, idx or t[1], index_for)
-        return dict((self._INFO_KEYS[i], v) for i, v in enumerate(t))
+        return dict(itertools.izip(self._INFO_KEYS, t))
+
+    def add_encoder(self, encoder):
+        """Register an :py:class:`Encoder` so that :py:class:`Collection` can
+        find it during decompression/unpacking."""
+        try:
+            return self._encoder_prefix[encoder]
+        except KeyError:
+            t = self._encoder_coll.get(encoder.name)
+            if not t:
+                idx = self.count('\x00encoder_idx', init=10)
+                assert idx <= 240
+                t = self._encoder_coll.put((encoder.name, idx)).data
+                self._encoder_prefix[encoder] = encode_int(idx)
+                self._prefix_encoder[encode_int(idx)] = encoder
+            return encode_int(t[1])
+
+    def get_encoder(self, prefix):
+        """Get a registered :py:class:`Encoder` given its string prefix, or
+        raise an error."""
+        try:
+            return self._prefix_encoder[prefix]
+        except KeyError:
+            dct = dict((v, k) for k, v in self._encoder_coll.itervalues())
+            idx = decode_int_s(prefix)
+            raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
 
     def count(self, name, n=1, init=1, txn=None):
         """Increment a counter and return its previous value. The counter is
@@ -1105,9 +1139,6 @@ class Store(object):
         """
         default = (name, init)
         rec = self._counter_coll.get(name, default, rec=True, txn=txn)
-        if rec.data == ('key:coll1\x15\x02',):
-            import pdb
-            #pdb.set_trace()
         val = rec.data[1]
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
@@ -1122,14 +1153,16 @@ if not (any(k in sys.modules for k in ('sphinx', 'pydoc')) or \
         pass
 
 #: Encode Python tuples using encode_keys()/decode_keys().
-KEY_ENCODER = Encoder('key', decode_key, encode_keys)
+KEY_ENCODER = Encoder('key', decode_key, encode_keys, 1)
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,
-                         functools.partial(pickle.dumps, protocol=2))
+                         functools.partial(pickle.dumps, protocol=2), 2)
 
 #: Perform no compression at all.
-PLAIN_PACKER = Encoder('plain', str, buffer)
+PLAIN_PACKER = Encoder('plain', str, lambda o: o, 3)
 
 #: Compress bytestrings using zlib.compress()/zlib.decompress().
-ZLIB_PACKER = Encoder('zlib', zlib.compress, zlib.decompress)
+ZLIB_PACKER = Encoder('zlib', zlib.decompress, zlib.compress, 4)
+
+_ENCODERS = (KEY_ENCODER, PICKLE_ENCODER, PLAIN_PACKER, ZLIB_PACKER)
