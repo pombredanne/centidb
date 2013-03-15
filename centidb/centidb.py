@@ -1139,7 +1139,7 @@ class Store(object):
         """
         default = (name, init)
         rec = self._counter_coll.get(name, default, rec=True, txn=txn)
-        val = rec.data[1]
+        val = long(rec.data[1])
         rec.data = (name, val + n)
         self._counter_coll.put(rec)
         return val
