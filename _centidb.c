@@ -711,7 +711,6 @@ static void record_dealloc(PyObject *self_)
 
 static PyObject *record_repr(PyObject *self)
 {
-    return PyString_FromString("Dave");
     Record *record = (Record *)self;
     PyObject *info = PyObject_GetAttrString(record->coll, "info");
     if(! info) {
