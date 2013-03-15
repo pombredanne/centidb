@@ -1153,16 +1153,16 @@ if not (any(k in sys.modules for k in ('sphinx', 'pydoc')) or \
         pass
 
 #: Encode Python tuples using encode_keys()/decode_keys().
-KEY_ENCODER = Encoder('key', decode_key, encode_keys, 1)
+KEY_ENCODER = Encoder('key', decode_key, encode_keys)
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,
-                         functools.partial(pickle.dumps, protocol=2), 2)
+                         functools.partial(pickle.dumps, protocol=2))
 
 #: Perform no compression at all.
-PLAIN_PACKER = Encoder('plain', str, lambda o: o, 3)
+PLAIN_PACKER = Encoder('plain', str, lambda o: o)
 
 #: Compress bytestrings using zlib.compress()/zlib.decompress().
-ZLIB_PACKER = Encoder('zlib', zlib.decompress, zlib.compress, 4)
+ZLIB_PACKER = Encoder('zlib', zlib.decompress, zlib.compress)
 
 _ENCODERS = (KEY_ENCODER, PICKLE_ENCODER, PLAIN_PACKER, ZLIB_PACKER)
