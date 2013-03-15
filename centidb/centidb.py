@@ -496,12 +496,10 @@ class Index(object):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
         it = self.itervalues(args, lo, hi, reverse, None, include, txn, rec)
-        try:
-            return it.next()
-        except StopIteration:
-            if rec and default is not None:
-                return Record(self.coll, default)
-            return default
+        v = next(it, default)
+        if v is default and rec and default is not None:
+            v = Record(self.coll, default)
+        return v
 
     def get(self, x, txn=None, rec=None, default=None):
         """Return the first matching record referred to by the index, in tuple
@@ -750,34 +748,47 @@ class Collection(object):
                 idx_keys.append(encode_keys([idx_key, key], idx.prefix))
         return idx_keys
 
-    def iteritems(self, key=(), rec=False, txn=None, reverse=False):
+    def iteritems(self, key=None, lo=None, hi=None, reverse=False, max=None,
+            include=True, txn=None, rec=None):
         """Yield all `(key, value)` tuples in the collection, in key order. If
         `rec` is ``True``, :py:class:`Record` instances are yielded instead of
         record values."""
-        prefix = encode_keys([key], self.prefix)
-        for phys, data in _iter(self, txn, reverse=reverse):
+        txn_id = getattr(txn or self.engine, 'txn_id', None)
+        for phys, data in _iter(self, txn, key, lo, hi, reverse, max, include):
             keys = decode_keys(phys, self.prefix)
             obj = self.encoder.unpack(self._decompress(data))
             if rec:
-                obj = Record(self, obj, keys[-1], len(keys) > 1)
+                obj = Record(self, obj, keys[-1], len(keys) > 1,
+                             txn_id, self._index_keys(keys[-1], obj))
             yield keys[-(1)], obj
 
-    def iterkeys(self, reverse=False):
+    def iterkeys(self, key=None, lo=None, hi=None, reverse=None, max=None,
+            include=True, txn=None, rec=None):
         """Yield all key tuples in the collection, in key order."""
         return itertools.imap(operator.itemgetter(0),
-                              self.iteritems(reverse=reverse))
+            self.iteritems(key, lo, hi, reverse, max, include, txn, rec))
 
-    def itervalues(self, key=(), rec=False):
+    def itervalues(self, key=None, lo=None, hi=None, reverse=None, max=None,
+            include=True, txn=None, rec=None):
         """Yield all values in the collection, in key order. If `rec` is
         ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
-        return itertools.imap(operator.itemgetter(1), self.iteritems(key, rec))
+        return itertools.imap(operator.itemgetter(1),
+            self.iteritems(key, lo, hi, reverse, max, include, txn, rec))
 
     def gets(self, keys, default=None, rec=False, txn=None):
-        """Yield `get(k)` for each `k` in the iterable `keys`, filtering out
-        missing 
-        ``False``, filter """
+        """Yield `get(k)` for each `k` in the iterable `keys`."""
         return (self.get(x, default, rec, txn) for k in keys)
+
+    def find(self, key=None, lo=None, hi=None, reverse=None, include=True,
+             txn=None, rec=None, default=None):
+        """Return the first matching record, or None. Like ``next(itervalues(),
+        default)``."""
+        it = self.itervalues(key, lo, hi, reverse, None, include, txn, rec)
+        v = next(it, default)
+        if v is default and rec and default is not None:
+            v = Record(self.coll, default)
+        return v
 
     def get(self, key, default=None, rec=False, txn=None):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped

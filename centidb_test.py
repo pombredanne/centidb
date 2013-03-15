@@ -18,7 +18,7 @@ import _centidb
 
 #
 # Module reloads are necessary because KEY_ENCODER & co bind whatever
-# encode_keys() & so happens to exist before we get a chance to interfere. It
+# encode_keys() & co happens to exist before we get a chance to interfere. It
 # also improves the chance of noticing any not-planned-for speedups related
 # side effects, rather than relying on explicit test coverage.
 # 
