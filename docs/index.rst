@@ -840,8 +840,6 @@ multiple languages. Additionally since the encoding name is stored, a
 meaningful diagnostic can be printed if attempts are made to access records
 encoded with an unregistered encoder.
 
-*Note: not implemented yet.*
-
 Encoding metadata starts with ``<prefix>\x02``. The remainder of the key is an
 encoded string representing the encoding or compressor name.
 
@@ -859,7 +857,8 @@ Compressor value prefixes are formed simply by encoding the index using
 :py:func:`encode_int`. The index itself is assigned by a call to
 :py:meth:`Store.count` using the special name ``'\x00encodings_idx'``.
 
-The following entries always exist (*not yet implemented*):
+The following entries are assumed to exist, but are never physically written to
+the storage engine:
 
 +-------------------+---------+---------------------------------------------+
 | ``name``          | ``idx`` | *Description*                               |
