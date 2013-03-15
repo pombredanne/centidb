@@ -32,8 +32,9 @@ ranges may be selected for compression and the batch size is configurable.
 Since it is a Python library, key and index functions are expressed directly in
 Python rather than some unrelated language.
 
-Why `centi`-db? Because at under 400 lines of code, it is over 100 times
-smaller than alternatives with comparable features.
+Why `centi`-db? Because with a core under 500 lines of code (excluding
+docstrings), it is over 100 times smaller than alternatives with comparable
+features.
 
 
 Introduction
@@ -898,7 +899,7 @@ So this module is borne out of frustration. On a recent project while
 experimenting with compression, I again found myself partially implementing
 what this module wants to be: a tiny layer that does little but add indices to
 Cold War era technology. No "inventions", no lies, no claims to beauty, no
-religious debates about scaleability, just 400ish lines that try to do one
+religious debates about scaleability, just 500ish lines that try to do one
 thing reasonably.
 
 And so that remains the primary design goal: **size**. The library should be
@@ -926,6 +927,8 @@ Probably:
 9. Key splitting (better support DBs that dislike large records)
 10. putbatch()
 11. More future proof metadata format.
+12. Convert Index/Collection guts to visitor-style design, replace find/iter
+    methods with free functions implemented once.
 
 Maybe:
 
