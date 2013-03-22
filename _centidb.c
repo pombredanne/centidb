@@ -165,17 +165,9 @@ struct writer {
 
 static int writer_init(struct writer *wtr, Py_ssize_t initial)
 {
-    if(! initial) {
-        initial = 20;
-    }
-
     wtr->pos = 0;
     wtr->s = PyString_FromStringAndSize(NULL, initial);
-    if(! wtr->s) {
-        PyErr_NoMemory();
-        return 0;
-    }
-    return 1;
+    return wtr->s != NULL;
 }
 
 static int writer_grow(struct writer *wtr)
@@ -205,15 +197,15 @@ static int writer_putc(struct writer *wtr, uint8_t o)
         }
     }
 
-    ((uint8_t *)PyString_AS_STRING(wtr->s))[wtr->pos++] = o;
+    ((uint8_t *restrict)PyString_AS_STRING(wtr->s))[wtr->pos++] = o;
     return 1;
 }
 
 /* Append a bytestring `b` to the buffer, growing it as necessary. */
-static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
+static int writer_puts(struct writer *wtr, const char *restrict s, Py_ssize_t size)
 {
     assert(wtr->s);
-    while((PyString_GET_SIZE(wtr->s) - wtr->pos) < (size + 1)) {
+    while((PyString_GET_SIZE(wtr->s) - (wtr->pos + 1)) < size) {
         if(! writer_grow(wtr)) {
             return 0;
         }
@@ -231,10 +223,7 @@ static PyObject *writer_fini(struct writer *wtr)
     if(! wtr->s) {
         return NULL;
     }
-    // It should be possible to do better than this.
-    if(-1 == _PyString_Resize(&(wtr->s), wtr->pos)) {
-        return PyErr_NoMemory();
-    }
+    _PyString_Resize(&(wtr->s), wtr->pos);
     PyObject *o = wtr->s;
     wtr->s = NULL;
     return o;
@@ -347,7 +336,7 @@ static PyObject *encode_int(PyObject *self, PyObject *arg)
 }
 
 
-static int encode_str(struct writer *wtr, uint8_t *p, Py_ssize_t length,
+static int encode_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
                       enum ElementKind kind)
 {
     if(kind) {
@@ -445,26 +434,22 @@ static PyObject *encode_keys(PyObject *self, PyObject *args)
     Py_ssize_t prefix_size;
 
     Py_ssize_t arg_count = PyTuple_GET_SIZE(args);
-    if(arg_count == 0 || arg_count > 2) {
+    if(arg_count != 2) {
         PyErr_SetString(PyExc_TypeError,
-            "encode_keys() takes between 1 and 2 arguments.");
+            "encode_keys() takes exactly 2 arguments.");
         return NULL;
     }
-    if(arg_count > 1) {
-        PyObject *py_prefix = PyTuple_GET_ITEM(args, 1);
-        if(py_prefix != Py_None) {
-            if(Py_TYPE(py_prefix) != &PyString_Type) {
-                PyErr_SetString(PyExc_TypeError,
-                    "encode_keys() prefix must be str().");
-                return NULL;
-            }
-            prefix = (uint8_t *) PyString_AS_STRING(py_prefix);
-            prefix_size = PyString_GET_SIZE(py_prefix);
-        }
+
+    PyObject *py_prefix = PyTuple_GET_ITEM(args, 0);
+    if(Py_TYPE(py_prefix) != &PyString_Type) {
+        PyErr_SetString(PyExc_TypeError, "encode_keys() prefix must be str.");
+        return NULL;
     }
+    prefix = (uint8_t *) PyString_AS_STRING(py_prefix);
+    prefix_size = PyString_GET_SIZE(py_prefix);
 
     struct writer wtr;
-    if(! writer_init(&wtr, 0)) {
+    if(! writer_init(&wtr, 20)) {
         return NULL;
     }
 
@@ -475,7 +460,7 @@ static PyObject *encode_keys(PyObject *self, PyObject *args)
         }
     }
 
-    PyObject *tups = PyTuple_GET_ITEM(args, 0);
+    PyObject *tups = PyTuple_GET_ITEM(args, 1);
     PyTypeObject *type = Py_TYPE(tups);
 
     if(type != &PyList_Type) {
@@ -585,7 +570,7 @@ static PyObject *builder_build(PyObject *self_, PyObject *args)
     }
 
     struct writer wtr;
-    if(! writer_init(&wtr, 0)) {
+    if(! writer_init(&wtr, 20)) {
         return NULL;
     }
 
@@ -871,7 +856,7 @@ static PyObject *c_decode_int_(struct reader *rdr, int negate)
 static PyObject *decode_str(struct reader *rdr)
 {
     struct writer wtr;
-    if(! writer_init(&wtr, 0)) {
+    if(! writer_init(&wtr, 20)) {
         return NULL;
     }
 
@@ -985,41 +970,51 @@ static PyObject *decode_key(struct reader *rdr)
 
 static PyObject *py_decode_key(PyObject *self, PyObject *args)
 {
-    PyObject *prefix = NULL;
+    uint8_t *prefix;
     uint8_t *s;
     Py_ssize_t s_len;
+    Py_ssize_t prefix_len;
 
-    if(! PyArg_ParseTuple(args, "s#|S", (char **) &s, &s_len, &prefix)) {
+    if(! PyArg_ParseTuple(args, "s#s#", (char **) &prefix, &prefix_len,
+                                        (char **) &s, &s_len)) {
         return NULL;
+    }
+    if(s_len < prefix_len) {
+        PyErr_SetString(PyExc_ValueError,
+            "decode_keys() input smaller than prefix.");
+        return NULL;
+    }
+    if(memcmp(prefix, s, prefix_len)) {
+        Py_RETURN_NONE;
     }
 
     struct reader rdr;
     if(! reader_init(&rdr, s, s_len)) {
         return NULL;
     }
-
-    if(prefix) {
-        if(rdr.size < PyString_GET_SIZE(prefix)) {
-            PyErr_SetString(PyExc_ValueError,
-                "decode_keys() input smaller than prefix.");
-            return NULL;
-        }
-        rdr.pos += PyString_GET_SIZE(prefix);
-    }
-
+    rdr.pos += prefix_len;
     return decode_key(&rdr);
 }
 
 
 static PyObject *decode_keys(PyObject *self, PyObject *args)
 {
-    PyObject *prefix = NULL;
-
+    uint8_t *prefix;
     uint8_t *s;
+    Py_ssize_t prefix_len;
     Py_ssize_t s_len;
 
-    if(! PyArg_ParseTuple(args, "s#|S", (char **) &s, &s_len, &prefix)) {
+    if(! PyArg_ParseTuple(args, "s#s#", (char **) &prefix, &prefix_len,
+                                        (char **) &s, &s_len)) {
         return NULL;
+    }
+    if(s_len < prefix_len) {
+        PyErr_SetString(PyExc_ValueError,
+            "decode_keys() prefix smaller than input.");
+        return NULL;
+    }
+    if(memcmp(prefix, s, prefix_len)) {
+        Py_RETURN_NONE;
     }
 
     struct reader rdr;
@@ -1027,15 +1022,7 @@ static PyObject *decode_keys(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    if(prefix) {
-        if(rdr.size < PyString_GET_SIZE(prefix)) {
-            PyErr_SetString(PyExc_ValueError,
-                "decode_keys() prefix smaller than input.");
-            return NULL;
-        }
-        rdr.pos += PyString_GET_SIZE(prefix);
-    }
-
+    rdr.pos += prefix_len;
     PyObject *tups = PyList_New(LIST_START_SIZE);
     if(! tups) {
         return NULL;

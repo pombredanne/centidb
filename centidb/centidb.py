@@ -51,6 +51,9 @@ KIND_SEP = chr(102)
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 IndexKeyBuilder = None
 
+ITEMGETTER_0 = operator.itemgetter(0)
+ITEMGETTER_1 = operator.itemgetter(1)
+
 def invert(s):
     """Invert the bits in the bytestring `s`.
 
@@ -153,6 +156,17 @@ def decode_int_s(s):
     io = cStringIO.StringIO(s)
     return decode_int(lambda: io.read(1), io.read)
 
+def decode_offsets(s):
+    io = cStringIO.StringIO(s)
+    more = functools.partial(decode_int,
+                             functools.partial(io.read, 1), io.read)
+    pos = 0
+    out = [0]
+    for _ in xrange(more()):
+        pos += more()
+        out.append(pos)
+    return out, io.tell()
+
 _encode_pat = re.compile(r'[\x00\x01]')
 _encode_subber = lambda m: '\x01\x01' if m.group(0) == '\x00' else '\x01\x02'
 def encode_str(s):
@@ -193,60 +207,6 @@ def next_greater(s):
     s2 = s.rstrip('\xff')
     return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
 
-def _iter(obj, txn, key=None, lo=None, hi=None, reverse=False,
-          max=None, include=False, values=True, is_index=False):
-    if lo is None:
-        lo = obj.prefix
-    else:
-        lo = encode_keys(lo, obj.prefix)
-
-    if hi is None:
-        hi = next_greater(obj.prefix)
-        if not key:
-            include = False
-    else:
-        hi = encode_keys(hi, obj.prefix)
-        if is_index:
-            # This is a broken mess. When doing reverse queries on an index we
-            # must account for the key component of the index key. Reusing
-            # next_greater() will most likely fail if the last byte of the
-            # index tuple is 0xff. Needs a better solution.
-            hi = next_greater(hi) # TODO WTF
-            assert hi
-
-    if key is not None:
-        if reverse:
-            hi = encode_keys(key, obj.prefix)
-            if is_index:
-                hi = next_greater(hi) # TODO WTF
-                assert hi
-            include = True
-        else:
-            lo = encode_keys(key, obj.prefix)
-
-    if reverse:
-        it = (txn or obj.engine).iter(hi, True)
-        pred = lo.__le__
-        if not include:
-            tup = next(it)
-            k = tup[0]
-            if lo <= k and k < hi:
-                yield tup if values else tup[0]
-    else:
-        it = (txn or obj.engine).iter(lo, False)
-        pred = hi.__ge__ if include else hi.__gt__
-
-    if max is not None:
-        it = itertools.islice(it, max)
-
-    for tup in it:
-        if not pred(tup[0]):
-            break
-        elif values:
-            yield tup
-        else:
-            yield tup[0]
-
 def _eat(pred, it, total_only=False):
     if not pred:
         return it
@@ -259,10 +219,14 @@ def _eat(pred, it, total_only=False):
         return total
     return total, true
 
+def __kcmp(fn, o):
+    return fn(o[1])
+_kcmp = functools.partial(functools.partial, __kcmp)
+
 def tuplize(o):
     return o if type(o) is tuple else (o,)
 
-def encode_keys(tups, prefix=''):
+def encode_keys(prefix, tups):
     """Encode a list of tuples of primitive values to a bytestring that
     preserves a meaningful lexicographical sort order.
 
@@ -338,22 +302,24 @@ def encode_keys(tups, prefix=''):
                 raise TypeError('unsupported type: %r' % (arg,))
     return str(ba)
 
-def decode_keys(s, prefix=None, first=False):
+def decode_keys(prefix, s, first=False):
     """Decode a bytestring produced by :py:func:`encode_keys`, returning the
     list of tuples the string represents.
 
         `prefix`:
             If specified, a string prefix of this length will be skipped before
-            decoding begins. A future version may also verify the prefix
-            matches.
+            decoding begins. If the passed string does not start with the given
+            prefix, None is returned and the string is not decoded.
 
         `first`:
             Stop work after the first tuple has been decoded and return it
             immediately. Note the return value is the tuple, not a list
             containing the tuple.
     """
-    if prefix:
-        s = buffer(s, len(prefix))
+    if not s.startswith(prefix):
+        return
+    s = buffer(s, len(prefix))
+
     io = cStringIO.StringIO(s)
     getc = functools.partial(io.read, 1)
     tups = []
@@ -385,8 +351,8 @@ def decode_keys(s, prefix=None, first=False):
     tups.append(tuple(tup))
     return tups[0] if first else tups
 
-def decode_key(s, prefix=''):
-    return decode_keys(s, prefix, True)
+def decode_key(prefix, s):
+    return decode_keys(prefix, s, True)
 
 class Encoder(object):
     """Instances of this class represent an encoding.
@@ -444,7 +410,47 @@ class Index(object):
         self.info = info
         self.func = func
         self.prefix = self.store.prefix + encode_int(info['idx'])
-        self._decode = lambda s: decode_keys(s, self.prefix)
+        self._decode = functools.partial(decode_keys, self.prefix)
+
+    def _iter(self, txn, key, lo, hi, reverse, max, include):
+        if lo is None:
+            lo = self.prefix
+        else:
+            lo = encode_keys(self.prefix, lo)
+
+        if hi is None:
+            hi = next_greater(self.prefix)
+            if not (key and reverse):
+                include = False
+        else:
+            # This is a broken mess. When doing reverse queries we must account
+            # for the key tuple of the index key. next_greater() may fail if
+            # the last byte of the index tuple is FF. Needs a better solution.
+            hi = next_greater(encode_keys(self.prefix, hi)) # TODO WTF
+            assert hi
+
+        if key is not None:
+            if reverse:
+                hi = next_greater(encode_keys(self.prefix, key)) # TODO WTF
+                assert hi
+                include = False
+            else:
+                lo = encode_keys(self.prefix, key)
+
+        if reverse:
+            it = (txn or self.engine).iter(hi, True)
+            pred = lo.__le__
+        else:
+            it = (txn or self.engine).iter(lo, False)
+            pred = hi.__ge__ if include else hi.__gt__
+        it = itertools.takewhile(pred, it)
+        if max is not None:
+            it = itertools.islice(it, max)
+        for key, _ in it:
+            key = self._decode(key)
+            if not key:
+                break
+            yield key
 
     def iterpairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None):
@@ -453,22 +459,20 @@ class Index(object):
         key of the matching record.
         
         `Note:` the yielded sequence is a list, not a tuple."""
-        return itertools.imap(self._decode,
-            _iter(self, txn, args, lo, hi, reverse, max, include, False,
-                  True))
+        return self._iter(txn, args, lo, hi, reverse, max, include)
 
     def itertups(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None):
         """Yield all index tuples in the index, in tuple order. The index tuple
         is the part of the entry produced by the user's index function, i.e.
         the index's natural "value"."""
-        return itertools.imap(operator.itemgetter(0),
+        return itertools.imap(ITEMGETTER_0,
             self.iterpairs(args, lo, hi, reverse, max, include, txn))
 
     def iterkeys(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None):
         """Yield all keys in the index, in tuple order."""
-        return itertools.imap(operator.itemgetter(1),
+        return itertools.imap(ITEMGETTER_1,
             self.iterpairs(args, lo, hi, reverse, max, include, txn))
 
     def iteritems(self, args=None, lo=None, hi=None, reverse=None, max=None,
@@ -489,7 +493,7 @@ class Index(object):
         """Yield all values referred to by the index, in tuple order. If `rec`
         is ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
-        return itertools.imap(operator.itemgetter(1),
+        return itertools.imap(ITEMGETTER_1,
             self.iteritems(args, lo, hi, reverse, max, include, txn, rec))
 
     def find(self, args=None, lo=None, hi=None, reverse=None, include=True,
@@ -501,6 +505,13 @@ class Index(object):
         if v is default and rec and default is not None:
             v = Record(self.coll, default)
         return v
+
+    def has(self, x, txn=None):
+        """Return True if an entry with the exact tuple `x` exists in the
+        index."""
+        x = tuplize(x)
+        tup, key = next(self.iterpairs(x), (None, None))
+        return tup == x
 
     def get(self, x, txn=None, rec=None, default=None):
         """Return the first matching record referred to by the index, in tuple
@@ -729,52 +740,132 @@ class Collection(object):
             self._index_keys = IndexKeyBuilder(self.indices.values()).build
         return index
 
+    def _logical_iter(self, txn, startkey, reverse):
+        #   * When iterating forward, if first yielded key lacks collection
+        #     prefix, result of iteration is empty.
+        #   * When iterating reverse, if first yielded key lacks collection
+        #     prefix, discard, then behave as forward.
+        #   * Records are discarded in the direction of iteration until
+        #     startpred() or not self.prefix.
+        #   * Records are yielded following startpred() until not endpred() or
+        #     not self.prefix.
+        it = txn.iter(startkey, reverse)
+        tup = next(it, None)
+        if tup and tup[0].startswith(self.prefix):
+            it = itertools.chain((tup,), it)
+        for key, value in it:
+            keys = decode_keys(self.prefix, key)
+            if not keys:
+                return
+
+            lenk = len(keys)
+            if lenk == 1:
+                yield False, keys[0], self._decompress(value)
+            else: # Batch record.
+                offsets, dstart = decode_offsets(value)
+                data = self._decompress(buffer(value, dstart))
+                keys.reverse()
+                if reverse:
+                    rit = xrange(lenk - 1, -1, -1)
+                else:
+                    rit = xrange(lenk)
+                for i in rit:
+                    key = keys[i]
+                    offs = offsets[i]
+                    size = offsets[i+1] - offs
+                    yield True, key, buffer(data, offs, size)
+
+    # -----------------------------------------------------------
+    # prefix: a
+    #                          _iter(key=ad, reverse=True)
+    #                         /_iter(hi=ad, reverse=True)
+    #                        //
+    #       aa     ab     aedc     af     ba
+    #       ^             ^               ^
+    #       |             |               |
+    #       |             |               |
+    #  .iter(prefix)      |        .iter(next_greater(prefix))
+    #                 .iter(ad)
+    # -----------------------------------------------------------
+    # _iter(, , , False): lokey=prefix, hikey=ng(prefix)
+    #                     startpred=lokey, endpred=
+    def _iter(self, txn, key, lo, hi, reverse, max_, include):
+        if key is not None:
+            key = tuplize(key)
+            if reverse:
+                hi = key
+                include = True
+            else:
+                lo = key
+
+        if lo is None:
+            lokey = self.prefix
+        else:
+            lo = tuplize(lo)
+            lokey = encode_keys(self.prefix, lo)
+
+        if hi is None:
+            hikey = next_greater(self.prefix)
+            include = False
+        else:
+            hi = tuplize(hi)
+            hikey = encode_keys(self.prefix, hi)
+
+        if reverse:
+            k = hikey
+            startpred = hi and (hi.__lt__ if include else hi.__le__)
+            endpred = lo and lo.__ge__
+        else:
+            k = lokey
+            startpred = None
+            endpred = hi and (hi.__ge__ if include else hi.__gt__)
+
+        it = self._logical_iter(txn or self.engine, k, reverse)
+        if max_ is not None:
+            it = itertools.islice(it, max_)
+        if startpred:
+            it = itertools.dropwhile(_kcmp(startpred), it)
+        if endpred:
+            it = itertools.takewhile(_kcmp(endpred), it)
+        return it
+
     def _decompress(self, s):
         encoder = self.store.get_encoder(s[0])
         return encoder.unpack(buffer(s, 1))
-
-    def iter_phys_keys(self, txn=None):
-        """Yield lists of tuples representing all the physical keys that exist
-        in the collection, in key order. A physical key is simply a sequence of
-        logical keys. When the length of the yielded list is >1, this indicates
-        multiple logical keys saved to the same physical key."""
-        it = _iter(self, txn, prefix=self.prefix, values=False)
-        return (decode_keys(phys, self.prefix)[::-1] for phys in it)
 
     def _index_keys(self, key, obj):
         idx_keys = []
         for idx in self.indices.itervalues():
             lst = idx.func(obj)
             for idx_key in lst if type(lst) is list else [lst]:
-                idx_keys.append(encode_keys([idx_key, key], idx.prefix))
+                idx_keys.append(encode_keys(idx.prefix, [idx_key, key]))
         return idx_keys
 
     def iteritems(self, key=None, lo=None, hi=None, reverse=False, max=None,
             include=True, txn=None, rec=None):
-        """Yield all `(key, value)` tuples in the collection, in key order. If
-        `rec` is ``True``, :py:class:`Record` instances are yielded instead of
-        record values."""
+        """Yield all `(key tuple, value)` tuples in key order. If `rec` is
+        ``True``, :py:class:`Record` instances are yielded instead of record
+        values."""
         txn_id = getattr(txn or self.engine, 'txn_id', None)
-        for phys, data in _iter(self, txn, key, lo, hi, reverse, max, include):
-            keys = decode_keys(phys, self.prefix)
-            obj = self.encoder.unpack(self._decompress(data))
+        it = self._iter(txn, key, lo, hi, reverse, max, include)
+        for batch, key, data in it:
+            obj = self.encoder.unpack(data)
             if rec:
-                obj = Record(self, obj, keys[-1], len(keys) > 1,
-                             txn_id, self._index_keys(keys[-1], obj))
-            yield keys[-(1)], obj
+                obj = Record(self, obj, key, batch, txn_id,
+                             self._index_keys(key, obj))
+            yield key, obj
 
     def iterkeys(self, key=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None, rec=None):
-        """Yield all key tuples in the collection, in key order."""
-        return itertools.imap(operator.itemgetter(0),
+        """Yield key tuples in key order."""
+        return itertools.imap(ITEMGETTER_0,
             self.iteritems(key, lo, hi, reverse, max, include, txn, rec))
 
     def itervalues(self, key=None, lo=None, hi=None, reverse=None, max=None,
             include=True, txn=None, rec=None):
-        """Yield all values in the collection, in key order. If `rec` is
-        ``True``, :py:class:`Record` instances are yielded instead of record
-        values."""
-        return itertools.imap(operator.itemgetter(1),
+        """Yield record values in key order. If `rec` is ``True``,
+        :py:class:`Record` instances are yielded instead of record values."""
+        return itertools.imap(ITEMGETTER_1,
             self.iteritems(key, lo, hi, reverse, max, include, txn, rec))
 
     def gets(self, keys, default=None, rec=False, txn=None):
@@ -798,20 +889,19 @@ class Collection(object):
         a :py:class:`Record` instance for use when later re-saving the record,
         otherwise only the record's value is returned."""
         key = tuplize(key)
-        it = _iter(self, txn, key)
-        phys, data = next(it, (None, None))
-        txn_id = getattr(txn or self.engine, 'txn_id', None)
+        it = self._iter(txn, None, key, key, False, None, True)
+        tup = next(it, None)
+        if tup:
+            txn_id = getattr(txn or self.engine, 'txn_id', None)
+            obj = self.encoder.unpack(tup[2])
+            if rec:
+                obj = Record(self, obj, key, tup[0], txn_id,
+                             self._index_keys(key, obj))
+            return obj
 
-        if phys and phys.startswith(self.prefix):
-            keys = decode_keys(phys, self.prefix)
-            obj = self.encoder.unpack(self._decompress(data))
-            if keys[-1] == key:
-                if rec:
-                    obj = Record(self, obj, key, len(keys) > 1,
-                                 txn_id, self._index_keys(key, obj))
-                return obj
         if default is not None:
             return Record(self, default) if rec else default
+        return
 
     def batch(self, lo, hi, maxrecs=None, maxbytes=None, preserve=True,
             packer=None, txn=None, maxphys=None):
@@ -884,9 +974,9 @@ class Collection(object):
 
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
-        it = _iter(self, txn, encode_keys(rec.key, self.prefix))
-        phys, data = next(it, (None, None))
-        keys = decode_keys(phys, self.prefix)
+        assert False
+        it = _iter(txn, rec.key, None, None, None, None, None)
+        keys, data = next(it, (None, None))
         assert len(keys) > 1 and rec.key in keys, \
             'Physical key missing: %r' % (rec.key,)
 
@@ -968,7 +1058,7 @@ class Collection(object):
                 self._split_batch(rec, txn)
             elif rec.key != obj_key:
                 # New version has changed key, delete old.
-                txn.delete(encode_keys(rec.key, self.prefix))
+                txn.delete(encode_keys(self.prefix, rec.key))
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     txn.delete(index_key)
@@ -978,8 +1068,10 @@ class Collection(object):
             self.delete(obj_key)
 
         packer = packer or self.packer
-        packer_prefix = self.store.add_encoder(packer)
-        txn.put(encode_keys(obj_key, self.prefix),
+        packer_prefix = self.store._encoder_prefix.get(packer)
+        if packer_prefix is None:
+            packer_prefix = self.store.add_encoder(packer)
+        txn.put(encode_keys(self.prefix, obj_key),
                 packer_prefix + packer.pack(self.encoder.pack(rec.data)))
         for index_key in index_keys:
             txn.put(index_key, '')
@@ -1025,7 +1117,7 @@ class Collection(object):
                 self._split_batch(rec, txn)
             else:
                 delete = (txn or self.engine).delete
-                delete(encode_keys(rec.key, self.prefix))
+                delete(encode_keys(self.prefix, rec.key))
                 for index_key in rec.index_keys or ():
                     delete(index_key)
             rec.key = None
@@ -1128,7 +1220,8 @@ class Store(object):
                 reserved by the implementation.
 
             `n`:
-                Number to add to the counter.
+                Number to add to the counter. If ``0`` or ``None``, return the
+                counter's value without incrementing it.
 
             `init`:
                 Initial value to give counter if it doesn't exist.
@@ -1140,8 +1233,9 @@ class Store(object):
         default = (name, init)
         rec = self._counter_coll.get(name, default, rec=True, txn=txn)
         val = long(rec.data[1])
-        rec.data = (name, val + n)
-        self._counter_coll.put(rec)
+        if n:
+            rec.data = (name, val + n)
+            self._counter_coll.put(rec, txn=txn)
         return val
 
 # Hack: disable speedups while testing or reading docstrings.
@@ -1153,7 +1247,8 @@ if not (any(k in sys.modules for k in ('sphinx', 'pydoc')) or \
         pass
 
 #: Encode Python tuples using encode_keys()/decode_keys().
-KEY_ENCODER = Encoder('key', decode_key, encode_keys)
+KEY_ENCODER = Encoder('key', functools.partial(decode_key, ''),
+                             functools.partial(encode_keys, ''))
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', pickle.loads,

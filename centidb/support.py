@@ -155,14 +155,7 @@ class SkiplistEngine(object):
         self.get = self.sl.search
         self.put = self.sl.insert
         self.delete = self.sl.delete
-
-    def iter(self, k, reverse=False):
-        it = self.sl.items(k, reverse)
-        if reverse:
-            tup = next(it, None)
-            if tup and tup[0] <= k:
-                return itertools.chain((tup,), it)
-        return it
+        self.iter = self.sl.items
 
 
 class ListEngine(object):
@@ -198,14 +191,14 @@ class ListEngine(object):
             self.size -= len(k) + len(self.pairs[idx][1])
             self.pairs.pop(idx)
 
-    def iter(self, k, reverse=False):
+    def iter(self, k, reverse):
         if not self.pairs:
-            return []
+            return iter([])
         idx = bisect.bisect_left(self.pairs, (k,)) if k else 0
         if reverse:
             idx -= len(self.pairs) == idx
-            if self.pairs:
-                idx -= self.pairs[idx][0] > k
+            #if self.pairs:
+                #idx -= self.pairs[idx][0] > k
             xr = xrange(idx, -1, -1)
         else:
             xr = xrange(idx, len(self.pairs))
@@ -232,10 +225,16 @@ class PlyvelEngine(object):
         self.put = (wb or db).put
         self.delete = (wb or db).delete
 
-    def iter(self, k, reverse=False):
+    def iter(self, k, reverse):
+        it = self.db.iterator()
+        it.seek(k)
         if reverse:
-            return self.db.iterator(stop=k, include_stop=True, reverse=True)
-        return self.db.iterator(start=k)
+            tup = next(it, None)
+            it = iter(it.prev, None)
+            if tup:
+                next(it) # skip back past tup
+                it = itertools.chain((tup,), it)
+        return it
 
 
 class KyotoEngine(object):
@@ -248,15 +247,25 @@ class KyotoEngine(object):
         self.db = db
         if not self.db:
             import kyotocabinet
-            self.db = kyotocabinet.DB(path)
+            self.db = kyotocabinet.DB()
+            assert self.db.open(path)
         self.get = self.db.get
-        self.set = self.db.set
+        self.put = self.db.set
         self.delete = self.db.remove
 
-    def iter(self, k, keys=True, values=True, reverse=False):
-        kw = dict(include_key=keys, include_value=values, include_stop=True)
-        kw.update(dict(stop=k, reverse=True) if reverse else dict(start=k))
-        return self.db.iterator(**kw)
+    def iter(self, k, reverse):
+        c = self.db.cursor()
+        c.jump(k)
+        tup = c.get()
+        if reverse:
+            it = iter((lambda: c.step_back() and c.get()), False)
+            if not tup:
+                c.jump_back()
+                tup = c.get()
+            return itertools.chain((tup,), it) if tup else it
+        else:
+            it = iter((lambda: c.step() and c.get()), False)
+            return itertools.chain((tup,), it) if tup else it
 
 def make_json_encoder():
     """Return an :py:class:`Encoder <centidb.Encoder>` that serializes

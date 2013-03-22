@@ -16,6 +16,49 @@ import centidb.support
 import _centidb
 
 
+class CountingEngine(object):
+    def __init__(self, real_engine):
+        self.real_engine = real_engine
+        self.get_iter_returned = 0
+        self.delete_count = 0
+        self.delete_keys = set()
+        self.put_count = 0
+        self.put_keys = set()
+        self.get_count = 0
+        self.get_keys = set()
+        self.get_returned = 0
+        self.iter_keys = set()
+        self.iter_count = 0
+        self.iter_size = 0
+
+    def put(self, key, value):
+        self.put_count += 1
+        self.put_keys.add(key)
+        self.real_engine.put(key, value)
+
+    def get(self, key):
+        self.get_count += 1
+        self.get_keys.add(key)
+        s = self.real_engine.get(key)
+        self.get_returned += s is not None
+        self.get_iter_returned += s is not None
+        return s
+
+    def delete(self, key):
+        self.delete_count += 1
+        self.delete_keys.add(key)
+        self.real_engine.delete(key)
+
+    def iter(self, key, reverse):
+        self.iter_keys.add(key)
+        self.iter_count += 1
+        it = self.real_engine.iter(key, reverse)
+        for x in it:
+            yield x
+            self.iter_size += 1
+            self.get_iter_returned += 1
+
+
 #
 # Module reloads are necessary because KEY_ENCODER & co bind whatever
 # encode_keys() & co happens to exist before we get a chance to interfere. It
@@ -85,25 +128,25 @@ le = make_asserter(operator.le, '<=')
 @register()
 class IterTest:
     prefix = 'Y'
-    KEYS = [centidb.encode_keys(x, prefix)
-            for x in ('aa', 'cc', 'd', 'dd', 'de')]
+    KEYS = [[(k,)] for k in 'aa cc d dd de'.split()]
     ITEMS = [(k, '') for k in KEYS]
     REVERSE = ITEMS[::-1]
 
     def _encode(self, s):
-        return centidb.encode_keys(s, self.prefix)
+        return centidb.encode_keys(self.prefix, s)
 
     def setUp(self):
         self.e = centidb.support.ListEngine()
         self.e.put('X', '')
         for key in self.KEYS:
-            self.e.put(key, '')
+            self.e.put(self._encode(key), '')
         self.e.put('Z', '')
-
         self.engine = self.e
 
-    def iter(self, *args, **kwargs):
-        return list(centidb.centidb._iter(self, None, *args, **kwargs))
+    def iter(self, key=None, lo=None, hi=None, reverse=None,
+            include=None, is_index=False):
+        return list(centidb.centidb._iter(self.prefix, self.e, key, lo, hi,
+                                          reverse, include, is_index))
 
     def testForward(self):
         eq(self.ITEMS, self.iter())
@@ -118,7 +161,7 @@ class IterTest:
         eq(self.ITEMS[1:], self.iter('cc'))
 
     def testForwardSkipMostExist(self):
-        eq([(self._encode('de'), '')], self.iter('de'))
+        eq([([('de',),], '')], self.iter('de'))
 
     def testForwardSeekBeyondNoExist(self):
         eq([], self.iter('df'))
@@ -151,7 +194,7 @@ class IterTest:
         eq(self.REVERSE[1:], self.riter(hi='dd', include=True))
 
     def testReverseSkipMostExist(self):
-        eq([(self._encode('aa'), '')], self.riter('ab'))
+        eq([([('aa',)], '')], self.riter('ab'))
 
     def testReverseSeekBeyondFirst(self):
         eq([], self.riter('a'))
@@ -213,51 +256,51 @@ class EngineTestBase:
         self.assertEqual(self.e.get('dave'), None)
 
     def testIterForwardEmpty(self):
-        assert list(self.e.iter('')) == []
-        assert list(self.e.iter('x')) == []
+        assert list(self.e.iter('', False)) == []
+        assert list(self.e.iter('x', False)) == []
 
     def testIterForwardFilled(self):
         self.e.put('dave', '')
-        eq(list(self.e.iter('dave')), [('dave', '')])
-        eq(list(self.e.iter('davee')), [])
+        eq(list(self.e.iter('dave', False)), [('dave', '')])
+        eq(list(self.e.iter('davee', False)), [])
 
     def testIterForwardBeyondNoExist(self):
         self.e.put('aa', '')
         self.e.put('bb', '')
-        eq([], list(self.e.iter('df')))
+        eq([], list(self.e.iter('df', False)))
 
     def testIterReverseEmpty(self):
-        eq(list(self.e.iter('', reverse=True)), [])
-        eq(list(self.e.iter('x', reverse=True)), [])
+        eq(list(self.e.iter('', True)), [])
+        eq(list(self.e.iter('x', True)), [])
 
     def testIterReverseAtEnd(self):
         self.e.put('a', '')
         self.e.put('b', '')
-        eq(list(self.e.iter('b', reverse=True)), [('b', ''), ('a', '')])
+        eq(list(self.e.iter('b', True)), [('b', ''), ('a', '')])
 
     def testIterReversePastEnd(self):
         self.e.put('a', '')
         self.e.put('b', '')
-        eq(list(self.e.iter('c', reverse=True)), [('b', ''), ('a', '')])
+        eq(list(self.e.iter('c', True)), [('b', ''), ('a', '')])
 
     def testIterReverseFilled(self):
         self.e.put('dave', '')
-        eq(list(self.e.iter('davee', reverse=True)), [('dave', '')])
+        eq(list(self.e.iter('davee', True)), [('dave', '')])
 
     def testIterForwardMiddle(self):
         self.e.put('a', '')
         self.e.put('c', '')
         self.e.put('d', '')
-        assert list(self.e.iter('b')) == [('c', ''), ('d', '')]
-        assert list(self.e.iter('c')) == [('c', ''), ('d', '')]
+        assert list(self.e.iter('b', False)) == [('c', ''), ('d', '')]
+        assert list(self.e.iter('c', False)) == [('c', ''), ('d', '')]
 
     def testIterReverseMiddle(self):
         self.e.put('a', '')
         self.e.put('b', '')
         self.e.put('d', '')
         self.e.put('e', '')
-        eq(list(self.e.iter('c', reverse=True)),
-           [('b', ''), ('a', '')])
+        eq(list(self.e.iter('c', True)),
+           [('d', ''), ('b', ''), ('a', '')])
 
 
 @register()
@@ -282,7 +325,7 @@ class PlyvelEngineTest(EngineTestBase):
             name='test.ldb', create_if_missing=True)
 
     def setUp(self):
-        for key, value in self.e.iter(''):
+        for key, value in self.e.iter('', False):
             self.e.delete(key)
 
     @classmethod
@@ -290,6 +333,23 @@ class PlyvelEngineTest(EngineTestBase):
         cls.e = None
         shutil.rmtree('test.ldb')
 
+
+@register()
+class KyotoEngineTest(EngineTestBase):
+    @classmethod
+    def _setUpClass(cls):
+        if os.path.exists('test.kct'):
+            os.unlink('test.kct')
+        cls.e = centidb.support.KyotoEngine(path='test.kct')
+
+    def setUp(self):
+        for key, value in list(self.e.iter('', False)):
+            self.e.delete(key)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.e = None
+        os.unlink('test.kct')
 
 
 @register()
@@ -305,10 +365,10 @@ class KeysTest:
     ]
 
     def _enc(self, *args, **kwargs):
-        return centidb.encode_keys(*args, **kwargs)
+        return centidb.encode_keys('', *args, **kwargs)
 
     def _dec(self, *args, **kwargs):
-        return centidb.decode_keys(*args, **kwargs)
+        return centidb.decode_keys('', *args, **kwargs)
 
     def test_counter(self):
         s = self._enc(('dave', 1))
@@ -322,8 +382,8 @@ class KeysTest:
 
     def test_single_sort_lower(self):
         for val in self.SINGLE_VALS:
-            e1 = centidb.encode_keys((val,))
-            e2 = centidb.encode_keys([(val, val),])
+            e1 = centidb.encode_keys('', (val,))
+            e2 = centidb.encode_keys('', [(val, val),])
             lt(e1, e2, 'eek %r' % (val,))
 
     def test_list(self):
@@ -334,7 +394,7 @@ class KeysTest:
 @register()
 class StringEncodingTest:
     def do_test(self, k):
-        eq(k, centidb.centidb.decode_key(centidb.encode_keys(k)))
+        eq(k, centidb.centidb.decode_key('', centidb.encode_keys('', k)))
 
     def test_simple(self):
         self.do_test(('dave',))
@@ -506,6 +566,11 @@ class IndexTest:
         eq([None, None], list(self.i.gets(('missing', 'missing2'))))
         eq(['dave', None], list(self.i.gets([(69, 'dave'), 'missing'])))
 
+    # has
+    def testHas(self):
+        assert self.i.has((69, 'dave'))
+        assert not self.i.has((69, 'dave123'))
+        assert self.i.has((69, 'dave2'))
 
 
 class Bag(object):
@@ -538,6 +603,38 @@ class RecordTest:
         centidb.Record('ok', 'ok')
 
 
+@register()
+class CountTest:
+    def setUp(self):
+        self.e = CountingEngine(centidb.support.ListEngine())
+        self.store = centidb.Store(self.e)
+
+    def testNoExistNoCount(self):
+        eq(10, self.store.count('test', n=0, init=10))
+        eq(10, self.store.count('test', n=0, init=10))
+
+    def testExistCount(self):
+        eq(10, self.store.count('test', init=10))
+        eq(11, self.store.count('test', init=10))
+        eq(12, self.store.count('test', init=10))
+        assert (self.e.get_count + self.e.iter_count) == 3
+        assert self.e.put_count == 3
+
+    def testExistCountSometimes(self):
+        eq(10, self.store.count('test', init=10))
+        eq(11, self.store.count('test', n=0, init=10))
+        eq(11, self.store.count('test', init=10))
+        eq(12, self.store.count('test', init=10))
+        assert (self.e.get_count + self.e.iter_count) == 4
+        assert self.e.put_count == 3
+
+    def testTxn(self):
+        txn = CountingEngine(self.e)
+        eq(10, self.store.count('test', init=10, txn=txn))
+        assert (txn.get_count + txn.iter_count) == 1
+        assert txn.put_count == 1
+
+
 def x():
     db = plyvel.DB('test.ldb', create_if_missing=True)
     store = storelib.Store(db)
@@ -549,6 +646,7 @@ def x():
 
     feed = iotypes.Feed(url='http://dave', title='mytitle', id=69)
     feeds.put(feed)
+
 
 
 if __name__ == '__main__':
