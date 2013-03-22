@@ -912,8 +912,6 @@ class Collection(object):
         Search the key range *lo..hi* for individual records, combining them
         into a batches.
 
-        *Note: Not implemented yet.*
-
         Returns `(found, made, last_key)` indicating the number of records
         combined, the number of batches produced, and the last key visited
         before `max_phys` was exceeded.
