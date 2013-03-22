@@ -7,13 +7,17 @@ centidb
 .. raw:: html
 
     <div style="border: 2px solid red; background: #ffefef; color: black;
-                padding: 1ex; text-align: center;">
-        <div style="margin: auto; max-width: 80% font-size: larger;;">
+                padding: 1ex; text-align: center; width: 66%; margin: auto;
+                font-size: larger">
         <strong style="color: #7f0000">WORK IN PROGRESS</strong><br>
         <br>
-        This is a design prototype. Even if it is finished, it may only be
-        useful as the basis for a library that may never exist.
-        </div>
+        This is a design prototype, focusing on useful APIs and physical data
+        layout. Some parts are missing, other parts are slow and/or nasty. Even
+        if finished it may only be useful as the basis for a library that may
+        never exist.<br>
+        <br>
+        <strong style="color: #7f0000">THIS DOCUMENTATION IS
+        INCOMPLETE</strong>
     </div>
 
 .. currentmodule:: centidb
@@ -21,10 +25,9 @@ centidb
     :hidden:
     :maxdepth: 2
 
-`centidb` is a tiny database offering a compromise between the minimalism of a
-key/value store and the convenience of SQL. It wraps any store offering an
-ordered-map interface, adding features that often tempt developers to use more
-complex systems.
+`centidb` is a tiny database offering a compromise between the minimalism of
+key/value stores and the convenience of SQL. It wraps any store offering an
+ordered-map interface, adding features typical of more complex systems.
 
 Functionality is provided to form ordered compound keys, create and query
 indices, and a binary tuple encoding that preserves the ordering of its
@@ -33,20 +36,18 @@ DBMS indexing, while absent of any storage-specific
 protocol/language/encoding/data model, or the impedence mismatch that
 necessitates use of ORMs, it provides for a compelling programming experience.
 
-Few constraints exist: there is no enforced value type or encoding, key scheme,
-compressor, or storage engine, allowing integration with whatever best suits a
-project.
+There is no enforced value type or encoding, key scheme, compressor, or storage
+engine, allowing integration with whatever best suits a project. Batch
+compression is supported, trading read performance for improved compression
+while still permitting easy access to data. Arbitrary key ranges may be
+compressed and the batch size is configurable.
 
-Batch value compression is supported, trading read performance for improved
-compression ratios, while still permitting easy access to data. Arbitrary key
-ranges may be selected for compression and the batch size is configurable.
-
-Since it is a Python library, key and index functions are expressed directly in
-Python rather than some unrelated language.
+Since it is a Python library, key and index functions are expressed directly as
+Python functions.
 
 Why `centi`-db? Because with a core under 500 lines of code (excluding
-docstrings), it is over 100 times smaller than alternatives with comparable
-features.
+docstrings and speedups), it is over 100 times smaller than alternatives with
+comparable features.
 
 
 Introduction
@@ -89,13 +90,13 @@ Now let's insert some people:
 ::
 
     >>> people.put(('Buffy', 'girl'))
-    <Record people:(1) ('Buffy', 'girl')>
+    <Record people:(1L) ('Buffy', 'girl')>
 
     >>> people.put(('Willow', 'girl'))
-    <Record people:(2) ('Willow', 'girl')>
+    <Record people:(2L) ('Willow', 'girl')>
 
     >>> people.put(('Spike', 'boy'))
-    <Record people:(3) ('Spike', 'boy')>
+    <Record people:(3L) ('Spike', 'boy')>
 
     >>> people.get(2)
     ('Willow', 'girl')
@@ -126,11 +127,11 @@ encoding the collection.
 Keys
 ++++
 
-We are not limited to simple auto-incrementing keys, in fact keys are always
-treated as tuples containing one or more :py:func:`primitive values
-<encode_keys>`. The method used to encode the tuples for the storage engine
-results in a binary order that is identical to how the tuples would sort in
-Python, making working with them very intuitive.
+We're not limited to auto-incrementing keys, in fact keys are always treated as
+tuples containing one or more :py:func:`primitive values <encode_keys>`. The
+method used to encode the tuples for the storage engine results in a binary
+order that is identical to how the tuples would sort in Python, making working
+with them very intuitive.
 
 Let's recreate the ``people`` collection, this time 
 
@@ -722,6 +723,71 @@ Glossary
 
     *Primitive Value*
         A value of any type that :py:func:`encode_keys` supports.
+
+
+
+Cookbook
+########
+
+Compressing similar records
++++++++++++++++++++++++++++
+
+Batch compression is useful for storing collections of similar data, such as a
+collection of web pages sharing common HTML tags, or perhaps even sharing a
+common header and footer. By handing the compressor more data with similar
+redundancies, it can do a much better job of producing a smaller bitstream
+overall.
+
+Imagine you're building a web scraper, fetching data from a handful of domains
+that each has its own distinctive layout. You're not sure about the quality of
+your scraper, so you wish to store the source pages in case you need to parse
+them again due to a scraper bug.
+
+We're storing our pages in a collection with the record key being the page's
+URL. This means pages for the same domain will be physically grouped in the
+underlying storage engine, and that contiguous ranges of keys exist where all
+keys in the range relate to only a single domain.
+
+::
+
+    >>> coll = centidb.Collection(store, 'pages')
+    >>> # ...
+
+    >>> pprint(list(coll.iterkeys(max=5)))
+    ["http://bbb.com/page?id=1",
+     "http://bbb.com/page?id=2",
+     "http://bbb.com/page?id=3",
+     "http://ccc.com/page?id=1",
+     "http://ccc.com/page?id=2"]
+
+    >>> # Print the first record:
+    >>> pprint(coll.find())
+    {
+        "url": "http://bbb.com/page?id=1",
+        "html": ... # raw HTML
+    }
+
+Here we can use :py:meth:`Collection.batch` with the `grouper=` parameter to
+compress 10 pages at a time, while ensuring batches contain only pages relating
+to a single domain:
+
+::
+
+    >>> import urlparse
+
+    >>> def domain_grouper(obj):
+    ...     return urlparse.urlparse(obj['url']).netloc
+    ...
+
+    >>> # Rewrite all records in the collection into batches of 10, ensuring
+    >>> # pages from distinct domains don't get batched together:
+    >>> coll.batch(max_recs=10, grouper=domain_grouper)
+    (1000, 100, None) # Found items, made batches, next key
+
+
+Compressing old data
+++++++++++++++++++++
+
 
 
 Notes

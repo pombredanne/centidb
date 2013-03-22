@@ -907,7 +907,8 @@ class Collection(object):
         return
 
     def batch(self, lo=None, hi=None, max_recs=None, max_bytes=None,
-            preserve=True, packer=None, txn=None, max_phys=None):
+              preserve=True, packer=None, txn=None, max_phys=None,
+              grouper=None):
         """
         Search the key range *lo..hi* for individual records, combining them
         into a batches.
@@ -916,7 +917,7 @@ class Collection(object):
         combined, the number of batches produced, and the last key visited
         before `max_phys` was exceeded.
 
-        Batch size is controlled via `maxrecs` and `maxbytes`; at least one
+        Batch size is controlled via `max_recs` and `max_bytes`; at least one
         must not be ``None``. Larger sizes may cause pathological behaviour in
         the storage engine (for example, space inefficiency). Since batches are
         fully decompressed before any member may be accessed via
@@ -969,11 +970,19 @@ class Collection(object):
                 set to `last_key` of the previous run, until `found` returns
                 ``0``. This allows batching to complete over several
                 transactions without blocking other users.
+
+            `grouper`:
+                Specifies a grouping function used to decide when to avoid
+                compressing unrelated records. The function is passed a
+                record's value. A new batch is triggered each time the
+                function's return value changes.
+
         """
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
         txn = txn or self.engine
         packer = packer or self.packer
         it = self._iter(txn, None, lo, hi, False, None, True, max_phys)
+        groupval = None
         items = []
 
         for batch, key, data in it:
@@ -988,7 +997,12 @@ class Collection(object):
                         items.pop()
                         self._write_batch(txn, items, packer)
                         items.append((key, data))
-                if max_recs and len(items) == max_recs:
+                done = max_recs and len(items) == max_recs
+                if (not done) and grouper:
+                    val = grouper(self.encoder.unpack(data))
+                    done = val != groupval
+                    groupval = val
+                if done:
                     self._write_batch(txn, items, packer)
         self._write_batch(txn, items, packer)
 
