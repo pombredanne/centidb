@@ -376,8 +376,8 @@ class KeysTest:
 
     def test_single(self):
         for val in self.SINGLE_VALS:
-            encoded = centidb.encode_keys((val,))
-            decoded = centidb.decode_keys(encoded)
+            encoded = centidb.encode_keys('', (val,))
+            decoded = centidb.decode_keys('', encoded)
             eq([(val,)], decoded, 'input was %r' % (val,))
 
     def test_single_sort_lower(self):
@@ -442,9 +442,9 @@ class TupleTest:
 
     def testStringSorting(self):
         strs = [(x,) for x in ('dave', 'dave\x00', 'dave\x01', 'davee\x01')]
-        encs = map(centidb.encode_keys, strs)
+        encs = map(lambda o: centidb.encode_keys('', o), strs)
         encs.sort()
-        eq(strs, [centidb.centidb.decode_key(x) for x in encs])
+        eq(strs, [centidb.centidb.decode_key('', x) for x in encs])
 
     def testTupleNonTuple(self):
         pass
@@ -601,6 +601,28 @@ class RecordTest:
     def test_basic(self):
         self.assertRaises(TypeError, centidb.Record)
         centidb.Record('ok', 'ok')
+
+
+@register()
+class BatchTest:
+    ITEMS = [
+        ((1,), 'dave'),
+        ((2,), 'jim'),
+        ((3,), 'zork')
+    ]
+
+    def setUp(self):
+        self.e = centidb.support.ListEngine()
+        self.store = centidb.Store(self.e)
+        self.coll = centidb.Collection(self.store, 'people')
+
+    def testBatch(self):
+        old_len = len(self.e.pairs)
+        self.coll.putitems(self.ITEMS)
+        assert len(self.e.pairs) == (old_len + len(self.ITEMS))
+        self.coll.batch(max_recs=len(self.ITEMS))
+        assert len(self.e.pairs) == (old_len + 1)
+        assert list(self.coll.iteritems()) == self.ITEMS
 
 
 @register()

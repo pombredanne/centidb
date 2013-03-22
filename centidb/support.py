@@ -202,7 +202,7 @@ class ListEngine(object):
             xr = xrange(idx, -1, -1)
         else:
             xr = xrange(idx, len(self.pairs))
-        return itertools.imap(self.pairs.__getitem__, xr)
+        return itertools.imap(self.pairs[:].__getitem__, xr)
 
 
 class PlyvelEngine(object):

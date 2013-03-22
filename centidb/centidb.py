@@ -158,8 +158,8 @@ def decode_int_s(s):
 
 def decode_offsets(s):
     io = cStringIO.StringIO(s)
-    more = functools.partial(decode_int,
-                             functools.partial(io.read, 1), io.read)
+    getc = functools.partial(io.read, 1)
+    more = functools.partial(decode_int, getc, io.read)
     pos = 0
     out = [0]
     for _ in xrange(more()):
@@ -740,7 +740,7 @@ class Collection(object):
             self._index_keys = IndexKeyBuilder(self.indices.values()).build
         return index
 
-    def _logical_iter(self, txn, startkey, reverse):
+    def _logical_iter(self, it, reverse):
         #   * When iterating forward, if first yielded key lacks collection
         #     prefix, result of iteration is empty.
         #   * When iterating reverse, if first yielded key lacks collection
@@ -749,7 +749,6 @@ class Collection(object):
         #     startpred() or not self.prefix.
         #   * Records are yielded following startpred() until not endpred() or
         #     not self.prefix.
-        it = txn.iter(startkey, reverse)
         tup = next(it, None)
         if tup and tup[0].startswith(self.prefix):
             it = itertools.chain((tup,), it)
@@ -789,7 +788,7 @@ class Collection(object):
     # -----------------------------------------------------------
     # _iter(, , , False): lokey=prefix, hikey=ng(prefix)
     #                     startpred=lokey, endpred=
-    def _iter(self, txn, key, lo, hi, reverse, max_, include):
+    def _iter(self, txn, key, lo, hi, reverse, max_, include, max_phys):
         if key is not None:
             key = tuplize(key)
             if reverse:
@@ -812,15 +811,19 @@ class Collection(object):
             hikey = encode_keys(self.prefix, hi)
 
         if reverse:
-            k = hikey
+            startkey = hikey
             startpred = hi and (hi.__lt__ if include else hi.__le__)
             endpred = lo and lo.__ge__
         else:
-            k = lokey
+            startkey = lokey
             startpred = None
             endpred = hi and (hi.__ge__ if include else hi.__gt__)
 
-        it = self._logical_iter(txn or self.engine, k, reverse)
+        it = (txn or self.engine).iter(startkey, reverse)
+        if max_phys is not None:
+            it = itertools.islice(it, max_phys)
+
+        it = self._logical_iter(it, reverse)
         if max_ is not None:
             it = itertools.islice(it, max_)
         if startpred:
@@ -847,7 +850,7 @@ class Collection(object):
         ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
         txn_id = getattr(txn or self.engine, 'txn_id', None)
-        it = self._iter(txn, key, lo, hi, reverse, max, include)
+        it = self._iter(txn, key, lo, hi, reverse, max, include, None)
         for batch, key, data in it:
             obj = self.encoder.unpack(data)
             if rec:
@@ -889,7 +892,7 @@ class Collection(object):
         a :py:class:`Record` instance for use when later re-saving the record,
         otherwise only the record's value is returned."""
         key = tuplize(key)
-        it = self._iter(txn, None, key, key, False, None, True)
+        it = self._iter(txn, None, key, key, False, None, True, None)
         tup = next(it, None)
         if tup:
             txn_id = getattr(txn or self.engine, 'txn_id', None)
@@ -903,8 +906,8 @@ class Collection(object):
             return Record(self, default) if rec else default
         return
 
-    def batch(self, lo, hi, maxrecs=None, maxbytes=None, preserve=True,
-            packer=None, txn=None, maxphys=None):
+    def batch(self, lo=None, hi=None, max_recs=None, max_bytes=None,
+            preserve=True, packer=None, txn=None, max_phys=None):
         """
         Search the key range *lo..hi* for individual records, combining them
         into a batches.
@@ -913,7 +916,7 @@ class Collection(object):
 
         Returns `(found, made, last_key)` indicating the number of records
         combined, the number of batches produced, and the last key visited
-        before `maxphys` was exceeded.
+        before `max_phys` was exceeded.
 
         Batch size is controlled via `maxrecs` and `maxbytes`; at least one
         must not be ``None``. Larger sizes may cause pathological behaviour in
@@ -929,12 +932,12 @@ class Collection(object):
             `hi`:
                 Highest search key.
 
-            `maxrecs`:
+            `max_recs`:
                 Maximum number of records contained by any single batch. When
                 this count is reached, the current batch is saved and a new one
                 is created.
 
-            `maxbytes`:
+            `max_bytes`:
                 Maximum size in bytes of the batch record's value after
                 compression, or ``None`` for no maximum size. When not
                 ``None``, values are recompressed after each member is
@@ -961,7 +964,7 @@ class Collection(object):
                 Transaction to use, or ``None`` to indicate the default
                 behaviour of the storage engine.
 
-            `maxphys`:
+            `max_phys`:
                 Maximum number of physical keys to visit in any particular
                 call. A collection may be incrementally batched by repeatedly
                 invoking :py:meth:`Collection.batch` with `max` set, and `lo`
@@ -969,8 +972,47 @@ class Collection(object):
                 ``0``. This allows batching to complete over several
                 transactions without blocking other users.
         """
-        assert maxsize or maxrecs, 'maxsize and/or maxrecs must be provided.'
+        assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
+        txn = txn or self.engine
+        packer = packer or self.packer
+        it = self._iter(txn, None, lo, hi, False, None, True, max_phys)
+        items = []
 
+        for batch, key, data in it:
+            if preserve and batch:
+                self._write_batch(txn, items, packer)
+            else:
+                txn.delete(encode_keys(self.prefix, key))
+                items.append((key, data))
+                if max_bytes:
+                    _, encoded = self._prepare_batch(items, packer)
+                    if len(encoded) > max_bytes:
+                        items.pop()
+                        self._write_batch(txn, items, packer)
+                        items.append((key, data))
+                if max_recs and len(items) == max_recs:
+                    self._write_batch(txn, items, packer)
+        self._write_batch(txn, items, packer)
+
+    def _write_batch(self, txn, items, packer):
+        if items:
+            phys, data = self._prepare_batch(items, packer)
+            txn.put(phys, data)
+            del items[:]
+
+    def _prepare_batch(self, items, packer):
+        io = cStringIO.StringIO()
+        io.write(encode_int(len(items)))
+        for _, data in items:
+            io.write(encode_int(len(data)))
+        packer_prefix = self.store._encoder_prefix.get(packer)
+        if packer_prefix is None:
+            packer_prefix = self.store.add_encoder(packer)
+        io.write(packer_prefix)
+        concat = ''.join(data for _, data in items)
+        io.write(packer.pack(concat))
+        phys = encode_keys(self.prefix, [key for key, _ in reversed(items)])
+        return phys, io.getvalue()
 
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
@@ -1008,7 +1050,7 @@ class Collection(object):
         `it`. If `eat` is ``True``, returns the number of items processed,
         otherwise returns an iterator that lazily calls :py:meth:`put` and
         yields its return values."""
-        return _eat(eat, (self.put(x, txn, packer, y) for x, y in it), True)
+        return _eat(eat, (self.put(y, txn, packer, x) for x, y in it), True)
 
     def put(self, rec, txn=None, packer=None, key=None, virgin=False):
         """Create or overwrite a record.
@@ -1251,7 +1293,7 @@ KEY_ENCODER = Encoder('key', functools.partial(decode_key, ''),
                              functools.partial(encode_keys, ''))
 
 #: Encode Python objects using the cPickle version 2 protocol."""
-PICKLE_ENCODER = Encoder('pickle', pickle.loads,
+PICKLE_ENCODER = Encoder('pickle', lambda b: pickle.loads(str(b)),
                          functools.partial(pickle.dumps, protocol=2))
 
 #: Perform no compression at all.
