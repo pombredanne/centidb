@@ -773,6 +773,42 @@ be tuples in order to remain compatible with :py:class:`Index`. Needs further
 consideration.
 
 
+Record Format
++++++++++++++
+
+Non-batch
+---------
+
+A non-batch record is indicated when key decoding yields a single tuple.
+
+In this case the record key corresponds exactly to the output of
+:py:func:`encode_keys` for the single key present. The value has a variable
+length integer prefix indicating the packer used, and the remainder is the
+output of :py:meth:`Encoder.pack` from the collection's associated encoder.
+
+Batch
+-----
+
+A batch record is indicated when key decoding yields multiple tuples.
+
+With batch compression, the key corresponds to the reversed list of member
+keys. For example, when saving records with keys ``[('a',), ('b',), ('c',)]``,
+the batch record key instead encodes the list ``[('c',), ('b',), ('a',)]``.
+This allows the correct record to be located with a single ``>=`` iteration
+using any member key, and allows a member's existence to be confirmed without
+further value decoding.
+
+The value is comprised of a variable-length integer indicating the number of
+records present, followed by variable-length integers indicating the unpacked
+encoded length for each record, in the original key order (i.e. not reversed).
+The count is encoded to permit later addition of a `pure keys` mode, as
+mentioned in the Futures section.
+
+After the variable-length integer array comes a final variable length integer
+indicating the compressor used. The remainder of the value is the packed
+concatenation of the encoded record values, again in key order.
+
+
 Metadata
 ++++++++
 
@@ -929,6 +965,7 @@ Probably:
 11. More future proof metadata format.
 12. Convert Index/Collection guts to visitor-style design, replace find/iter
     methods with free functions implemented once.
+13. datetime support
 
 Maybe:
 
