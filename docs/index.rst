@@ -4,6 +4,18 @@ centidb
 
 `http://github.com/dw/centidb <http://github.com/dw/centidb>`_
 
+.. raw:: html
+
+    <div style="border: 2px solid red; background: #ffefef; color: black;
+                padding: 1ex; text-align: center;">
+        <div style="margin: auto; max-width: 80% font-size: larger;;">
+        <strong style="color: #7f0000">WORK IN PROGRESS</strong><br>
+        <br>
+        This is a design prototype. Even if it is finished, it may only be
+        useful as the basis for a library that may never exist.
+        </div>
+    </div>
+
 .. currentmodule:: centidb
 .. toctree::
     :hidden:
