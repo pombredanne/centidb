@@ -1013,17 +1013,21 @@ class Collection(object):
             del items[:]
 
     def _prepare_batch(self, items, packer):
-        io = cStringIO.StringIO()
-        io.write(encode_int(len(items)))
-        for _, data in items:
-            io.write(encode_int(len(data)))
         packer_prefix = self.store._encoder_prefix.get(packer)
-        if packer_prefix is None:
+        if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer)
-        io.write(packer_prefix)
-        concat = ''.join(data for _, data in items)
-        io.write(packer.pack(concat))
         phys = encode_keys(self.prefix, [key for key, _ in reversed(items)])
+        io = cStringIO.StringIO()
+
+        if len(items) == 1:
+            io.write(packer_prefix + packer.pack(items[0][1]))
+        else:
+            io.write(encode_int(len(items)))
+            for _, data in items:
+                io.write(encode_int(len(data)))
+            io.write(packer_prefix)
+            concat = ''.join(data for _, data in items)
+            io.write(packer.pack(concat))
         return phys, io.getvalue()
 
     def _split_batch(self, rec, txn):
@@ -1123,7 +1127,7 @@ class Collection(object):
 
         packer = packer or self.packer
         packer_prefix = self.store._encoder_prefix.get(packer)
-        if packer_prefix is None:
+        if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer)
         txn.put(encode_keys(self.prefix, obj_key),
                 packer_prefix + packer.pack(self.encoder.pack(rec.data)))
