@@ -239,12 +239,12 @@ Batch compression
 +++++++++++++++++
 
 Batch compression is supported by way of :py:meth:`Collection.batch`: this is
-where a contiguous range of records have their values combined before being
-passed to the compressor. The resulting stream is saved using a special key
-that still permits efficient child lookup. The main restriction is that batches
-cannot violate the key ordering, meaning only contiguous ranges may be
-combined. Calls to :py:func:`Collection.put` will cause any overlapping batch
-to be split as part of the operation.
+where a range of records have their values combined before being passed to the
+compressor. The resulting stream is saved using a special key that still
+permits efficient child lookup. The main restriction is that batches cannot
+violate the key ordering, meaning only contiguous ranges may be combined. Calls
+to :py:func:`Collection.put` will cause any overlapping batch to be split as
+part of the operation.
 
 Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
@@ -968,6 +968,32 @@ Another option would be to allow alternative key encodings for
 :py:class:`Collection` only, with the restriction that keys must still always
 be tuples in order to remain compatible with :py:class:`Index`. Needs further
 consideration.
+
+Mapping Protocol
+++++++++++++++++
+
+There are a bunch of reasons why the mapping protocol isn't supported by
+:py:class:`Collection`.
+
+Firstly, the mapping protocol was designed with unordered maps in mind, and
+provides no support for range queries. This greatly limits the 'adaptive power'
+of grafting the mapping interface on to :py:class:`Collection`.
+
+Secondly, our 'mapping' is only superficial in nature. Given some key, we map
+it to **a copy of** it's associated value, not some unique object itself. In
+this respect our interface is more like a translator than a mapper.
+Implementing an interface that usually returns identical value objects given
+the same key repeatedly would only encourage buggy code by suggesting its
+usefulness in circumstances that aren't valid.
+
+Thirdly, to get reasonable performance from :py:meth:`Collection.put` requires
+that a :py:class:`Record` descriptor is provided, rather than the record value
+itself. Attempting to mimic this using the mapping protocol would feel stupid
+and broken.
+
+Finally, encouraging users to think about extremely distinct implementations as
+painlessly interchangeable is a bad idea. Users should understand the code they
+are integrating with, rather than being encouraged to treat it as a black box.
 
 
 Record Format
