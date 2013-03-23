@@ -120,7 +120,7 @@ Exact lookup
 ++++++++++++
 
 Lookup of a single record is accomplished by :py:meth:`Collection.get`, which
-works identically to :py:meth:`dict.get`. The first parameter is the key to
+works similarly to :py:meth:`dict.get`. The first parameter is the key to
 return, and an optional second parameter specifies a default if the key is
 missing:
 
@@ -136,6 +136,24 @@ missing:
     >>> # Default is returned.
     >>> people.get(99, default=('Angel', 'boy'))
     ('Angel', 'boy')
+
+Be aware that unlike :py:meth:`dict.get`, :py:meth:`Collection.get` and all
+similar methods return freshly decoded *copies* of the associated value. In
+this respect :py:class:`Collection` only behaves superficially like
+:py:class:`dict`:
+
+::
+
+    >>> t1 = people.get(2)
+    >>> t2 = people.get(2)
+
+    >>> # The copies are equal:
+    >>> t1 == t2
+    True
+
+    >>> # But they are distinct:
+    >>> t1 is t2
+    False
 
 
 Inexact lookup
@@ -189,6 +207,15 @@ supported parameter combinations.
         >>> # All keys, end to start.
         >>> list(people.iterkeys(reverse=True))
         [(3L,), (2L,), (1L,)]
+
+        >>> # Keys from 2 to end:
+        >>> list(people.iterkeys(2))
+        [(2L,), (3L,)]
+
+        >>> # Keys from 2 to start:
+        >>> list(people.iterkeys(2, reverse=True))
+        [(2L,), (1L,)]
+
 
 :py:meth:`Collection.itervalues`
 
@@ -783,6 +810,20 @@ Archiving Data
 
 
 
+Cookbook
+########
+
+Changing key function
++++++++++++++++++++++
+
+The simplest way to migrate to a new key function is to create a new
+collection, and iteratively copy from the old collection:
+
+::
+
+    >>> new_coll.puts(old_coll.itervalues())
+
+
 
 Performance
 ###########
@@ -982,14 +1023,18 @@ of grafting the mapping interface on to :py:class:`Collection`.
 Secondly, our 'mapping' is only superficial in nature. Given some key, we map
 it to **a copy of** it's associated value, not some unique object itself. In
 this respect our interface is more like a translator than a mapper.
-Implementing an interface that usually returns identical value objects given
-the same key repeatedly would only encourage buggy code by suggesting its
+Implementing an interface that usually returns identical value objects when
+repeatedly given the same key would only encourage buggy code, by implying its
 usefulness in circumstances that aren't valid.
 
 Thirdly, to get reasonable performance from :py:meth:`Collection.put` requires
 that a :py:class:`Record` descriptor is provided, rather than the record value
 itself. Attempting to mimic this using the mapping protocol would feel stupid
 and broken.
+
+Fourthly, many storage engines permit duplicate keys, which is directly in
+contravention to how the mapping protocol works. While :py:class:`Collection`
+does not yet support duplicate keys, an obvious future extension would.
 
 Finally, encouraging users to think about extremely distinct implementations as
 painlessly interchangeable is a bad idea. Users should understand the code they
