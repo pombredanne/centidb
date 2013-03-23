@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-"""sortedfile distutils script.
+"""centidb distutils script.
 """
 
 from setuptools import setup
