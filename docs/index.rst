@@ -191,7 +191,7 @@ Range iteration
 
 Similar to dictionaries a family of methods assist with iteration, however
 these methods also allow setting a start/stop key, or a lo/hi range, and
-walking in reverse. Refer to :ref:`query-parameters` below for the full set of
+walking in reverse. Refer to :ref:`query-parameters` for the full set of
 supported combinations.
 
 :py:meth:`Collection.iterkeys`
@@ -238,7 +238,7 @@ supported combinations.
 Keys & Indices
 ++++++++++++++
 
-While auto-incrementing keys are often useful and efficient to store, they
+While auto-incrementing keys are useful and efficient to store, they often
 prevent the ordered nature of the storage engine from being fully exploited. As
 we can efficiently iterate key ranges, by controlling the key we can order the
 collection in ways that are very useful for queries.
@@ -255,7 +255,7 @@ without a secondary index.
 
 **Note:** anywhere a key is expected by the library, if a single value is
 passed it will be *automatically wrapped in a 1-tuple*. Conversely, it is
-important to remember this when handling keys returned by the library - keys
+important to remember this when handling keys returned by the library — keys
 are *always* tuples.
 
 
