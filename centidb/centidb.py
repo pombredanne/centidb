@@ -453,7 +453,7 @@ class Index(object):
             yield key
 
     def iterpairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None):
+            include=False, txn=None):
         """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record.
@@ -462,7 +462,7 @@ class Index(object):
         return self._iter(txn, args, lo, hi, reverse, max, include)
 
     def itertups(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None):
+            include=False, txn=None):
         """Yield all index tuples in the index, in tuple order. The index tuple
         is the part of the entry produced by the user's index function, i.e.
         the index's natural "value"."""
@@ -470,13 +470,13 @@ class Index(object):
             self.iterpairs(args, lo, hi, reverse, max, include, txn))
 
     def iterkeys(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None):
+            include=False, txn=None):
         """Yield all keys in the index, in tuple order."""
         return itertools.imap(ITEMGETTER_1,
             self.iterpairs(args, lo, hi, reverse, max, include, txn))
 
     def iteritems(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None, rec=False):
+            include=False, txn=None, rec=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order. If `rec` is ``True``, :py:class:`Record` instances are yielded
         instead of record values."""
@@ -489,14 +489,14 @@ class Index(object):
                 warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
     def itervalues(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None, rec=None):
+            include=False, txn=None, rec=None):
         """Yield all values referred to by the index, in tuple order. If `rec`
         is ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
         return itertools.imap(ITEMGETTER_1,
             self.iteritems(args, lo, hi, reverse, max, include, txn, rec))
 
-    def find(self, args=None, lo=None, hi=None, reverse=None, include=True,
+    def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
              txn=None, rec=None, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
@@ -517,7 +517,7 @@ class Index(object):
         """Return the first matching record referred to by the index, in tuple
         order. If `rec` is ``True`` a :py:class:`Record` instance is returned
         of the record value."""
-        for tup in self.iteritems(lo=x, hi=x, include=True, rec=rec):
+        for tup in self.iteritems(lo=x, hi=x, include=False, rec=rec):
             return tup[1]
         if rec and default is not None:
             return Record(self.coll, default)
@@ -845,7 +845,7 @@ class Collection(object):
         return idx_keys
 
     def iteritems(self, key=None, lo=None, hi=None, reverse=False, max=None,
-            include=True, txn=None, rec=None):
+            include=False, txn=None, rec=None):
         """Yield all `(key tuple, value)` tuples in key order. If `rec` is
         ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
@@ -859,13 +859,13 @@ class Collection(object):
             yield key, obj
 
     def iterkeys(self, key=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None, rec=None):
+            include=False, txn=None, rec=None):
         """Yield key tuples in key order."""
         return itertools.imap(ITEMGETTER_0,
             self.iteritems(key, lo, hi, reverse, max, include, txn, rec))
 
     def itervalues(self, key=None, lo=None, hi=None, reverse=None, max=None,
-            include=True, txn=None, rec=None):
+            include=False, txn=None, rec=None):
         """Yield record values in key order. If `rec` is ``True``,
         :py:class:`Record` instances are yielded instead of record values."""
         return itertools.imap(ITEMGETTER_1,
@@ -875,7 +875,7 @@ class Collection(object):
         """Yield `get(k)` for each `k` in the iterable `keys`."""
         return (self.get(x, default, rec, txn) for k in keys)
 
-    def find(self, key=None, lo=None, hi=None, reverse=None, include=True,
+    def find(self, key=None, lo=None, hi=None, reverse=None, include=False,
              txn=None, rec=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
