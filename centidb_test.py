@@ -617,11 +617,11 @@ class BatchTest:
         self.coll = centidb.Collection(self.store, 'people')
 
     def testBatch(self):
-        old_len = len(self.e.pairs)
+        old_len = len(self.e.items)
         self.coll.putitems(self.ITEMS)
-        assert len(self.e.pairs) == (old_len + len(self.ITEMS))
+        assert len(self.e.items) == (old_len + len(self.ITEMS))
         self.coll.batch(max_recs=len(self.ITEMS))
-        assert len(self.e.pairs) == (old_len + 1)
+        assert len(self.e.items) == (old_len + 1)
         assert list(self.coll.iteritems()) == self.ITEMS
 
 

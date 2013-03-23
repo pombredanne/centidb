@@ -22,19 +22,17 @@
     :hidden:
     :maxdepth: 2
 
-**centidb** is a small library compromising between the minimalism of key/value
-stores and the convenience of SQL. It augments any store offering an
-ordered-map interface to add support for keys composed of tuples rather than
-bytestrings, and easy maintenance of secondary indices.
+**centidb** is a compromise between the minimalism of key/value stores and the
+convenience of SQL. It augments any store offering an ordered-map interface to
+add support for keys composed of tuples rather than bytestrings, and easy
+maintenance of secondary indices, with key and index functions written directly
+in Python syntax.
 
 There is no fixed value type or encoding, key scheme, compressor, or storage
 engine, allowing integration with whatever suits a project. Batch compression
 allows read performance to be traded for storage efficiency, while still
 allowing transparent access to individual records. Arbitrary key ranges may be
 compressed and the batch size is configurable.
-
-Since it is a Python library, key and index functions are expressed directly as
-Python functions.
 
 The name is due to the core being under 500 lines of code excluding docstrings
 and speedups, making it over 100 times smaller than alternatives with
@@ -66,13 +64,13 @@ collection:
 
     people = centidb.Collection(store, 'people')
 
-Underneath a few interesting things occurred. Since our in-memory engine had no
+Underneath a few interesting things occurred. Since our engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
 and records representing the counter and the collection were written:
 
 ::
     
-    >>> pprint(engine.pairs)
+    >>> pprint(engine.items)
     [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
      ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
 
@@ -102,7 +100,7 @@ More magic is visible underneath:
 
 ::
 
-    >>> pprint(engine.pairs)
+    >>> pprint(engine.items)
     [('\x00(people\x00',                    ' (people\x00\x15\n\x0f'),
      ('\x01(\x01\x01collections_idx\x00',   ' (\x01\x01collections_idx\x00\x15\x0b'),
      ('\x01(key:people\x00',                ' (key:people\x00\x15\x04'),
@@ -194,7 +192,7 @@ Range iteration
 Similar to dictionaries a family of methods assist with iteration, however
 these methods also allow setting a start/stop key, or a lo/hi range, and
 walking in reverse. Refer to :ref:`query-parameters` below for the full set of
-supported parameter combinations.
+supported combinations.
 
 :py:meth:`Collection.iterkeys`
 

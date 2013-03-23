@@ -166,43 +166,43 @@ class ListEngine(object):
     """
     def __init__(self):
         #: Sorted list of `(key, value)` tuples.
-        self.pairs = []
-        #: Size in bytes for stored pairs, i.e.
-        #: ``sum(len(k)+len(v) for k, v in pairs)``.
+        self.items = []
+        #: Size in bytes for stored items, i.e.
+        #: ``sum(len(k)+len(v) for k, v in items)``.
         self.size = 0
 
     def get(self, k):
-        idx = bisect.bisect_left(self.pairs, (k,))
-        if idx < len(self.pairs) and self.pairs[idx][0] == k:
-            return self.pairs[idx][1]
+        idx = bisect.bisect_left(self.items, (k,))
+        if idx < len(self.items) and self.items[idx][0] == k:
+            return self.items[idx][1]
 
     def put(self, k, v):
-        idx = bisect.bisect_left(self.pairs, (k,))
-        if idx < len(self.pairs) and self.pairs[idx][0] == k:
-            self.size += len(v) - len(self.pairs[idx][1])
-            self.pairs[idx] = (k, v)
+        idx = bisect.bisect_left(self.items, (k,))
+        if idx < len(self.items) and self.items[idx][0] == k:
+            self.size += len(v) - len(self.items[idx][1])
+            self.items[idx] = (k, v)
         else:
-            self.pairs.insert(idx, (k, v))
+            self.items.insert(idx, (k, v))
             self.size += len(k) + len(v)
 
     def delete(self, k):
-        idx = bisect.bisect_left(self.pairs, (k,))
-        if idx < len(self.pairs) and self.pairs[idx][0] == k:
-            self.size -= len(k) + len(self.pairs[idx][1])
-            self.pairs.pop(idx)
+        idx = bisect.bisect_left(self.items, (k,))
+        if idx < len(self.items) and self.items[idx][0] == k:
+            self.size -= len(k) + len(self.items[idx][1])
+            self.items.pop(idx)
 
     def iter(self, k, reverse):
-        if not self.pairs:
+        if not self.items:
             return iter([])
-        idx = bisect.bisect_left(self.pairs, (k,)) if k else 0
+        idx = bisect.bisect_left(self.items, (k,)) if k else 0
         if reverse:
-            idx -= len(self.pairs) == idx
-            #if self.pairs:
-                #idx -= self.pairs[idx][0] > k
+            idx -= len(self.items) == idx
+            #if self.items:
+                #idx -= self.items[idx][0] > k
             xr = xrange(idx, -1, -1)
         else:
-            xr = xrange(idx, len(self.pairs))
-        return itertools.imap(self.pairs[:].__getitem__, xr)
+            xr = xrange(idx, len(self.items))
+        return itertools.imap(self.items[:].__getitem__, xr)
 
 
 class PlyvelEngine(object):
