@@ -76,6 +76,10 @@ and records representing the counter and the collection were written:
     [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
      ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
 
+
+Insertion
++++++++++
+
 Now let's insert some people:
 
 ::
@@ -88,9 +92,6 @@ Now let's insert some people:
 
     >>> people.put(('Spike', 'boy'))
     <Record people:(3L) ('Spike', 'boy')>
-
-    >>> people.get(2)
-    ('Willow', 'girl')
 
 Since we didn't specify an encoder during construction, the default pickle
 encoder is used which allows almost any Python value, although here we use
@@ -113,6 +114,100 @@ More magic is visible underneath:
 Notice the ``key:people`` counter and freshly inserted people records. Pay
 attention to the record keys, occupying only 3 bytes despite their prefix also
 encoding the collection.
+
+
+Exact lookup
+++++++++++++
+
+Lookup of a single record is accomplished by :py:meth:`Collection.get`, which
+works identically to :py:meth:`dict.get`. The first parameter is the key to
+return, and an optional second parameter specifies a default if the key is
+missing:
+
+::
+
+    >>> people.get(2)
+    ('Willow', 'girl')
+
+    >>> # No such record.
+    >>> people.get(99)
+    None
+
+    >>> # Default is returned.
+    >>> people.get(99, default=('Angel', 'boy'))
+    ('Angel', 'boy')
+
+
+Inexact lookup
+++++++++++++++
+
+As the storage engine keeps records in key order, queries relating to this
+order are very efficient. :py:meth:`Collection.find` can be used to return the
+first matching record from a given key range. For example, to return the lowest
+and highest records:
+
+::
+
+    >>> # Find record with lowest key, 1
+    >>> people.find()
+    ('Buffy', 'girl')
+
+    >>> # Find record with highest key, 3
+    >>> people.find(reverse=True)
+    ('Spike', 'boy')
+
+We can locate records based only on the relation of their key to some search
+key:
+
+::
+
+    >>> # Find first record with 2 <= key < 99.
+    >>> people.find(lo=2, hi=99)
+    ('Willow', 'girl')
+
+    >>> # Find last record with 2 <= key < 99.
+    >>> people.find(lo=2, hi=99, reverse=True)
+    ('Spike', 'boy')
+
+
+Range iteration
++++++++++++++++
+
+Similar to dictionaries a family of methods assist with iteration, however
+these methods also allow setting a start/stop key, or a lo/hi range, and
+walking in reverse. Refer to :ref:`query-parameters` below for the full set of
+supported parameter combinations.
+
+:py:meth:`Collection.iterkeys`
+
+    ::
+
+        >>> # All keys, start to end:
+        >>> list(people.iterkeys())
+        [(1L,), (2L,), (3L,)]
+
+        >>> # All keys, end to start.
+        >>> list(people.iterkeys(reverse=True))
+        [(3L,), (2L,), (1L,)]
+
+:py:meth:`Collection.itervalues`
+
+    ::
+
+        >>> # All values, start to end:
+        >>> pprint(list(people.itervalues()))
+        [('Buffy', 'girl'),
+         ('Willow', 'girl'),
+         ('Spike', 'boy')]
+
+:py:meth:`Collection.iteritems`
+
+    ::
+
+        >>> # All (key, value) pairs, from 99 to 2:
+        >>> pprint(list(people.iteritems(lo=2, hi=99, reverse=True)))
+        [((3L,), ('Spike', 'boy')),
+         ((2L,), ('Willow', 'girl'))]
 
 
 Keys
@@ -155,7 +250,7 @@ Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
 batching can occur, although this restriction may be removed in future.
 
-A run of ``examples/batch.py`` demonstrates the tradeoffs of compression:
+A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
 
 ::
 
@@ -246,12 +341,14 @@ integer was wrapped in a 1-tuple.
 
 
 
+.. _query-parameters:
+
 Query Parameters
 ++++++++++++++++
 
 The following parameters are supported everywhere some kind of key enumeration
-may occur using the `Collection` or `Index` classes, for example all `iter*()`
-methods.
+may occur using :py:class:`Collection` or :py:class:`Index`, for example all
+`iter*()` methods.
 
     `lo`:
         Lowest key returned. All returned keys will be `>= lo`. If unspecified,
