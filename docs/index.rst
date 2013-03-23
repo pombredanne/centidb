@@ -135,9 +135,9 @@ missing:
     >>> people.get(99, default=('Angel', 'boy'))
     ('Angel', 'boy')
 
-Be aware that unlike :py:meth:`dict.get`, :py:meth:`Collection.get` and all
-similar methods return freshly decoded *copies* of the associated value. In
-this respect :py:class:`Collection` only behaves superficially like
+Be aware that unlike :py:meth:`dict.get`, :py:meth:`Collection.get` and related
+methods return freshly decoded *copies* of the associated value. In this
+respect :py:class:`Collection` only superficially behaves like a
 :py:class:`dict`:
 
 ::
@@ -157,10 +157,10 @@ this respect :py:class:`Collection` only behaves superficially like
 Inexact lookup
 ++++++++++++++
 
-As the storage engine keeps records in key order, queries relating to this
-order are very efficient. :py:meth:`Collection.find` can be used to return the
-first matching record from a given key range. For example, to return the lowest
-and highest records:
+As the engine keeps records in key order, searches and enumerations on this
+order are very efficient. :py:meth:`Collection.find` can return the first
+matching record from a given key range. For example, to return the lowest and
+highest records:
 
 ::
 
@@ -172,8 +172,8 @@ and highest records:
     >>> people.find(reverse=True)
     ('Spike', 'boy')
 
-We can locate records based only on the relation of their key to some search
-key:
+We can locate records based only on the relation of their key to some
+constraining keys:
 
 ::
 
@@ -235,20 +235,88 @@ supported combinations.
          ((2L,), ('Willow', 'girl'))]
 
 
-Keys
-++++
+Keys & Indices
+++++++++++++++
 
-We're not limited to auto-incrementing keys, in fact keys are always treated as
-tuples containing one or more :py:func:`primitive values <encode_keys>`. The
-method used to encode the tuples for the storage engine results in a binary
-order that is identical to how the tuples would sort in Python, making working
-with them very intuitive.
+While auto-incrementing keys are often useful and efficient to store, they
+prevent the ordered nature of the storage engine from being fully exploited. As
+we can efficiently iterate key ranges, by controlling the key we can order the
+collection in ways that are very useful for queries.
 
-Let's recreate the ``people`` collection, this time 
+To make this ordering easy to exploit, keys are treated as tuples of one or
+more :py:func:`primitive values <encode_keys>`, with the order of earlier
+elements taking precedence over later elements, just like a Python tuple. When
+written to storage, tuples are carefully encoded so their ordering is preserved
+by the engine.
 
+Since multiple values can be provided, powerful grouping hierarchies can be
+designed to allow efficient range queries anywhere within the hierarchy, all
+without a secondary index.
+
+**Note:** anywhere a key is expected by the library, if a single value is
+passed it will be *automatically wrapped in a 1-tuple*. Conversely, it is
+important to remember this when handling keys returned by the library - keys
+are *always* tuples.
+
+
+Key functions
+-------------
+
+When instantiating :py:class:`Collection` you may provide a key function, which
+is responsible for producing record keys. The key function can accept either
+one or two parameters. In the first form (*key_func=*), only the record's value
+is passed, while in the second form (*txn_key_func=*) a reference to the active
+transaction is also passed.
+
+The key may be any supported primitive value, or a tuple of primitive values.
+For example, to assign a key based on the time in microseconds:
+
+    ::
+
+        >>> def usec_key(val):
+        ...     return int(1e6 * time.time())
+
+        >>> coll = centidb.Collection(store, 'stuff', key_func=usec_key)
+
+Or by UUID:
+
+    ::
+
+        >>> def uuid_key(val):
+        ...     return uuid.uuid4()
+
+        >>> coll = centidb.Collection(store, 'stuff', key_func=uuid_key)
+
+Finally, a key function may also be marked as `derived` (`derived_keys=True`),
+indicating that if the record value changes, the key function should be
+reinvoked to assign a new key.
+
+    ::
+
+        >>> # If username changes, we need to update the record's key.
+        >>> def user_name_key(val):
+        ...     return val['username']
+
+        >>> coll = centidb.Collection(store, 'users',
+        ...     key_func=user_name_key,
+        ...     derived_keys=True)
+
+
+Let's create a new collection, this time storing :py:class:`dicts <dict>` with
+some new fields. The collection holds user accounts for an organizational web
+application, where each user belongs to a particular department within a
+particular region.
+
+::
+
+    users = centidb.Collection(store, 'users')
+
+
+Compression
++++++++++++
 
 Value compression
-+++++++++++++++++
+-----------------
 
 Values may be compressed by passing a `packer=` argument to
 :py:meth:`Collection.put`, or to the :py:class:`Collection` constructor. A
@@ -261,7 +329,7 @@ simply a case of constructing an :py:class:`Encoder`.
 
 
 Batch compression
-+++++++++++++++++
+-----------------
 
 Batch compression is supported by way of :py:meth:`Collection.batch`: this is
 where a range of records have their values combined before being passed to the
@@ -300,43 +368,6 @@ A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
      After sz 2909.70kb cnt   30 ratio  2.39 ( snappy size 16, 1721.41 get/s 42.48 iter/s 8427.12 iterrecs/s)
      After sz 2874.35kb cnt   18 ratio  2.42 ( snappy size 32, 987.66 get/s 39.33 iter/s 8388.72 iterrecs/s)
      After sz 2859.89kb cnt   12 ratio  2.43 ( snappy size 64, 528.00 get/s 35.33 iter/s 8384.39 iterrecs/s)
-
-Keys & Indices
-##############
-
-When instantiating a Collection you may provide a key function, which is
-responsible for producing the unique (primary) key for the record. The key
-function can accept either one or two parameters. In the first form, only the
-record' value is passed, while in the second form .
-
-is passed three parameters:
-
-    `obj`:
-        Which is record value itself. Note this is not the Record instance, but
-        the :py:attr:`Record.data` (i.e. value) attribute.
-
-    `txn`:
-        The transaction this modification is a part of. May be used to
-        implement transactional assignment of IDs.
-
-The returned key may be any of the supported primitive values, or a tuple of
-primitive values. Note that any non-tuple values returned are automatically
-transformed into 1-tuples, and `you should expect this anywhere your code
-refers to the record's key`.
-
-For example, to assign a key based on the time in microseconds:
-
-::
-
-    def usec_key(val):
-        return int(1e6 * time.time())
-
-Or by UUID:
-
-::
-
-    def uuid_key(val):
-        return uuid.uuid4()
 
 
 Auto-increment
