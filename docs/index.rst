@@ -1,10 +1,7 @@
 
-centidb
-=======
-
-`http://github.com/dw/centidb <http://github.com/dw/centidb>`_
-
 .. raw:: html
+
+    <p>&nbsp;</p>
 
     <div style="border: 2px solid red; background: #ffefef; color: black;
                 padding: 1ex; text-align: center; width: 66%; margin: auto;
@@ -25,28 +22,22 @@ centidb
     :hidden:
     :maxdepth: 2
 
-`centidb` is a tiny database offering a compromise between the minimalism of
-key/value stores and the convenience of SQL. It wraps any store offering an
-ordered-map interface, adding features typical of more complex systems.
+**centidb** is a small library compromising between the minimalism of key/value
+stores and the convenience of SQL. It augments any store offering an
+ordered-map interface to add support for record keys composed of tuples rather
+than plain bytestrings, and easy maintenance of secondary indices.
 
-Functionality is provided to form ordered compound keys, create and query
-indices, and a binary tuple encoding that preserves the ordering of its
-elements. Combining the simplicity of a key/value store with the convenience of
-DBMS indexing, while absent of any storage-specific
-protocol/language/encoding/data model, or the impedence mismatch that
-necessitates use of ORMs, it provides for a compelling programming experience.
-
-There is no enforced value type or encoding, key scheme, compressor, or storage
-engine, allowing integration with whatever best suits a project. Batch
-compression is supported, trading read performance for improved compression
-while still permitting easy access to data. Arbitrary key ranges may be
+There is no fixed value type or encoding, key scheme, compressor, or storage
+engine, allowing integration with whatever suits a project. Batch compression
+is supported, trading read performance for improved compression, while still
+allowing transparent access to individual records. Arbitrary key ranges may be
 compressed and the batch size is configurable.
 
 Since it is a Python library, key and index functions are expressed directly as
 Python functions.
 
-Why `centi`-db? Because with a core under 500 lines of code (excluding
-docstrings and speedups), it is over 100 times smaller than alternatives with
+The name is due to the core being under 500 lines of code excluding docstrings
+and speedups, making it over 100 times smaller than alternatives with
 comparable features.
 
 
@@ -148,18 +139,47 @@ simply a case of constructing an :py:class:`Encoder`.
 
     coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
 
+
+Batch compression
++++++++++++++++++
+
 Batch compression is supported by way of :py:meth:`Collection.batch`: this is
-where a record range has its values combined before passing through the
-compressor. The resulting stream is saved using a special key that still
-permits efficient child lookup. The main restriction is that batches cannot
-violate the key ordering, meaning only contiguous ranges may be combined. Calls
-to :py:func:`Collection.put` will cause any overlapping batch to be split as
-part of the operation.
+where a contiguous range of records have their values combined before being
+passed to the compressor. The resulting stream is saved using a special key
+that still permits efficient child lookup. The main restriction is that batches
+cannot violate the key ordering, meaning only contiguous ranges may be
+combined. Calls to :py:func:`Collection.put` will cause any overlapping batch
+to be split as part of the operation.
 
 Since it is designed for archival, it is expected that records within a batch
 will not be written often. They must also already exist in the store before
 batching can occur, although this restriction may be removed in future.
 
+A run of ``examples/batch.py`` demonstrates the tradeoffs of compression:
+
+::
+
+    $ PYTHONPATH=. python examples/batch.py
+
+    Before sz 6952.27kb cnt  403                              (8194.45 get/s 49.37 iter/s 10513.34 iterrecs/s)
+     After sz 3250.61kb cnt  403 ratio  2.14 (   zlib size  1, 3822.55 get/s 20.28 iter/s 4315.76 iterrecs/s)
+     After sz 1878.92kb cnt  203 ratio  3.70 (   zlib size  2, 3156.00 get/s 29.51 iter/s 5280.37 iterrecs/s)
+     After sz 1177.15kb cnt  103 ratio  5.91 (   zlib size  4, 2544.36 get/s 30.88 iter/s 6297.81 iterrecs/s)
+     After sz 1029.91kb cnt   83 ratio  6.75 (   zlib size  5, 2351.24 get/s 34.14 iter/s 6621.98 iterrecs/s)
+     After sz  816.30kb cnt   53 ratio  8.52 (   zlib size  8, 1921.35 get/s 36.16 iter/s 7168.79 iterrecs/s)
+     After sz  635.69kb cnt   28 ratio 10.94 (   zlib size 16, 1098.36 get/s 31.94 iter/s 6970.13 iterrecs/s)
+     After sz  547.55kb cnt   16 ratio 12.70 (   zlib size 32, 511.96 get/s 34.20 iter/s 6628.68 iterrecs/s)
+     After sz  503.59kb cnt   10 ratio 13.81 (   zlib size 64, 288.66 get/s 28.56 iter/s 6507.69 iterrecs/s)
+
+    Before sz 6952.27kb cnt  403                              (8198.30 get/s 50.20 iter/s 10475.25 iterrecs/s)
+     After sz 4508.79kb cnt  405 ratio  1.54 ( snappy size  1, 6456.26 get/s 39.59 iter/s 7765.54 iterrecs/s)
+     After sz 2994.95kb cnt  205 ratio  2.32 ( snappy size  2, 5314.67 get/s 38.72 iter/s 7860.98 iterrecs/s)
+     After sz 2995.79kb cnt  105 ratio  2.32 ( snappy size  4, 4091.23 get/s 38.66 iter/s 8175.65 iterrecs/s)
+     After sz 3049.17kb cnt   85 ratio  2.28 ( snappy size  5, 3609.85 get/s 39.07 iter/s 8184.12 iterrecs/s)
+     After sz 2953.20kb cnt   55 ratio  2.35 ( snappy size  8, 2789.39 get/s 41.48 iter/s 8308.94 iterrecs/s)
+     After sz 2909.70kb cnt   30 ratio  2.39 ( snappy size 16, 1721.41 get/s 42.48 iter/s 8427.12 iterrecs/s)
+     After sz 2874.35kb cnt   18 ratio  2.42 ( snappy size 32, 987.66 get/s 39.33 iter/s 8388.72 iterrecs/s)
+     After sz 2859.89kb cnt   12 ratio  2.43 ( snappy size 64, 528.00 get/s 35.33 iter/s 8384.39 iterrecs/s)
 
 Keys & Indices
 ##############
@@ -463,8 +483,8 @@ These functions are based on `SQLite 4's sortable varint encoding
 .. autofunction:: centidb.decode_int
 
 
-Examples
-########
+Index Examples
+##############
 
 Index Usage
 +++++++++++
@@ -602,6 +622,71 @@ A future version may allow storing arbitrarily encoded values along with index
 entries as part of the API.
 
 
+Compression Examples
+####################
+
+Similar records
++++++++++++++++
+
+Batch compression is useful for storing collections of similar data, such as a
+collection of web pages sharing common HTML tags, or perhaps even sharing a
+common header and footer. By handing the compressor more data with similar
+redundancies, it can do a much better job of producing a smaller bitstream
+overall.
+
+Imagine you're building a web scraper, fetching data from a handful of domains
+that each has its own distinctive layout. You're not sure about the quality of
+your scraper, so you wish to store the source pages in case you need to parse
+them again due to a scraper bug.
+
+We're storing our pages in a collection with the record key being the page's
+URL. This means pages for the same domain will be physically grouped in the
+underlying storage engine, and that contiguous ranges of keys exist where all
+keys in the range relate to only a single domain.
+
+::
+
+    >>> coll = centidb.Collection(store, 'pages')
+    >>> # ...
+
+    >>> pprint(list(coll.iterkeys(max=5)))
+    ["http://bbb.com/page?id=1",
+     "http://bbb.com/page?id=2",
+     "http://bbb.com/page?id=3",
+     "http://ccc.com/page?id=1",
+     "http://ccc.com/page?id=2"]
+
+    >>> # Print the first record:
+    >>> pprint(coll.find())
+    {
+        "url": "http://bbb.com/page?id=1",
+        "html": ... # raw HTML
+    }
+
+Here we can use :py:meth:`Collection.batch` with the `grouper=` parameter to
+compress 10 pages at a time, while ensuring batches contain only pages relating
+to a single domain:
+
+::
+
+    >>> import urlparse
+
+    >>> def domain_grouper(obj):
+    ...     return urlparse.urlparse(obj['url']).netloc
+    ...
+
+    >>> # Rewrite all records in the collection into batches of 10, ensuring
+    >>> # pages from distinct domains don't get batched together:
+    >>> coll.batch(max_recs=10, grouper=domain_grouper)
+    (1000, 100, None) # Found items, made batches, next key
+
+
+Archiving Data
+++++++++++++++
+
+
+
+
 Performance
 ###########
 
@@ -724,69 +809,6 @@ Glossary
     *Primitive Value*
         A value of any type that :py:func:`encode_keys` supports.
 
-
-
-Cookbook
-########
-
-Compressing similar records
-+++++++++++++++++++++++++++
-
-Batch compression is useful for storing collections of similar data, such as a
-collection of web pages sharing common HTML tags, or perhaps even sharing a
-common header and footer. By handing the compressor more data with similar
-redundancies, it can do a much better job of producing a smaller bitstream
-overall.
-
-Imagine you're building a web scraper, fetching data from a handful of domains
-that each has its own distinctive layout. You're not sure about the quality of
-your scraper, so you wish to store the source pages in case you need to parse
-them again due to a scraper bug.
-
-We're storing our pages in a collection with the record key being the page's
-URL. This means pages for the same domain will be physically grouped in the
-underlying storage engine, and that contiguous ranges of keys exist where all
-keys in the range relate to only a single domain.
-
-::
-
-    >>> coll = centidb.Collection(store, 'pages')
-    >>> # ...
-
-    >>> pprint(list(coll.iterkeys(max=5)))
-    ["http://bbb.com/page?id=1",
-     "http://bbb.com/page?id=2",
-     "http://bbb.com/page?id=3",
-     "http://ccc.com/page?id=1",
-     "http://ccc.com/page?id=2"]
-
-    >>> # Print the first record:
-    >>> pprint(coll.find())
-    {
-        "url": "http://bbb.com/page?id=1",
-        "html": ... # raw HTML
-    }
-
-Here we can use :py:meth:`Collection.batch` with the `grouper=` parameter to
-compress 10 pages at a time, while ensuring batches contain only pages relating
-to a single domain:
-
-::
-
-    >>> import urlparse
-
-    >>> def domain_grouper(obj):
-    ...     return urlparse.urlparse(obj['url']).netloc
-    ...
-
-    >>> # Rewrite all records in the collection into batches of 10, ensuring
-    >>> # pages from distinct domains don't get batched together:
-    >>> coll.batch(max_recs=10, grouper=domain_grouper)
-    (1000, 100, None) # Found items, made batches, next key
-
-
-Compressing old data
-++++++++++++++++++++
 
 
 
