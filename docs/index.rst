@@ -80,7 +80,7 @@ and records representing the counter and the collection were written:
 Insertion
 +++++++++
 
-Now let's insert some people:
+Now let's insert some people using :py:meth:`Collection.put`:
 
 ::
 
