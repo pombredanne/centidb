@@ -770,18 +770,18 @@ keys in the range relate to only a single domain.
 
 ::
 
-    >>> coll = centidb.Collection(store, 'pages')
+    >>> pages = centidb.Collection(store, 'pages')
     >>> # ...
 
-    >>> pprint(list(coll.iterkeys(max=5)))
-    ["http://bbb.com/page?id=1",
-     "http://bbb.com/page?id=2",
-     "http://bbb.com/page?id=3",
-     "http://ccc.com/page?id=1",
-     "http://ccc.com/page?id=2"]
+    >>> pprint(list(pages.iterkeys(max=5)))
+    [("http://bbb.com/page?id=1",),
+     ("http://bbb.com/page?id=2",),
+     ("http://bbb.com/page?id=3",),
+     ("http://ccc.com/page?id=1",),
+     ("http://ccc.com/page?id=2")]
 
     >>> # Print the first record:
-    >>> pprint(coll.find())
+    >>> pprint(pages.find())
     {
         "url": "http://bbb.com/page?id=1",
         "html": ... # raw HTML
