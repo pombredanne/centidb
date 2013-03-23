@@ -29,7 +29,7 @@ bytestrings, and easy maintenance of secondary indices.
 
 There is no fixed value type or encoding, key scheme, compressor, or storage
 engine, allowing integration with whatever suits a project. Batch compression
-allows read performance to be traded for improved compression, while still
+allows read performance to be traded for storage efficiency, while still
 allowing transparent access to individual records. Arbitrary key ranges may be
 compressed and the batch size is configurable.
 
