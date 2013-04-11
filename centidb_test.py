@@ -16,6 +16,13 @@ import centidb.support
 import _centidb
 
 
+def rm_rf(path):
+    if os.path.isfile(path):
+        os.unlink(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path)
+
+
 class CountingEngine(object):
     def __init__(self, real_engine):
         self.real_engine = real_engine
@@ -319,8 +326,7 @@ class SkiplistEngineTest(EngineTestBase):
 class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
-        if os.path.exists('test.ldb'):
-            shutil.rmtree('test.ldb')
+        rm_rf('test.ldb')
         cls.e = centidb.support.PlyvelEngine(
             name='test.ldb', create_if_missing=True)
 
@@ -331,7 +337,7 @@ class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def tearDownClass(cls):
         cls.e = None
-        shutil.rmtree('test.ldb')
+        rm_rf('test.ldb')
 
 
 @register()
@@ -356,8 +362,7 @@ class KyotoEngineTest(EngineTestBase):
 class LmdbEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
-        if os.path.exists('test.lmdb'):
-            shutil.rmtree('test.lmdb')
+        rm_rf('test.lmdb')
         import lmdb
         cls.env = lmdb.open('test.lmdb')
         cls.e = centidb.support.LmdbEngine(cls.env, cls.env.begin(write=True))
@@ -369,8 +374,7 @@ class LmdbEngineTest(EngineTestBase):
     @classmethod
     def tearDownClass(cls):
         cls.e = None
-        if os.path.exists('test.lmdb'):
-            shutil.rmtree('test.lmdb')
+        rm_rf('test.lmdb')
 
 
 @register()
@@ -689,7 +693,6 @@ def x():
 
     feed = iotypes.Feed(url='http://dave', title='mytitle', id=69)
     feeds.put(feed)
-
 
 
 if __name__ == '__main__':

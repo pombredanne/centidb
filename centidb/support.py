@@ -334,6 +334,7 @@ def make_json_encoder():
     return centidb.Encoder('json', json.JSONDecoder().decode,
                            functools.partial(encode, separators=',:'))
 
+
 def make_msgpack_encoder():
     """Return an :py:class:`Encoder <centidb.Encoder>` that serializes
     dict/list/string/float/int/bool/None objects using `MessagePack
@@ -341,6 +342,7 @@ def make_msgpack_encoder():
     <https://pypi.python.org/pypi/msgpack-python/>`_ package."""
     import msgpack
     return centidb.Encoder('msgpack', msgpack.loads, msgpack.dumps)
+
 
 def make_thrift_encoder(klass, factory=None):
     """
