@@ -125,7 +125,7 @@ eq = make_asserter(operator.eq, '==')
 le = make_asserter(operator.le, '<=')
 
 
-@register()
+#@register()
 class IterTest:
     prefix = 'Y'
     KEYS = [[(k,)] for k in 'aa cc d dd de'.split()]
@@ -350,6 +350,27 @@ class KyotoEngineTest(EngineTestBase):
     def tearDownClass(cls):
         cls.e = None
         os.unlink('test.kct')
+
+
+@register()
+class LmdbEngineTest(EngineTestBase):
+    @classmethod
+    def _setUpClass(cls):
+        if os.path.exists('test.lmdb'):
+            shutil.rmtree('test.lmdb')
+        import lmdb
+        cls.env = lmdb.open('test.lmdb')
+        cls.e = centidb.support.LmdbEngine(cls.env, cls.env.begin(write=True))
+
+    def setUp(self):
+        for key, value in list(self.e.iter('', False)):
+            self.e.delete(key)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.e = None
+        if os.path.exists('test.lmdb'):
+            shutil.rmtree('test.lmdb')
 
 
 @register()

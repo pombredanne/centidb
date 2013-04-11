@@ -267,6 +267,64 @@ class KyotoEngine(object):
             it = iter((lambda: c.step() and c.get()), False)
             return itertools.chain((tup,), it) if tup else it
 
+
+class LmdbEngine(object):
+    """Storage engine that uses the OpenLDAP `"Lightning" MDB
+    <http://symas.com/mdb/>`_ library via the `py-lmdb
+    <http://py-lmdb.readthedocs.org/>`_ module.
+
+        `env`:
+            :py:class:`lmdb.Environment` to use, or ``None`` if `txn` or
+            `kwargs` is provided.
+
+        `txn`:
+            :py:class:`lmdb.Transaction` to use, or ``None`` if `env` or
+            `kwargs` is provided.
+
+        `db`:
+            Database handle to use, or ``None`` to use the main database.
+
+        `kwargs`:
+            If `env` and `txn` are ``None``, pass these keyword arguments to
+            create a new :py:class:`lmdb.Environment`.
+    """
+    txn_id = None
+
+    def __init__(self, env=None, txn=None, db=None, **kwargs):
+        if not (env or txn):
+            import lmdb
+            env = lmdb.open(**kwargs)
+        self.env = env
+        self.txn = txn
+        self.db = db
+        self.get = (txn or env).get
+        self.put = (txn or env).put
+        self.delete = (txn or env).delete
+        self.cursor = (txn or env).cursor
+
+    def begin(self, write=False, db=None):
+        """Start a transaction. Only valid if `txn` was not passed to the
+        constructor.
+
+            `write`:
+                Start a write transaction
+        """
+        assert not self.txn
+        return LmdbEngine(self.env, self.env.begin(write=write))
+
+    def iter(self, k, reverse):
+        cursor = self.cursor(self.db)
+        found = cursor.set_range(k)
+        if reverse:
+            if not found:
+                cursor.last()
+            return cursor.iterprev()
+        else:
+            if not found:
+                return xrange(0)
+            return cursor.iternext()
+
+
 def make_json_encoder():
     """Return an :py:class:`Encoder <centidb.Encoder>` that serializes
     dict/list/string/float/int/bool/None objects using the :py:mod:`json`

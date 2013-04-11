@@ -512,6 +512,9 @@ Predefined Engines
 .. autoclass:: centidb.support.SkiplistEngine
     :members:
 
+.. autoclass:: centidb.support.LmdbEngine
+    :members:
+
 .. autoclass:: centidb.support.PlyvelEngine
     :members:
 
