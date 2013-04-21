@@ -34,5 +34,5 @@ setup(
     packages =      ['centidb'],
     ext_modules = [
         Extension("_centidb", sources=['_centidb.c'],
-                  extra_compile_args=['-std=c99', '-O2'])
+                  extra_compile_args=['-std=c99', '-g', '-O2']) #'-O2'])
     ])

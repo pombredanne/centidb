@@ -365,7 +365,7 @@ class LmdbEngineTest(EngineTestBase):
         rm_rf('test.lmdb')
         import lmdb
         cls.env = lmdb.open('test.lmdb')
-        cls.e = centidb.support.LmdbEngine(cls.env, cls.env.begin(write=True))
+        cls.e = centidb.support.LmdbEngine(cls.env)
 
     def setUp(self):
         for key, value in list(self.e.iter('', False)):
