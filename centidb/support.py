@@ -271,7 +271,7 @@ class KyotoEngine(object):
 class LmdbEngine(object):
     """Storage engine that uses the OpenLDAP `"Lightning" MDB
     <http://symas.com/mdb/>`_ library via the `py-lmdb
-    <http://py-lmdb.readthedocs.org/>`_ module.
+    <http://lmdb.readthedocs.org/>`_ module.
 
         `env`:
             :py:class:`lmdb.Environment` to use, or ``None`` if `txn` or
@@ -313,16 +313,7 @@ class LmdbEngine(object):
         return LmdbEngine(self.env, self.env.begin(write=write))
 
     def iter(self, k, reverse):
-        cursor = self.cursor(self.db)
-        found = cursor.set_range(k)
-        if reverse:
-            if not found:
-                cursor.last()
-            return cursor.iterprev()
-        else:
-            if not found:
-                return xrange(0)
-            return cursor.iternext()
+        return self.cursor(db=self.db)._iter_from(k, reverse)
 
 
 def make_json_encoder():
