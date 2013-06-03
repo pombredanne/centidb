@@ -194,43 +194,43 @@ these methods also allow setting a start/stop key, or a lo/hi range, and
 walking in reverse. Refer to :ref:`query-parameters` for the full set of
 supported combinations.
 
-:py:meth:`Collection.iterkeys`
+:py:meth:`Collection.keys`
 
     ::
 
         >>> # All keys, start to end:
-        >>> list(people.iterkeys())
+        >>> list(people.keys())
         [(1L,), (2L,), (3L,)]
 
         >>> # All keys, end to start.
-        >>> list(people.iterkeys(reverse=True))
+        >>> list(people.keys(reverse=True))
         [(3L,), (2L,), (1L,)]
 
         >>> # Keys from 2 to end:
-        >>> list(people.iterkeys(2))
+        >>> list(people.keys(2))
         [(2L,), (3L,)]
 
         >>> # Keys from 2 to start:
-        >>> list(people.iterkeys(2, reverse=True))
+        >>> list(people.keys(2, reverse=True))
         [(2L,), (1L,)]
 
 
-:py:meth:`Collection.itervalues`
+:py:meth:`Collection.values`
 
     ::
 
         >>> # All values, start to end:
-        >>> pprint(list(people.itervalues()))
+        >>> pprint(list(people.values()))
         [('Buffy', 'girl'),
          ('Willow', 'girl'),
          ('Spike', 'boy')]
 
-:py:meth:`Collection.iteritems`
+:py:meth:`Collection.items`
 
     ::
 
         >>> # All (key, value) pairs, from 99 to 2:
-        >>> pprint(list(people.iteritems(lo=2, hi=99, reverse=True)))
+        >>> pprint(list(people.items(lo=2, hi=99, reverse=True)))
         [((3L,), ('Spike', 'boy')),
          ((2L,), ('Willow', 'girl'))]
 
@@ -385,7 +385,7 @@ auto-incrementing keys should be used sparingly. Example:
     log_msgs.put("second")
     log_msgs.put("third")
 
-    assert list(log_msgs.iteritems()) == [
+    assert list(log_msgs.items()) == [
         ((1,), "first"),
         ((2,), "second"),
         ((3,), "third")
@@ -404,7 +404,7 @@ Query Parameters
 
 The following parameters are supported everywhere some kind of key enumeration
 may occur using :py:class:`Collection` or :py:class:`Index`, for example all
-`iter*()` methods.
+iteration methods.
 
     `lo`:
         Lowest key returned. All returned keys will be `>= lo`. If unspecified,
@@ -666,13 +666,13 @@ Index Usage
     people.put(make_person(u'Winnifred', u'Paris', 24))
 
     # Youngest to oldest:
-    pprint(list(people.indices['age'].iteritems()))
+    pprint(list(people.indices['age'].items()))
 
     # Oldest to youngest:
-    pprint(list(people.indices['age'].itervalues(reverse=True)))
+    pprint(list(people.indices['age'].values(reverse=True)))
 
     # Youngest to oldest, by city:
-    it = people.indices['city_age'].itervalues()
+    it = people.indices['city_age'].values()
     for city, items in itertools.groupby(it, lambda p: p['city']):
         print '  ', city
         for person in items:
@@ -739,13 +739,13 @@ itself may be iterated in reverse:
         lambda person: (-person['age'], -person['height']))
 
     # Equivalent to 'name_desc' index:
-    it = coll.iteritems(reverse=True)
+    it = coll.items(reverse=True)
 
     # Equivalent to 'age_desc' index:
-    it = coll.index['age'].iteritems(reverse=True)
+    it = coll.index['age'].items(reverse=True)
 
     # Equivalent to 'age_desc_height_desc' index:
-    it = coll.index['age_height'].iteritems(reverse=True)
+    it = coll.index['age_height'].items(reverse=True)
 
 
 Covered indices
@@ -768,10 +768,10 @@ emulated by encoding the data to be covered as part of the index key:
     coll.put({'name': u'Bob', 'age': 69, 'height': 113})
 
     # Query by key but omit covered part:
-    tup = next(age_height_name.itertups((69, 113)))
+    tup = next(age_height_name.tups((69, 113)))
     name = tup and tup[-1]
 
-    tup = next(age_photo.itertups(69))
+    tup = next(age_photo.tups(69))
     photo = tup and tup[-1]
 
 A future version may allow storing arbitrarily encoded values along with index
@@ -805,7 +805,7 @@ keys in the range relate to only a single domain.
     >>> pages = centidb.Collection(store, 'pages')
     >>> # ...
 
-    >>> pprint(list(pages.iterkeys(max=5)))
+    >>> pprint(list(pages.keys(max=5)))
     [("http://bbb.com/page?id=1",),
      ("http://bbb.com/page?id=2",),
      ("http://bbb.com/page?id=3",),
@@ -853,7 +853,7 @@ collection, and iteratively copy from the old collection:
 
 ::
 
-    >>> new_coll.puts(old_coll.itervalues())
+    >>> new_coll.puts(old_coll.values())
 
 
 
