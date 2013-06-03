@@ -907,8 +907,8 @@ class Collection(object):
         return
 
     def batch(self, lo=None, hi=None, max_recs=None, max_bytes=None,
-              preserve=True, packer=None, txn=None, max_phys=None,
-              grouper=None):
+              max_keylen=None, preserve=True, packer=None, txn=None,
+              max_phys=None, grouper=None):
         """
         Search the key range *lo..hi* for individual records, combining them
         into a batches.
@@ -945,6 +945,10 @@ class Collection(object):
                 size. Single records are skipped if they exceed this size when
                 compressed individually.
 
+            `max_keylen`:
+                Maximum size in bytes of the batch record's key part, or
+                ``None`` for no maximum size.
+
             `preserve`:
                 If ``True``, then existing batch records in the database are
                 left untouched. When one is found within `lo..hi`, the
@@ -978,6 +982,7 @@ class Collection(object):
                 function's return value changes.
 
         """
+        assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
         txn = txn or self.engine
         packer = packer or self.packer
@@ -1297,8 +1302,8 @@ class Store(object):
         return val
 
 # Hack: disable speedups while testing or reading docstrings.
-if not (any(k in sys.modules for k in ('sphinx', 'pydoc')) or \
-        os.getenv('NO_SPEEDUPS') is not None):
+if os.path.basename(sys.argv[0]) in ('sphinx-build', 'pydoc') or \
+        os.getenv('CENTIDB_NO_SPEEDUPS') is not None:
     try:
         from _centidb import *
     except ImportError:
