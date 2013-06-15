@@ -32,6 +32,7 @@ setup(
     url =           'http://github.com/dw/centidb/',
     zip_safe = False,
     packages =      ['centidb'],
+    install_requires = ['keycoder'],
     ext_modules = [
         Extension("_centidb", sources=['_centidb.c'],
                   extra_compile_args=['-std=c99', '-g', '-O2']) #'-O2'])
