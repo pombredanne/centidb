@@ -879,7 +879,7 @@ Setup:
 
         encoder = centidb.support.make_msgpack_encoder()
 
-* :py:meth:`Collection.put` with `virgin=True`
+* :py:meth:`Collection.put` with `blind=True`
 
 * 236,000 200 byte dict records with 3 string keys and string values, third
   value containing 150 bytes mostly random data:
@@ -905,7 +905,7 @@ Setup:
         coll.add_index('rev_location', lambda p: p['location'][::-1])
 
 
-`put(virgin=True)`
+`put(blind=True)`
 ++++++++++++++++++
 
 Indices enabled:
@@ -935,7 +935,7 @@ already likely dwarfed by the Python code comprising an even moderately complex
 host application.
 
 
-`put(virgin=False)`
+`put(blind=False)`
 +++++++++++++++++++
 
 Indices enabled:
