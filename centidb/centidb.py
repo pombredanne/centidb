@@ -24,6 +24,7 @@ from __future__ import absolute_import
 import cPickle as pickle
 import cStringIO
 import functools
+import importlib
 import itertools
 import operator
 import os
@@ -39,7 +40,7 @@ import keycoder
 from keycoder import tuplize
 
 __all__ = '''Store Collection Record Index Encoder KEY_ENCODER PICKLE_ENCODER
-    PLAIN_PACKER ZLIB_PACKER next_greater'''.split()
+    PLAIN_PACKER ZLIB_PACKER next_greater open'''.split()
 
 KIND_NULL = chr(15)
 KIND_NEG_INTEGER = chr(20)
@@ -55,6 +56,24 @@ IndexKeyBuilder = None
 
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
+
+
+def open(engine, **kwargs):
+    """Look up an engine class named by `engine`, instantiate it as
+    `engine(**kwargs)` and wrapping the result in a :py:class:`Engine`.
+    `engine` can either be a name from :py:mod:`centidb.support` or a fully
+    qualified name for a class in another module.
+
+    ::
+
+        >>> # Uses centidb.support.SkiplistEngine
+        >>> open("SkiplistEngine")
+        >>> # Uses mymodule.BlarghEngine
+        >>> open("mymodule.BlarghEngine")
+    """
+    modname, _, classname = engine.rpartition('.')
+    module = importlib.import_module(modname or 'centidb.support')
+    return Store(getattr(module, classname)(**kwargs))
 
 
 def decode_offsets(s):
@@ -378,7 +397,7 @@ class Collection(object):
             `get(rec=True)` and `put(<Record instance>)` are used. In either
             case, `put(..., key=...)` may be used to override default behavior.
 
-        `virgin_keys`:
+        `blind`:
             If ``True``, indicates the key function never reassigns the same
             key twice, for example when using a time-based key. In this case,
             checks for old records with the same key may be safely skipped,
@@ -410,7 +429,7 @@ class Collection(object):
             specified.
     """
     def __init__(self, store, name, key_func=None, txn_key_func=None,
-            derived_keys=False, virgin_keys=False, encoder=None, packer=None,
+            derived_keys=False, blind=False, encoder=None, packer=None,
             _idx=None, counter_name=None, counter_prefix=None):
         """Create an instance; see class docstring."""
         self.store = store
@@ -426,11 +445,11 @@ class Collection(object):
             txn_key_func = lambda txn, _: \
                 (counter_prefix + (store.count(counter_name, txn=txn),))
             derived_keys = False
-            virgin_keys = True
+            blind = True
         self.key_func = key_func
         self.txn_key_func = txn_key_func
         self.derived_keys = derived_keys
-        self.virgin_keys = virgin_keys
+        self.blind = blind
         self.encoder = encoder or PICKLE_ENCODER
         self.encoder_prefix = self.store.add_encoder(self.encoder)
         #: Default packer used when calls to :py:meth:`Collection.put` do not
@@ -598,14 +617,14 @@ class Collection(object):
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, reverse=False, max=None,
-            include=False, txn=None, rec=None):
+            include=False, txn=None, rec=None, raw=False):
         """Yield all `(key tuple, value)` tuples in key order. If `rec` is
         ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
         txn_id = getattr(txn or self.engine, 'txn_id', None)
         it = self._iter(txn, key, lo, hi, reverse, max, include, None)
         for batch, key, data in it:
-            obj = self.encoder.unpack(data)
+            obj = data if raw else self.encoder.unpack(data)
             if rec:
                 obj = Record(self, obj, key, batch, txn_id,
                              self._index_keys(key, obj))
@@ -615,41 +634,42 @@ class Collection(object):
             include=False, txn=None, rec=None):
         """Yield key tuples in key order."""
         return itertools.imap(ITEMGETTER_0,
-            self.items(key, lo, hi, reverse, max, include, txn, rec))
+            self.items(key, lo, hi, reverse, max, include, txn, rec, True))
 
     def values(self, key=None, lo=None, hi=None, reverse=None, max=None,
-            include=False, txn=None, rec=None):
+            include=False, txn=None, rec=None, raw=False):
         """Yield record values in key order. If `rec` is ``True``,
         :py:class:`Record` instances are yielded instead of record values."""
         return itertools.imap(ITEMGETTER_1,
-            self.items(key, lo, hi, reverse, max, include, txn, rec))
+            self.items(key, lo, hi, reverse, max, include, txn, rec, raw))
 
     def gets(self, keys, default=None, rec=False, txn=None):
         """Yield `get(k)` for each `k` in the iterable `keys`."""
         return (self.get(x, default, rec, txn) for k in keys)
 
     def find(self, key=None, lo=None, hi=None, reverse=None, include=False,
-             txn=None, rec=None, default=None):
+             txn=None, rec=None, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
-        it = self.values(key, lo, hi, reverse, None, include, txn, rec)
+        it = self.values(key, lo, hi, reverse, None, include, txn, rec, raw)
         v = next(it, default)
         if v is default and rec and default is not None:
             v = Record(self.coll, default)
         return v
 
-    def get(self, key, default=None, rec=False, txn=None):
+    def get(self, key, default=None, rec=False, txn=None, raw=False):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead. If `rec` is ``True``, return
         a :py:class:`Record` instance for use when later re-saving the record,
-        otherwise only the record's value is returned."""
+        otherwise only the record's value is returned. If `rec` is ``True``,
+        return the record without unpacking it."""
         key = tuplize(key)
         it = self._iter(txn, None, key, key, False, None, True, None)
         tup = next(it, None)
         if tup:
             txn_id = getattr(txn or self.engine, 'txn_id', None)
-            obj = self.encoder.unpack(tup[2])
+            obj = tup[2] if raw else self.encoder.unpack(tup[2])
             if rec:
                 obj = Record(self, obj, key, tup[0], txn_id,
                              self._index_keys(key, obj))
@@ -827,7 +847,7 @@ class Collection(object):
         yields its return values."""
         return _eat(eat, (self.put(y, txn, packer, x) for x, y in it), True)
 
-    def put(self, rec, txn=None, packer=None, key=None, virgin=False):
+    def put(self, rec, txn=None, packer=None, key=None, blind=False):
         """Create or overwrite a record.
 
             `rec`:
@@ -850,10 +870,10 @@ class Collection(object):
                 If specified, overrides the use of collection's key function
                 and forces a specific key. Use with caution.
 
-            `virgin`:
+            `blind`:
                 If ``True``, skip checks for any old record assigned the same
                 key. Automatically enabled when a collection has no indices, or
-                when `virgin_keys=` is passed to :py:class:`Collection`'s
+                when `blind=` is passed to :py:class:`Collection`'s
                 constructor.
 
                 While this significantly improves performance, enabling it for
@@ -879,7 +899,7 @@ class Collection(object):
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     txn.delete(index_key)
-        elif self.indices and not (virgin or self.virgin_keys):
+        elif self.indices and not (blind or self.blind):
             # TODO: delete() may be unnecessary when no indices are defined
             # Old key might already exist, so delete it.
             self.delete(obj_key)
