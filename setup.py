@@ -18,9 +18,16 @@
 """centidb distutils script.
 """
 
+import os
 from setuptools import setup
 from distutils.extension import Extension
 
+try:
+    import keycoder
+except ImportError:
+    raise SystemExit('Cannot install: centidb depends on keycoder package.')
+
+include_path = os.path.join(os.path.dirname(keycoder.__file__), 'include')
 
 setup(
     name =          'centidb',
@@ -35,5 +42,6 @@ setup(
     install_requires = ['keycoder'],
     ext_modules = [
         Extension("_centidb", sources=['_centidb.c'],
-                  extra_compile_args=['-std=c99', '-g', '-O2']) #'-O2'])
+                  extra_compile_args=['-std=c99', '-g', '-O2'],
+                  include_dirs=[include_path]) #'-O2'])
     ])

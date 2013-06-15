@@ -10,6 +10,7 @@ import unittest
 from pprint import pprint
 from unittest import TestCase
 
+import keycoder
 import centidb
 import centidb.centidb
 import centidb.support
@@ -68,7 +69,7 @@ class CountingEngine(object):
 
 #
 # Module reloads are necessary because KEY_ENCODER & co bind whatever
-# encode_keys() & co happens to exist before we get a chance to interfere. It
+# packs() & co happens to exist before we get a chance to interfere. It
 # also improves the chance of noticing any not-planned-for speedups related
 # side effects, rather than relying on explicit test coverage.
 # 
@@ -140,7 +141,7 @@ class IterTest:
     REVERSE = ITEMS[::-1]
 
     def _encode(self, s):
-        return centidb.encode_keys(self.prefix, s)
+        return keycoder.packs(self.prefix, s)
 
     def setUp(self):
         self.e = centidb.support.ListEngine()
@@ -378,104 +379,6 @@ class LmdbEngineTest(EngineTestBase):
 
 
 @register()
-class KeysTest:
-    SINGLE_VALS = [
-        None,
-        1,
-        'x',
-        u'hehe',
-        True,
-        False,
-        -1
-    ]
-
-    def _enc(self, *args, **kwargs):
-        return centidb.encode_keys('', *args, **kwargs)
-
-    def _dec(self, *args, **kwargs):
-        return centidb.decode_keys('', *args, **kwargs)
-
-    def test_counter(self):
-        s = self._enc(('dave', 1))
-        eq([('dave', 1)], self._dec(s))
-
-    def test_single(self):
-        for val in self.SINGLE_VALS:
-            encoded = centidb.encode_keys('', (val,))
-            decoded = centidb.decode_keys('', encoded)
-            eq([(val,)], decoded, 'input was %r' % (val,))
-
-    def test_single_sort_lower(self):
-        for val in self.SINGLE_VALS:
-            e1 = centidb.encode_keys('', (val,))
-            e2 = centidb.encode_keys('', [(val, val),])
-            lt(e1, e2, 'eek %r' % (val,))
-
-    def test_list(self):
-        lst = [(1,), (2,)]
-        eq(lst, self._dec(self._enc(lst)))
-
-
-@register()
-class StringEncodingTest:
-    def do_test(self, k):
-        eq(k, centidb.centidb.decode_key('', centidb.encode_keys('', k)))
-
-    def test_simple(self):
-        self.do_test(('dave',))
-
-    def test_escapes(self):
-        self.do_test(('dave\x00\x00',))
-        self.do_test(('dave\x00\x01',))
-        self.do_test(('dave\x01\x01',))
-        self.do_test(('dave\x01\x02',))
-        self.do_test(('dave\x01',))
-
-
-@register()
-class TuplizeTest:
-    def test_already_tuple(self):
-        eq((), centidb.centidb.tuplize(()))
-
-    def test_not_already_tuple(self):
-        eq(("",), centidb.centidb.tuplize(""))
-
-
-@register()
-class EncodeIntTest:
-    INTS = [0, 1, 240, 241, 2286, 2287, 2288,
-            67823, 67824, 16777215, 16777216,
-            4294967295, 4294967296,
-            1099511627775, 1099511627776,
-            281474976710655, 281474976710656,
-            72057594037927935, 72057594037927936]
-
-    def testInts(self):
-        for i in self.INTS:
-            io = cStringIO.StringIO(centidb.encode_int(i))
-            j = centidb.decode_int(lambda: io.read(1), io.read)
-            assert j == i, (i, j, io.getvalue())
-
-
-@register()
-class TupleTest:
-    def assertOrder(self, tups):
-        tups = [centidb.centidb.tuplize(x) for x in tups]
-        encs = map(centidb.encode_keys, tups)
-        encs.sort()
-        eq(tups, [centidb.centidb.decode_key(x) for x in encs])
-
-    def testStringSorting(self):
-        strs = [(x,) for x in ('dave', 'dave\x00', 'dave\x01', 'davee\x01')]
-        encs = map(lambda o: centidb.encode_keys('', o), strs)
-        encs.sort()
-        eq(strs, [centidb.centidb.decode_key('', x) for x in encs])
-
-    def testTupleNonTuple(self):
-        pass
-
-
-@register()
 class CollBasicTest:
     def setUp(self):
         self.e = centidb.support.ListEngine()
@@ -508,16 +411,16 @@ class CollBasicTest:
 
     def testIterItemsExist(self):
         rec = self.coll.put('')
-        eq([((1,), '')], list(self.coll.iteritems()))
+        eq([((1,), '')], list(self.coll.items()))
 
     def testIterKeysExist(self):
         rec = self.coll.put('')
         rec2 = self.coll.put('')
-        eq([rec.key, rec2.key], list(self.coll.iterkeys()))
+        eq([rec.key, rec2.key], list(self.coll.keys()))
 
     def testIterValuesExist(self):
         rec = self.coll.put('')
-        eq([''], list(self.coll.itervalues()))
+        eq([''], list(self.coll.values()))
 
 
 @register()
@@ -538,40 +441,40 @@ class IndexTest:
 
     # iterpairs
     def testIterPairs(self):
-        eq(self.both, list(self.i.iterpairs()))
-        eq(self.both, list(self.i.iterpairs(68)))
-        eq(self.both, list(self.i.iterpairs((69, 'dave'))))
-        eq(self.second, list(self.i.iterpairs((69, 'dave2'))))
-        eq([], list(self.i.iterpairs(80)))
+        eq(self.both, list(self.i.pairs()))
+        eq(self.both, list(self.i.pairs(68)))
+        eq(self.both, list(self.i.pairs((69, 'dave'))))
+        eq(self.second, list(self.i.pairs((69, 'dave2'))))
+        eq([], list(self.i.pairs(80)))
 
-        eq(self.both[::-1], list(self.i.iterpairs(reverse=True)))
+        eq(self.both[::-1], list(self.i.pairs(reverse=True)))
 
         self.coll.deletes(self.key)
-        eq(self.second, list(self.i.iterpairs()))
+        eq(self.second, list(self.i.pairs()))
         self.coll.deletes(self.key2)
-        eq([], list(self.i.iterpairs()))
+        eq([], list(self.i.pairs()))
 
     # itertups
     def testIterTups(self):
-        eq([(69, 'dave'), (69, 'dave2')], list(self.i.itertups()))
-        eq([(69, 'dave2'), (69, 'dave')], list(self.i.itertups(reverse=True)))
+        eq([(69, 'dave'), (69, 'dave2')], list(self.i.tups()))
+        eq([(69, 'dave2'), (69, 'dave')], list(self.i.tups(reverse=True)))
 
     # iterkeys
     def testIterKeys(self):
-        eq([self.key, self.key2], list(self.i.iterkeys()))
-        eq([self.key2, self.key], list(self.i.iterkeys(reverse=True)))
+        eq([self.key, self.key2], list(self.i.keys()))
+        eq([self.key2, self.key], list(self.i.keys(reverse=True)))
 
     # iteritems
     def testIterItems(self):
         item1 = (self.key, 'dave')
         item2 = (self.key2, 'dave2')
-        eq([item1, item2], list(self.i.iteritems()))
-        eq([item2, item1], list(self.i.iteritems(reverse=True)))
+        eq([item1, item2], list(self.i.items()))
+        eq([item2, item1], list(self.i.items(reverse=True)))
 
     # itervalues
     def testIterValues(self):
-        eq(['dave', 'dave2'], list(self.i.itervalues()))
-        eq(['dave2', 'dave'], list(self.i.itervalues(reverse=True)))
+        eq(['dave', 'dave2'], list(self.i.values()))
+        eq(['dave2', 'dave'], list(self.i.values(reverse=True)))
 
     # find
     def testFind(self):
@@ -647,7 +550,7 @@ class BatchTest:
         assert len(self.e.items) == (old_len + len(self.ITEMS))
         self.coll.batch(max_recs=len(self.ITEMS))
         assert len(self.e.items) == (old_len + 1)
-        assert list(self.coll.iteritems()) == self.ITEMS
+        assert list(self.coll.items()) == self.ITEMS
 
 
 @register()
