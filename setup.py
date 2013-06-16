@@ -31,7 +31,7 @@ include_path = os.path.join(os.path.dirname(keycoder.__file__), 'include')
 
 setup(
     name =          'centidb',
-    version =       '0.1',
+    version =       '0.11',
     description =   'Minimalist DBMS middleware for key/value stores.',
     author =        'David Wilson',
     author_email =  'dw@botanicus.net',
