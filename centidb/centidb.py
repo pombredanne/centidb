@@ -75,7 +75,6 @@ def open(engine, **kwargs):
     module = importlib.import_module(modname or 'centidb.support')
     return Store(getattr(module, classname)(**kwargs))
 
-
 def decode_offsets(s):
     io = cStringIO.StringIO(s)
     getc = functools.partial(io.read, 1)
@@ -377,7 +376,7 @@ class Collection(object):
 
             If neither function is given, keys are assigned using a
             transactional counter (like auto-increment in SQL). See
-            `counter_name` and `counter_prefix`.
+            `counter_name`.
 
         `derived_keys`:
             If ``True``, indicates the key function derives a record's key from
@@ -421,16 +420,10 @@ class Collection(object):
             generating auto-incremented keys. If unspecified, defaults to
             ``"key:<name>"``. Unused when `key_func` or `txn_key_func`
             are specified.
-
-        `counter_prefix`:
-            Optional tuple to prefix auto-incremented keys with. If
-            unspecified, auto-incremented keys are a 1-tuple containing the
-            counter value. Unused when `key_func` or `txn_key_func` are
-            specified.
     """
     def __init__(self, store, name, key_func=None, txn_key_func=None,
             derived_keys=False, blind=False, encoder=None, packer=None,
-            _idx=None, counter_name=None, counter_prefix=None):
+            _idx=None, counter_name=None):
         """Create an instance; see class docstring."""
         self.store = store
         self.engine = store.engine
@@ -441,9 +434,7 @@ class Collection(object):
         self.prefix = store.prefix + keycoder.pack_int(self.info['idx'])
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
-            counter_prefix = counter_prefix or ()
-            txn_key_func = lambda txn, _: \
-                (counter_prefix + (store.count(counter_name, txn=txn),))
+            txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
             derived_keys = False
             blind = True
         self.key_func = key_func
@@ -1009,12 +1000,18 @@ class Store(object):
         self._prefix_encoder = (
             dict((keycoder.pack_int(1 + i), e)
                  for i, e in enumerate(_ENCODERS)))
+        self._meta = Collection(self, '\x00meta', _idx=3,
+            encoder=KEY_ENCODER, key_func=lambda t: t[:2])
         self._encoder_coll = Collection(self, '\x00encoders', _idx=2,
-            encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
+            encoder=KEY_ENCODER, key_func=ITEMGETTER_0)
         self._info_coll = Collection(self, '\x00collections', _idx=0,
-            encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
+            encoder=KEY_ENCODER, key_func=ITEMGETTER_0)
         self._counter_coll = Collection(self, '\x00counters', _idx=1,
-            encoder=KEY_ENCODER, key_func=lambda tup: tup[0])
+            encoder=KEY_ENCODER, key_func=ITEMGETTER_0)
+
+    def collection(self, name, *args, **kwargs):
+        """Shorthand for `centidb.Collection(self, *args, **kwargs)`."""
+        return Collection(self, name, *args, **kwargs)
 
     _INFO_KEYS = ('name', 'idx', 'index_for')
     def _get_info(self, name, idx=None, index_for=None):
