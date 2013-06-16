@@ -360,7 +360,7 @@ def make_thrift_encoder(klass, factory=None):
 
     def loads(buf):
         transport = thrift.transport.TTransport.TMemoryBuffer(buf)
-        proto = factory(transport)
+        proto = factory.getProtocol(transport)
         value = klass()
         value.read(proto)
         return value
