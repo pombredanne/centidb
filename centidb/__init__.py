@@ -14,6 +14,11 @@
 # limitations under the License.
 #
 from __future__ import absolute_import
+
 from centidb.centidb import *
-from centidb.centidb import __all__
-from centidb.centidb import __doc__
+from centidb.support import *
+from centidb import centidb
+from centidb import support
+
+__all__ = centidb.__all__ + support.__all__
+__doc__ = centidb.__doc__
