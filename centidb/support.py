@@ -321,9 +321,8 @@ def make_json_encoder():
     dict/list/string/float/int/bool/None objects using the :py:mod:`json`
     module."""
     import json
-    encode = json.JSONEncoder().encode
     return centidb.Encoder('json', json.JSONDecoder().decode,
-                           functools.partial(encode, separators=',:'))
+                           json.JSONEncoder(separators=',:').encode)
 
 
 def make_msgpack_encoder():
