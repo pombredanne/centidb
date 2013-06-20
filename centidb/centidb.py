@@ -1075,8 +1075,8 @@ class Store(object):
         return val
 
 # Hack: disable speedups while testing or reading docstrings.
-if os.path.basename(sys.argv[0]) in ('sphinx-build', 'pydoc') or \
-        os.getenv('CENTIDB_NO_SPEEDUPS') is not None:
+if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
+        os.getenv('CENTIDB_NO_SPEEDUPS') is None:
     try:
         from _centidb import *
     except ImportError:
