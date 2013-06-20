@@ -244,10 +244,10 @@ we can efficiently iterate key ranges, by controlling the key we can order the
 collection in ways that are very useful for queries.
 
 To make this ordering easy to exploit, keys are treated as tuples of one or
-more :py:func:`primitive values <encode_keys>`, with the order of earlier
-elements taking precedence over later elements, just like a Python tuple. When
-written to storage, tuples are carefully encoded so their ordering is preserved
-by the engine.
+more :py:func:`primitive values <keycoder.packs>`, with the order of
+earlier elements taking precedence over later elements, just like a Python
+tuple. When written to storage, tuples are carefully encoded so their ordering
+is preserved by the engine.
 
 Since multiple values can be provided, powerful grouping hierarchies can be
 designed to allow efficient range queries anywhere within the hierarchy, all
@@ -535,9 +535,9 @@ The ``centidb`` module contains the following predefined :py:class:`Encoder`
 instances.
 
     ``KEY_ENCODER``
-        Uses :py:func:`encode_keys` and :py:func:`decode_keys` to serialize
-        tuples. It is used internally to represent keys, counters, and
-        :py:class:`Store` metadata.
+        Uses :py:func:`keycoder.packs` and
+        :py:func:`keycoder.unpacks` to serialize tuples. It is used
+        internally to represent keys, counters, and :py:class:`Store` metadata.
 
     ``PICKLE_ENCODER``
         Uses :py:func:`pickle.dumps` and :py:func:`pickle.loads` with protocol
@@ -623,8 +623,8 @@ These functions are based on `SQLite 4's key encoding
 * Varints are used for integers.
 * Strings use a more scripting-friendly encoding.
 
-.. autofunction:: centidb.encode_keys (tups, prefix='')
-.. autofunction:: centidb.decode_keys
+.. autofunction:: centidb.packs (tups, prefix='')
+.. autofunction:: centidb.unpacks
 .. autofunction:: centidb.invert
 .. autofunction:: centidb.next_greater
 
@@ -635,8 +635,8 @@ Varint functions
 These functions are based on `SQLite 4's sortable varint encoding
 <http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
 
-.. autofunction:: centidb.encode_int
-.. autofunction:: centidb.decode_int
+.. autofunction:: centidb.pack_int
+.. autofunction:: centidb.unpack_int
 
 
 Index Examples
@@ -977,7 +977,7 @@ Glossary
         multiple logical records as part of a batch.
 
     *Primitive Value*
-        A value of any type that :py:func:`encode_keys` supports.
+        A value of any type that :py:func:`keycoder.packs` supports.
 
 
 
@@ -1003,7 +1003,7 @@ once-per-decade bugs: depending on a database key, the expression ``123 /
 db_val`` might perform integer or float division.
 
 A final option is adding a `number_factory=` parameter to
-:py:func:`decode_keys`, which still requires picking a good default.
+:py:func:`unpacks`, which still requires picking a good default.
 
 Non-tuple Keys
 ++++++++++++++
@@ -1031,11 +1031,11 @@ type, or to provide exact emulation of the sort order of other databases (e.g.
 App Engine).
 
 Several difficulties arise with parameterizing key encoding. Firstly,
-:py:class:`Index` relies on :py:func:`encode_keys` to function. One solution
-might be to parameterize :py:class:`Index`'s key construction, or force key
-encodings to accept lists of keys as part of their interface. A second issue is
-that is that the 'innocence' of the key encoding might be needed to implement
-`prefix=` queries robustly.
+:py:class:`Index` relies on :py:func:`keycoder.packs` to function. One
+solution might be to parameterize :py:class:`Index`'s key construction, or
+force key encodings to accept lists of keys as part of their interface. A
+second issue is that is that the 'innocence' of the key encoding might be
+needed to implement `prefix=` queries robustly.
 
 Another option would be to allow alternative key encodings for
 :py:class:`Collection` only, with the restriction that keys must still always
@@ -1082,9 +1082,9 @@ Non-batch
 A non-batch record is indicated when key decoding yields a single tuple.
 
 In this case the record key corresponds exactly to the output of
-:py:func:`encode_keys` for the single key present. The value has a variable
-length integer prefix indicating the packer used, and the remainder is the
-output of :py:meth:`Encoder.pack` from the collection's associated encoder.
+:py:func:`keycoder.packs` for the single key present. The value has a
+variable length integer prefix indicating the packer used, and the remainder is
+the output of :py:meth:`Encoder.pack` from the collection's associated encoder.
 
 Batch
 -----
@@ -1149,7 +1149,7 @@ The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 +-------------------+-------------------------------------------------------+
 
 Collection key prefixes are formed simply by encoding the index using
-:py:func:`encode_int`. The index itself is assigned by a call to
+:py:func:`pack_int`. The index itself is assigned by a call to
 :py:meth:`Store.count` using the special name ``'\x00collections_idx'``.
 
 Counters
@@ -1191,7 +1191,7 @@ The value is a ``KEY_ENCODER``-encoded tuple of these fields:
 +-------------------+-------------------------------------------------------+
 
 Compressor value prefixes are formed simply by encoding the index using
-:py:func:`encode_int`. The index itself is assigned by a call to
+:py:func:`pack_int`. The index itself is assigned by a call to
 :py:meth:`Store.count` using the special name ``'\x00encodings_idx'``.
 
 The following entries are assumed to exist, but are never physically written to
