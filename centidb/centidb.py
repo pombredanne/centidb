@@ -513,7 +513,7 @@ class Collection(object):
         #   * Records are yielded following startpred() until not endpred() or
         #     not self.prefix.
         tup = next(it, None)
-        if tup and tup[0].startswith(self.prefix):
+        if tup and tup[0][:len(self.prefix)] == self.prefix:
             it = itertools.chain((tup,), it)
         for key, value in it:
             keys = keycoder.unpacks(self.prefix, key)
