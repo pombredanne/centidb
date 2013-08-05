@@ -320,13 +320,16 @@ class LmdbEngine(object):
         return self.cursor(db=self.db)._iter_from(k, reverse)
 
 
-def make_json_encoder():
+def make_json_encoder(separators=',:', **kwargs):
     """Return an :py:class:`Encoder <centidb.Encoder>` that serializes
     dict/list/string/float/int/bool/None objects using the :py:mod:`json`
-    module."""
+    module. `separators` and `kwargs` are passed to the JSONEncoder
+    constructor."""
     import json
-    return centidb.Encoder('json', json.JSONDecoder().decode,
-                           json.JSONEncoder(separators=',:').encode)
+    encoder = json.JSONEncoder(separators=separators, **kwargs)
+    decoder = json.JSONDecoder().decode
+    decode = lambda s: decoder(str(s))
+    return centidb.Encoder('json', decode, encoder.encode)
 
 
 def make_msgpack_encoder():
