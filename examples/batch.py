@@ -1,23 +1,22 @@
 
+import json
+import os
 import random
 import time
 
 import centidb
-import centidb.support
 
-lines = file('/etc/services').readlines()
-header = random.sample(lines, 150)
-footer = random.sample(lines, 150)
 
-recs = [header + random.sample(lines, 30) + footer
-        for _ in xrange(400)]
+INPUT_PATH = os.path.join(os.path.dirname(__file__), 'hn-comments.json')
+recs = json.load(file(INPUT_PATH))
+
 
 def dotestget():
     t0 = time.time()
     cnt = 0
     while (time.time() - t0) < 2:
         for x in xrange(100):
-            co.get(random.choice(keys))
+            co.get(random.choice(keys), raw=True)
             cnt += 1
     return cnt / (time.time() - t0)
 
@@ -31,6 +30,12 @@ def dotestiter():
     return recs / (time.time() - t0), cnt / (time.time() - t0)
 
 try:
+    import lz4
+    LZ4_PACKER = centidb.Encoder('lz4', lz4.loads, lz4.dumps)
+except ImportError:
+    LZ4_PACKER = None
+
+try:
     import snappy
     SNAPPY_PACKER = centidb.Encoder('snappy',
         snappy.uncompress,
@@ -39,7 +44,7 @@ except ImportError:
     SNAPPY_PACKER = None
 
 
-for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER:
+for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     if not packer:
         continue
 
@@ -47,7 +52,8 @@ for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER:
     for bsize in 1, 2, 4, 5, 8, 16, 32, 64:
         le = centidb.support.ListEngine()
         st = centidb.Store(le)
-        co = centidb.Collection(st, 'people')
+        co = centidb.Collection(st, 'people',
+            encoder=centidb.support.make_json_encoder(sort_keys=True))
 
         keys = [co.put(rec).key for rec in recs]
         before = le.size
