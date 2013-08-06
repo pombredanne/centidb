@@ -612,23 +612,6 @@ The `centidb.support` module includes helpers for a few more encodings.
 .. autofunction:: centidb.support.make_msgpack_encoder
 
 
-Key functions
-+++++++++++++
-
-These functions are based on `SQLite 4's key encoding
-<http://sqlite.org/src4/doc/trunk/www/key_encoding.wiki>`_, except that:
-
-* Support for ``uuid.UUID`` is added.
-* Floats are removed.
-* Varints are used for integers.
-* Strings use a more scripting-friendly encoding.
-
-.. autofunction:: centidb.packs (tups, prefix='')
-.. autofunction:: centidb.unpacks
-.. autofunction:: centidb.invert
-.. autofunction:: centidb.next_greater
-
-
 Index Examples
 ##############
 
