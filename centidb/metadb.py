@@ -41,8 +41,13 @@ class Field(object):
             raise AttributeError(self.name)
 
 
-class String(Field):
-    """A string field.
+class Bool(Field):
+    """A boolean field.
+    """
+
+
+class Double(Field):
+    """A double field.
     """
 
 
@@ -51,9 +56,14 @@ class Integer(Field):
     """
 
 
+class String(Field):
+    """A string field.
+    """
+
+
 class LazyIndexProperty(object):
     """Property that replaces itself with a centidb.Index when it is first
-    called."""
+    accessed."""
     def __init__(self, name):
         self.name = name
 
@@ -139,23 +149,6 @@ class ModelMeta(type):
     def setup_encoding(cls, klass, bases, attrs):
         cls.METADB_ENCODING = centidb.support.make_json_encoder()
 
-    @classmethod
-    def create_collection(cls, klass):
-        if not hasattr(klass, 'METADB_STORE'):
-            raise TypeError('%s nor any of its bases have been bound to a '
-                            'Store. You must call %s.bind_store() with a '
-                            'centidb.Store instance.'
-                            % (klass.__name__, klass.__name__))
-
-        key_func = getattr(klass, 'METADB_KEY_FUNC', None)
-        coll = klass.METADB_STORE.collection(
-            klass.METADB_COLLECTION_NAME, key_func=key_func,
-            blind=getattr(key_func, 'metadb_blind_keys', False))
-
-        for index_func in klass.METADB_INDEX_FUNCS:
-            coll.add_index(index_func.func_name, index_func)
-        klass.METADB_COLLECTION = coll
-
 
 def key(func):
     """Mark a function as the model's primary key function. If the function
@@ -188,9 +181,9 @@ def derived_key(func):
 
 
 def blind(func):
-    """Mark a key function as being compatible with blind writes. This simply
-    means the key function will never generate a duplicate result, therefore
-    the database does not need to check for existent keys during save.
+    """Mark a key function as being compatible with blind writes. This
+    indicates the function never generates a duplicate result, therefore the
+    database does not need to check for existing keys during save.
 
     ::
 
@@ -255,17 +248,34 @@ class BaseModel(object):
     metaclass.
     """
     @classmethod
+    def create_collection(cls):
+        if not hasattr(cls, 'METADB_STORE'):
+            raise TypeError('%s nor any of its bases have been bound to a '
+                            'Store. You must call %s.bind_store() with a '
+                            'centidb.Store instance.'
+                            % (cls.__name__, cls.__name__))
+
+        key_func = getattr(cls, 'METADB_KEY_FUNC', None)
+        coll = cls.METADB_STORE.collection(
+            cls.METADB_COLLECTION_NAME, key_func=key_func,
+            blind=getattr(key_func, 'metadb_blind_keys', False))
+
+        for index_func in cls.METADB_INDEX_FUNCS:
+            coll.add_index(index_func.func_name, index_func)
+        cls.METADB_COLLECTION = coll
+
+    @classmethod
     def collection(cls):
-        """The :py:class:`centidb.Collection` used to store instances of this
-        model. The collection handles objects understood by the
-        underlying encoder, not Model instances.
+        """Return the :py:class:`centidb.Collection` used to store instances of
+        this model. The collection handles objects understood by the underlying
+        encoder, not Model instances.
 
         :py:meth:`bind_store` must be called before accessing this property.
         """
         coll = cls.METADB_COLLECTION
         if coll:
             return coll
-        ModelMeta.create_collection(cls)
+        cls.create_collection()
         return cls.METADB_COLLECTION
 
     @classmethod
@@ -329,7 +339,6 @@ class BaseModel(object):
                     raise ValueError('constraint %r failed for %r'
                                      % (func.func_name, self))
         self.collection().put(self._rec)
-
 
     def __repr__(self):
         klass = self.__class__

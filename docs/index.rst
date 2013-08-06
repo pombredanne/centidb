@@ -827,6 +827,15 @@ Model class
 .. autoclass:: centidb.metadb.BaseModel (\**kwargs)
 
 
+Field Types
++++++++++++
+
+.. autoclass:: centidb.metadb.Bool
+.. autoclass:: centidb.metadb.Double
+.. autoclass:: centidb.metadb.Integer
+.. autoclass:: centidb.metadb.String
+
+
 Specifying an index
 +++++++++++++++++++
 
