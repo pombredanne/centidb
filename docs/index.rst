@@ -5,7 +5,7 @@ centidb
 .. raw:: html
 
     <div style="border: 2px solid #7f0000; background: #ffefef; color: black;
-                padding: 1ex; width: 66%; margin: auto; font-size: larger">
+                padding: 1ex; width: 66%; font-size: larger">
         This is a design prototype, focusing on useful APIs and physical data
         layout.<br>
         <br>

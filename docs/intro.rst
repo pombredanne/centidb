@@ -1,4 +1,6 @@
 
+.. currentmodule:: centidb
+
 Introduction
 ############
 
@@ -9,10 +11,7 @@ be which to use. Let's forgo the nasty research and settle on
 ::
 
     import centidb
-    import centidb.support
-
-    engine = centidb.support.ListEngine()
-    store = centidb.Store(engine)
+    store = centidb.open('ListEngine')
 
 :py:class:`Stores <Store>` manage metadata for a set of collections,
 along with any registered encodings and counters. Multiple

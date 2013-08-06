@@ -1,4 +1,6 @@
 
+.. currentmodule:: centidb
+
 Performance
 ###########
 
