@@ -342,9 +342,9 @@ violate the key ordering, meaning only contiguous ranges may be combined. Calls
 to :py:func:`Collection.put` will cause any overlapping batch to be split as
 part of the operation.
 
-Since it is designed for archival, it is expected that records within a batch
-will not be written often. They must also already exist in the store before
-batching can occur, although this restriction may be removed in future.
+Since this feature is designed for archival, records within a batch should not
+be written often. They must also already exist in the store before batching can
+occur, although this restriction may be removed in future.
 
 A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
 
