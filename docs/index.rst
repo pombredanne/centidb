@@ -629,16 +629,6 @@ These functions are based on `SQLite 4's key encoding
 .. autofunction:: centidb.next_greater
 
 
-Varint functions
-++++++++++++++++
-
-These functions are based on `SQLite 4's sortable varint encoding
-<http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
-
-.. autofunction:: centidb.pack_int
-.. autofunction:: centidb.unpack_int
-
-
 Index Examples
 ##############
 
@@ -776,6 +766,82 @@ emulated by encoding the data to be covered as part of the index key:
 
 A future version may allow storing arbitrarily encoded values along with index
 entries as part of the API.
+
+
+Declarative Interface
+#####################
+
+The `centidb.metadb` module provides an ORM-like metaclass that allows
+simplified definition of database models using Python code.
+
+::
+
+    import centidb
+    from centidb import metadb
+
+
+    class Base(metadb.Model):
+        """Base for models belonging to this program. Can be used to add common
+        fields, and to bind all subclasses to a particular centidb.Store with a
+        single call."""
+
+
+    class User(Base):
+        email = metadb.String()
+        first = metadb.String()
+        last = metadb.String()
+        age = metadb.Integer()
+
+        @metadb.constraint
+        def sane_age(self):
+            """Ensure the user's age is 1..149 if they provided it."""
+            return age is None or (0 < age < 150)
+
+
+    class Item(Base):
+        user_id = metadb.Integer()
+        data = metadb.String()
+
+        @metadb.constraint
+        def sane_user_id(self):
+            """Ensure a User model exists for user_id."""
+            return User.get(self.user_id) is not None
+
+
+    def main():
+        Base.bind_store(centidb.open('ListEngine'))
+
+        user = User(email='dw@botanicus.net', first='David', last='Wilson')
+        user.save()
+
+        user = User.by_key(1)
+
+
+Model class
++++++++++++
+
+.. autoclass:: centidb.metadb.Model (\**kwargs)
+    :members:
+
+
+Specifying an index
++++++++++++++++++++
+
+.. autofunction:: centidb.metadb.index
+
+
+Specifying a key function
++++++++++++++++++++++++++
+
+.. autofunction:: centidb.metadb.key
+.. autofunction:: centidb.metadb.derived_key
+.. autofunction:: centidb.metadb.blind
+
+
+Specifying constraints
+++++++++++++++++++++++
+
+.. autofunction:: centidb.metadb.constraint
 
 
 Compression Examples
