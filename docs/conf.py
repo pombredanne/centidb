@@ -104,7 +104,7 @@ html_theme = 'really-default'
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
-    #'sidebarwidth': 250
+    'sidebarwidth': 250
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
