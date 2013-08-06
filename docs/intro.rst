@@ -4,34 +4,35 @@
 Introduction
 ############
 
+While it is possible to construct all objects from the API reference manually,
+a few helpers exist to simplify access to common objects. First we make use of
+:py:func:`centidb.open`, which simply wraps the process of constructing an
+engine and attaching it to a :py:class:`Store <centidb.Store>`.
+
 Since the library depends on an external engine, an initial consideration might
-be which to use. Let's forgo the nasty research and settle on
-:py:class:`ListEngine <centidb.support.ListEngine>`:
+be which to use. For now, let's forgo the nasty research and settle on the
+simplest engine available, :py:class:`ListEngine <centidb.support.ListEngine>`:
 
 ::
 
     import centidb
     store = centidb.open('ListEngine')
 
-:py:class:`Stores <Store>` manage metadata for a set of collections,
-along with any registered encodings and counters. Multiple
-:py:class:`Collections <Collection>` may exist, each managing
-independent sets of records, like an SQL table. Let's create a ``people``
-collection:
+We now have a :py:class:`Store <Store>`. Stores manage metadata for a set of
+collections, along with any registered encodings and counters. Multiple
+:py:class:`Collections <Collection>` may exist, each managing independent sets
+of records, like an SQL table.
+
+Let's create a ``people`` collection:
 
 ::
 
-    people = centidb.Collection(store, 'people')
+    people = store.collection('people')
 
-Underneath a few interesting things occurred. Since our engine had no
+Underneath a few interesting things just occurred. Since the engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
-and records representing the counter and the collection were written:
-
-::
-    
-    >>> pprint(engine.items)
-    [('\x00(people\x00',                  ' (people\x00\x15\n\x0f'),
-     ('\x01(\x01\x01collections_idx\x00', ' (\x01\x01collections_idx\x00\x15\x0b')]
+and records representing the counter and the collection have already been
+written.
 
 
 Insertion

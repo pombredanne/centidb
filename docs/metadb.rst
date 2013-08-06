@@ -1,3 +1,6 @@
+
+.. currentmodule:: centidb.metadb
+
 Declarative Interface
 #####################
 

@@ -4,6 +4,13 @@
 Reference
 #########
 
+
+open
+++++
+
+.. autofunction:: centidb.open
+
+
 Store Class
 +++++++++++
 
