@@ -66,26 +66,26 @@ class LazyIndexProperty(object):
 class ModelMeta(type):
     def __new__(cls, name, bases, attrs):
         klass = type.__new__(cls, name, bases, attrs)
-        cls.setup_type_vars(klass, name, bases, attrs)
-        cls.setup_key_func(klass, name, bases, attrs)
-        cls.setup_index_funcs(klass, name, bases, attrs)
-        cls.setup_index_properties(klass, name, bases, attrs)
-        cls.setup_field_properties(klass, name, bases, attrs)
-        cls.setup_constraints(klass, name, bases, attrs)
-        cls.setup_encoding(klass, name, bases, attrs)
+        cls.setup_type_vars(klass, bases, attrs)
+        cls.setup_key_func(klass, bases, attrs)
+        cls.setup_index_funcs(klass, bases, attrs)
+        cls.setup_index_properties(klass, bases, attrs)
+        cls.setup_field_properties(klass, bases, attrs)
+        cls.setup_constraints(klass, bases, attrs)
+        cls.setup_encoding(klass, bases, attrs)
         return klass
 
     @classmethod
-    def setup_type_vars(cls, klass, name, bases, attrs):
+    def setup_type_vars(cls, klass, bases, attrs):
         if 'METADB_COLLECTION_NAME' not in attrs:
-            klass.METADB_COLLECTION_NAME = name
+            klass.METADB_COLLECTION_NAME = klass.__name__
         if 'METADB_KIND_NAME' not in attrs:
-            qname = '%s.%s' % (klass.__module__, name)
+            qname = '%s.%s' % (klass.__module__, klass.__name__)
             klass.METADB_KIND_NAME = qname
         klass.METADB_COLLECTION = None
 
     @classmethod
-    def setup_key_func(cls, klass, name, bases, attrs):
+    def setup_key_func(cls, klass, bases, attrs):
         key_func = None
         for key, value in attrs.iteritems():
             if not hasattr(value, 'metadb_derived_key'):
@@ -98,7 +98,7 @@ class ModelMeta(type):
             klass.METADB_KEY_FUNC = key_func
 
     @classmethod
-    def setup_index_funcs(cls, klass, name, bases, attrs):
+    def setup_index_funcs(cls, klass, bases, attrs):
         base_index_funcs = getattr(klass, 'METADB_INDEX_FUNCS', [])
         index_funcs = []
         if attrs.get('METADB_INHERIT_INDEX_FUNCS', True):
@@ -113,13 +113,13 @@ class ModelMeta(type):
         klass.METADB_INDEX_FUNCS = index_funcs
 
     @classmethod
-    def setup_index_properties(cls, klass, name, bases, attrs):
+    def setup_index_properties(cls, klass, bases, attrs):
         for index_func in klass.METADB_INDEX_FUNCS:
             setattr(klass, index_func.func_name,
                     LazyIndexProperty(index_func.func_name))
 
     @classmethod
-    def setup_constraints(cls, klass, name, bases, attrs):
+    def setup_constraints(cls, klass, bases, attrs):
         base_constraints = getattr(klass, 'METADB_CONSTRAINT_FUNCS', [])
         constraints = []
         if attrs.get('METADB_INHERIT_CONSTRAINTS', True):
@@ -130,13 +130,13 @@ class ModelMeta(type):
         klass.METADB_CONSTRAINTS = constraints
 
     @classmethod
-    def setup_field_properties(cls, klass, name, bases, attrs):
+    def setup_field_properties(cls, klass, bases, attrs):
         for key, value in attrs.iteritems():
             if isinstance(value, Field):
                 value.name = key
 
     @classmethod
-    def setup_encoding(cls, klass, name, bases, attrs):
+    def setup_encoding(cls, klass, bases, attrs):
         cls.METADB_ENCODING = centidb.support.make_json_encoder()
 
     @classmethod
