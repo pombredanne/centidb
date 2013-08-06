@@ -299,7 +299,7 @@ class BaseModel(object):
     @classmethod
     def find(cls, key=None, lo=None, hi=None, reverse=None, include=False):
         """Fetch the first matching instance; see
-        :py:meth:`centidb.Collection().find`.
+        :py:meth:`centidb.Collection.find`.
         """
         return cls.collection().find(key, lo, hi, reverse, include)
 
