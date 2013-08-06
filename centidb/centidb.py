@@ -179,6 +179,7 @@ class Index(object):
         self.store = coll.store
         self.engine = self.store.engine
         self.info = info
+        #: The index function.
         self.func = func
         self.prefix = self.store.prefix + keycoder.pack_int(info['idx'])
         self._decode = functools.partial(keycoder.unpacks, self.prefix)
@@ -222,6 +223,12 @@ class Index(object):
             if not key:
                 break
             yield key
+
+    def count(self, args=None, lo=None, hi=None, max=None, include=False,
+              txn=None):
+        """Return a count of index entries matching the parameter
+        specification."""
+        return sum(1 for _ in self._iter(txn, args, lo, hi, 0, max, include))
 
     def pairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=False, txn=None):
