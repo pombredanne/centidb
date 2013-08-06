@@ -58,7 +58,7 @@ class LazyIndexProperty(object):
         self.name = name
 
     def __get__(self, instance, klass):
-        index = klass.collection.indices[self.name]
+        index = klass.collection().indices[self.name]
         setattr(klass, self.name, index)
         return index
 
@@ -120,12 +120,12 @@ class ModelMeta(type):
 
     @classmethod
     def setup_constraints(cls, klass, bases, attrs):
-        base_constraints = getattr(klass, 'METADB_CONSTRAINT_FUNCS', [])
+        base_constraints = getattr(klass, 'METADB_CONSTRAINTS', [])
         constraints = []
         if attrs.get('METADB_INHERIT_CONSTRAINTS', True):
             constraints.extend(base_constraints)
         for key, value in attrs.iteritems():
-            if getattr(value, 'metadb_constraint', True):
+            if getattr(value, 'metadb_constraint', False):
                 constraints.append(value)
         klass.METADB_CONSTRAINTS = constraints
 
@@ -146,10 +146,11 @@ class ModelMeta(type):
                             'Store. You must call %s.bind_store() with a '
                             'centidb.Store instance.'
                             % (klass.__name__, klass.__name__))
+
+        key_func = getattr(klass, 'METADB_KEY_FUNC', None)
         coll = klass.METADB_STORE.collection(
-            klass.METADB_COLLECTION_NAME,
-            key_func=klass.METADB_KEY_FUNC,
-            blind=getattr(klass.METADB_KEY_FUNC, 'metadb_blind_keys', False))
+            klass.METADB_COLLECTION_NAME, key_func=key_func,
+            blind=getattr(key_func, 'metadb_blind_keys', False))
 
         for index_func in klass.METADB_INDEX_FUNCS:
             coll.add_index(index_func.func_name, index_func)
@@ -253,7 +254,7 @@ class BaseModel(object):
     :py:class:`Model` to allow clean subclassing of the :py:class:`ModelMeta`
     metaclass.
     """
-    @property
+    @classmethod
     def collection(cls):
         """The :py:class:`centidb.Collection` used to store instances of this
         model. The collection handles objects understood by the
@@ -283,25 +284,25 @@ class BaseModel(object):
     def get(cls, key):
         """Fetch an instance given its key; see
         :py:meth:`centidb.Collection.get`."""
-        return cls.collection.get(key)
+        return cls.collection().get(key)
 
     @classmethod
     def find(cls, key=None, lo=None, hi=None, reverse=None, include=False):
         """Fetch the first matching instance; see
-        :py:meth:`centidb.Collection.find`.
+        :py:meth:`centidb.Collection().find`.
         """
-        return cls.collection.find(key, lo, hi, reverse, include)
+        return cls.collection().find(key, lo, hi, reverse, include)
 
     @classmethod
     def iter(cls, key=None, lo=None, hi=None, reverse=None, max=None,
              include=False):
         """Yield matching models in key order; see
         :py:meth:`centidb.Store.values`."""
-        return cls.collection.values(key, lo, hi, reverse, max, include)
+        return cls.collection().values(key, lo, hi, reverse, max, include)
 
     def __init__(self, _rec=None, **kwargs):
         if _rec is None:
-            _rec = centidb.Record(self.collection, {})
+            _rec = centidb.Record(self.collection(), {})
         self._rec = _rec
 
     @property
@@ -313,7 +314,7 @@ class BaseModel(object):
     def delete(self):
         """Delete the model if it has been saved."""
         if self._rec.key:
-            self.collection.delete(self._rec)
+            self.collection().delete(self._rec)
 
     def save(self, check_constraints=True):
         """Create or update the model in the database.
@@ -323,11 +324,19 @@ class BaseModel(object):
                 importing e.g. old data.
         """
         if check_constraints:
-            for func in self.METADB_CONSTRAINT_FUNCS:
+            for func in self.METADB_CONSTRAINTS:
                 if not func(self):
                     raise ValueError('constraint %r failed for %r'
                                      % (func.func_name, self))
-        self.collection.put(self._rec)
+        self.collection().put(self._rec)
+
+
+    def __repr__(self):
+        klass = self.__class__
+        qname = '%s.%s' % (klass.__module__, klass.__name__)
+        if self.is_saved:
+            return '<%s %s>' % (qname, self._rec.key)
+        return '<%s unsaved>' % (qname,)
 
 
 class Model(BaseModel):
