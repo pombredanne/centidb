@@ -60,14 +60,15 @@ ITEMGETTER_1 = operator.itemgetter(1)
 
 def open(engine, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
-    `engine(**kwargs)` and wrapping the result in a :py:class:`Engine`.
-    `engine` can either be a name from :py:mod:`centidb.support` or a fully
-    qualified name for a class in another module.
+    `engine(**kwargs)` and wrapping the result in a :py:class:`Store`. `engine`
+    can either be a name from :py:mod:`centidb.support` or a fully qualified
+    name for a class in another module.
 
     ::
 
         >>> # Uses centidb.support.SkiplistEngine
         >>> open("SkiplistEngine")
+
         >>> # Uses mymodule.BlarghEngine
         >>> open("mymodule.BlarghEngine")
     """
