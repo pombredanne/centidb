@@ -822,6 +822,9 @@ Model class
 
 .. autoclass:: centidb.metadb.Model (\**kwargs)
     :members:
+    :inherited-members:
+
+.. autoclass:: centidb.metadb.BaseModel (\**kwargs)
 
 
 Specifying an index

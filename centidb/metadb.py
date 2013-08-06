@@ -88,7 +88,7 @@ class ModelMeta(type):
     def setup_key_func(cls, klass, name, bases, attrs):
         key_func = None
         for key, value in attrs.iteritems():
-            if not hasattr(value, 'potty_derived_key'):
+            if not hasattr(value, 'metadb_derived_key'):
                 continue
             if key_func:
                 raise TypeError('%r: multiple key functions found: %r and %r'
@@ -104,7 +104,7 @@ class ModelMeta(type):
         if attrs.get('METADB_INHERIT_INDEX_FUNCS', True):
             index_funcs.extend(base_index_funcs)
         for key, value in attrs.iteritems():
-            if not hasattr(value, 'potty_index_func'):
+            if not hasattr(value, 'metadb_index_func'):
                 continue
             if any(f.func_name == value.func_name for f in base_index_funcs):
                 raise TypeError('index %r already defined by a base class'
@@ -125,7 +125,7 @@ class ModelMeta(type):
         if attrs.get('METADB_INHERIT_CONSTRAINTS', True):
             constraints.extend(base_constraints)
         for key, value in attrs.iteritems():
-            if getattr(value, 'potty_constraint', True):
+            if getattr(value, 'metadb_constraint', True):
                 constraints.append(value)
         klass.METADB_CONSTRAINTS = constraints
 
@@ -149,7 +149,7 @@ class ModelMeta(type):
         coll = klass.METADB_STORE.collection(
             klass.METADB_COLLECTION_NAME,
             key_func=klass.METADB_KEY_FUNC,
-            blind=getattr(klass.METADB_KEY_FUNC, 'potty_blind_keys', False))
+            blind=getattr(klass.METADB_KEY_FUNC, 'metadb_blind_keys', False))
 
         for index_func in klass.METADB_INDEX_FUNCS:
             coll.add_index(index_func.func_name, index_func)
@@ -167,7 +167,7 @@ def key(func):
         def key_func(self):
             return int(time.time() * 1000)
     """
-    func.potty_derived_key = False
+    func.metadb_derived_key = False
     return func
 
 
@@ -182,7 +182,7 @@ def derived_key(func):
         def key_func(self):
             return self.name, self.email
     """
-    func.potty_derived_key = True
+    func.metadb_derived_key = True
     return func
 
 
@@ -198,7 +198,7 @@ def blind(func):
         def never_repeating_key_func(self):
             return int(time.time() * 10000000000)
     """
-    func.potty_blind_keys = True
+    func.metadb_blind_keys = True
     return func
 
 
@@ -229,7 +229,7 @@ def index(func):
         oldest = Person.age_index.get(reverse=True)
 
     """
-    func.potty_index_func = True
+    func.metadb_index_func = True
     return func
 
 
@@ -244,17 +244,15 @@ def constraint(func):
             return 0 < age < 150
 
     """
-    func.potty_constraint = True
+    func.metadb_constraint = True
     return func
 
 
-class Model(object):
-    """Model base class. Inherit from this class to add fields to the basic
-    model.
+class BaseModel(object):
+    """Basic model class implementation. This exists separately from
+    :py:class:`Model` to allow clean subclassing of the :py:class:`ModelMeta`
+    metaclass.
     """
-
-    __metaclass__ = ModelMeta
-
     @property
     def collection(cls):
         """The :py:class:`centidb.Collection` used to store instances of this
@@ -330,3 +328,9 @@ class Model(object):
                     raise ValueError('constraint %r failed for %r'
                                      % (func.func_name, self))
         self.collection.put(self._rec)
+
+
+class Model(BaseModel):
+    """Inherit from this class to add fields to the basic model.
+    """
+    __metaclass__ = ModelMeta
