@@ -1,8 +1,8 @@
 
 .. currentmodule:: centidb
 
-Reference
-#########
+API Reference
+#############
 
 
 open
