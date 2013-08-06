@@ -31,8 +31,7 @@ Let's create a ``people`` collection:
 
 Underneath a few interesting things just occurred. Since the engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
-and records representing the counter and the collection have already been
-written.
+and records representing the counter and the collection were written.
 
 
 Insertion
@@ -272,13 +271,35 @@ particular region.
     users = centidb.Collection(store, 'users')
 
 
+Auto-increment
+--------------
+
+When no explicit key function is given, :py:class:`Collection` defaults to
+generating transactionally assigned auto-incrementing integers using
+:py:meth:`Store.count`. Since this doubles the database operations required,
+auto-incrementing keys should be used sparingly. Example:
+
+::
+
+    log_msgs = centidb.Collection(store, 'log_msgs')
+    log_msgs.put("first")
+    log_msgs.put("second")
+    log_msgs.put("third")
+
+    assert list(log_msgs.items()) == [
+        ((1,), "first"),
+        ((2,), "second"),
+        ((3,), "third")
+    ]
+
+*Note:* as with everywhere, since keys are always tuples, the auto-incrementing
+integer was wrapped in a 1-tuple.
+
+
 Compression
 +++++++++++
 
-Value compression
------------------
-
-Values may be compressed by passing a `packer=` argument to
+Individual values may be compressed by passing a `packer=` argument to
 :py:meth:`Collection.put`, or to the :py:class:`Collection` constructor. A
 predefined ``ZLIB_PACKER`` is included, however adding new compressors is
 simply a case of constructing an :py:class:`Encoder`.
@@ -288,12 +309,34 @@ simply a case of constructing an :py:class:`Encoder`.
     coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
 
 
+Custom Compressors
+------------------
+
+Constructing a custom compressor is trivial:
+
+.. code-block:: python
+
+    import lz4
+
+    # Build an Encoder instance describing the encoding.
+    LZ4_PACKER = centidb.Encoder('lz4', lz4.loads, lz4.dumps)
+
+    # Register the encoder with the store, which causes allocation of a
+    # persistent numeric ID, and saving the encoder's record in the engine.
+    store.add_encoder(LZ4_PACKER)
+
+
+Note that custom compressors must always be re-registered with
+:py:meth:`Store.add_encoder` each time the store is re-opened, otherwise the
+library will raise exceptions when a compressed record is encountered.
+
+
 Batch compression
 -----------------
 
 Batch compression is supported by way of :py:meth:`Collection.batch`: this is
-where a range of records have their values combined before being passed to the
-compressor. The resulting stream is saved using a special key that still
+where a range of records *have their values concatenated* before being passed
+to the compressor. The resulting stream is saved using a special key that still
 permits efficient child lookup. The main restriction is that batches cannot
 violate the key ordering, meaning only contiguous ranges may be combined. Calls
 to :py:func:`Collection.put` will cause any overlapping batch to be split as
@@ -328,33 +371,6 @@ A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
      After sz 2909.70kb cnt   30 ratio  2.39 ( snappy size 16, 1721.41 get/s 42.48 iter/s 8427.12 iterrecs/s)
      After sz 2874.35kb cnt   18 ratio  2.42 ( snappy size 32, 987.66 get/s 39.33 iter/s 8388.72 iterrecs/s)
      After sz 2859.89kb cnt   12 ratio  2.43 ( snappy size 64, 528.00 get/s 35.33 iter/s 8384.39 iterrecs/s)
-
-
-Auto-increment
-++++++++++++++
-
-When no explicit key function is given, :py:class:`Collection` defaults to
-generating transactionally assigned auto-incrementing integers using
-:py:meth:`Store.count`. Since this doubles the database operations required,
-auto-incrementing keys should be used sparingly. Example:
-
-::
-
-    log_msgs = centidb.Collection(store, 'log_msgs')
-    log_msgs.put("first")
-    log_msgs.put("second")
-    log_msgs.put("third")
-
-    assert list(log_msgs.items()) == [
-        ((1,), "first"),
-        ((2,), "second"),
-        ((3,), "third")
-    ]
-
-*Note:* as with everywhere, since keys are always tuples, the auto-incrementing
-integer was wrapped in a 1-tuple.
-
-
 
 
 .. _query-parameters:
