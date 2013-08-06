@@ -4,20 +4,14 @@ centidb
 
 .. raw:: html
 
-    <p>&nbsp;</p>
-
-    <div style="border: 2px solid red; background: #ffefef; color: black;
-                padding: 1ex; text-align: center; width: 66%; margin: auto;
-                font-size: larger">
-        <strong style="color: #7f0000">WORK IN PROGRESS</strong><br>
-        <br>
+    <div style="border: 2px solid #7f0000; background: #ffefef; color: black;
+                padding: 1ex; width: 66%; margin: auto; font-size: larger">
         This is a design prototype, focusing on useful APIs and physical data
-        layout. Some parts are missing, other parts are slow and/or nasty. Even
-        if finished it may only be useful as the basis for a library that may
-        never exist.<br>
+        layout.<br>
         <br>
-        <strong style="color: #7f0000">THIS DOCUMENTATION IS
-        INCOMPLETE</strong>
+        Some parts are missing, others are slow, broken and/or nasty. Even if
+        finished it may only be useful as the basis for a library that may
+        never exist.
     </div>
 
 **centidb** is a compromise between the minimalism of key/value stores and the
@@ -42,4 +36,4 @@ comparable features.
     api
     cookbook
     notes
-    :maxdepth: 2
+    :maxdepth: 1
