@@ -44,6 +44,12 @@ except ImportError:
     SNAPPY_PACKER = None
 
 
+print '"Packer","Size","Count","Ratio","BatchSz","Gets/sec","Iters/sec","Iterrecs/sec"'
+
+def out(*args):
+    print '"%s","%.2fkb","%d","%.2f","%d","%.2f","%.2f","%.2f"' % args
+
+
 for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     if not packer:
         continue
@@ -60,11 +66,9 @@ for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
 
         if bsize == 1:
             iterrecs, te = dotestiter()
-            print 'Before sz %7.2fkb cnt %4d %28s (%4.2f get/s %4.2f iter/s %4.2f iterrecs/s)' %\
-                (before / 1024., len(le.items), '', dotestget(), te, iterrecs)
+            out('plain', before / 1024., len(le.items), 1, 1, dotestget(), te, iterrecs)
         co.batch(max_recs=bsize, packer=packer)
 
         iterrecs, te = dotestiter()
-        print ' After sz %7.2fkb cnt %4d ratio %5.2f (%7s size %2d, %4.2f get/s %4.2f iter/s %4.2f iterrecs/s)' %\
-            (le.size / 1024., len(le.items), float(before) / le.size,
-             packer.name, bsize, dotestget(), te, iterrecs)
+        out(packer.name, le.size / 1024., len(le.items), float(before) / le.size,
+            bsize, dotestget(), te, iterrecs)
