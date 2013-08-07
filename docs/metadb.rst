@@ -76,21 +76,21 @@ Field Types
 Specifying an index
 +++++++++++++++++++
 
-.. autofunction:: centidb.metadb.index
+.. autofunction:: centidb.metadb.index ()
 
 
 Specifying a key function
 +++++++++++++++++++++++++
 
-.. autofunction:: centidb.metadb.key
-.. autofunction:: centidb.metadb.derived_key
-.. autofunction:: centidb.metadb.blind
+.. autofunction:: centidb.metadb.key ()
+.. autofunction:: centidb.metadb.derived_key ()
+.. autofunction:: centidb.metadb.blind ()
 
 
 Specifying constraints
 ++++++++++++++++++++++
 
-.. autofunction:: centidb.metadb.constraint
+.. autofunction:: centidb.metadb.constraint ()
 
 
 Triggers
