@@ -214,17 +214,16 @@ def index(func):
             age = metadb.Integer()
 
             @metadb.index
-            def age_index(self):
+            def by_age(self):
                 return self.age
 
-        # ...
-        # Count all people older than 22.
-        print('Total people older than 22:', Person.age_index.count(lo=22))
+
+        # Count all people 22 or older.
+        print('Total people older than 22:', Person.by_age.count(lo=22))
 
         # Fetch youngest and oldest people.
-        youngest = Person.age_index.get()
-        oldest = Person.age_index.get(reverse=True)
-
+        youngest = Person.by_age.find()
+        oldest = Person.by_age.find(reverse=True)
     """
     func.metadb_index_func = True
     return func
@@ -237,7 +236,7 @@ def constraint(func):
     ::
 
         @metadb.constraint
-        def age_sane(self):
+        def is_age_valid(self):
             return 0 < age < 150
     """
     func.metadb_constraint = True

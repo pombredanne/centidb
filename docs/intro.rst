@@ -235,7 +235,7 @@ For example, to assign a key based on the time in microseconds:
         >>> def usec_key(val):
         ...     return int(1e6 * time.time())
 
-        >>> coll = centidb.Collection(store, 'stuff', key_func=usec_key)
+        >>> stuff = centidb.Collection(store, 'stuff', key_func=usec_key)
 
 Or by UUID:
 
@@ -244,7 +244,7 @@ Or by UUID:
         >>> def uuid_key(val):
         ...     return uuid.uuid4()
 
-        >>> coll = centidb.Collection(store, 'stuff', key_func=uuid_key)
+        >>> stuff = centidb.Collection(store, 'stuff', key_func=uuid_key)
 
 Finally, a key function may also be marked as `derived` (`derived_keys=True`),
 indicating that if the record value changes, the key function should be
@@ -256,7 +256,7 @@ reinvoked to assign a new key.
         >>> def user_name_key(val):
         ...     return val['username']
 
-        >>> coll = centidb.Collection(store, 'users',
+        >>> users = centidb.Collection(store, 'users',
         ...     key_func=user_name_key,
         ...     derived_keys=True)
 
@@ -294,6 +294,44 @@ auto-incrementing keys should be used sparingly. Example:
 
 *Note:* as with everywhere, since keys are always tuples, the auto-incrementing
 integer was wrapped in a 1-tuple.
+
+
+
+Indices
+-------
+
+A primary benefit of the library is the ability to define *secondary indices*
+on a collection. These are essentially separate, hidden collections that
+reverse map from record attributes to the record's primary key, similar to
+other database systems.
+
+An index can be created by calling :py:meth:`Collection.add_index`, passing it
+a name and function implementing the index:
+
+::
+
+    def age_index(person):
+        return person['age']
+
+    people.add_index('by_age', age_index)
+
+An index function can return a ``None``, a single primitive value, a tuple of
+values, or a list of any of the above. Returning ``None`` indicates that no
+index entries should be generated for this record. Returning a primitive value
+or tuple specifies a single entry, and returning a list of values or tuples
+indicates multiple entries.
+
+.. code-block:: python
+
+    def age_nickname_index(person):
+        """Produce one index entry for each (age, nickname)."""
+        return [(person['age'], nick) for nick in person['nicknames'])]
+
+
+    def deceased_name_index(person):
+        """Produce an index of names but include only people that died."""
+        if person['dead']:
+            return person['name']
 
 
 Compression
