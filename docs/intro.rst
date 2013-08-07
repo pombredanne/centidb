@@ -346,7 +346,12 @@ Since this feature is designed for archival, records within a batch should not
 be written often. They must also already exist in the store before batching can
 occur, although this restriction may be removed in future.
 
-A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
+.. note::
+
+    Batch compression is currently only possible on a collection. A future
+    version may also support the ability to batch compress secondary indices.
+
+A run of ``examples/batch.py`` illustrates the tradeoffs of compression.
 
 .. raw:: html
 
@@ -357,11 +362,10 @@ A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
         }
     </style>
 
-.. csv-table::
+.. csv-table:: ``examples/batch.py`` with 777 1.51kb records.
     :class: pants
     :header-rows: 1
     :file: batch-output.csv
-
 
 
 .. _query-parameters:
