@@ -197,8 +197,11 @@ def blind(func):
 
 
 def index(func):
-    """Mark a function as being an index function for the model. The function
-    will be called during save to produce secondary indices for each item.
+    """Mark a function as an index for the model. The function will be called
+    during update to produce secondary indices for each item.
+
+    See :py:class:`centidb.Index` for more information on the function's return
+    value.
 
     Once the model class has been constructed, accessing ``Model.func_name``
     will return a :py:class:`centidb.Index` instance representing the index.
