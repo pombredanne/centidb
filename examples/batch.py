@@ -1,5 +1,6 @@
 
 import gzip
+import itertools
 import json
 import os
 import random
@@ -17,7 +18,7 @@ def dotestget():
     cnt = 0
     while (time.time() - t0) < 2:
         for x in xrange(100):
-            co.get(random.choice(keys), raw=True)
+            co.get(nextkey(), raw=True)
             cnt += 1
     return cnt / (time.time() - t0)
 
@@ -26,7 +27,7 @@ def dotestiter():
     cnt = 0
     recs = 0
     while (time.time() - t0) < 2:
-        recs += sum(1 for _ in co.items(random.choice(keys)))
+        recs += sum(1 for _ in co.items(nextkey()))
         cnt += 1
     return recs / (time.time() - t0), cnt / (time.time() - t0)
 
@@ -63,6 +64,9 @@ for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
             encoder=centidb.support.make_json_encoder(sort_keys=True))
 
         keys = [co.put(rec).key for rec in recs]
+        random.shuffle(keys)
+        nextkey = iter(itertools.cycle(keys)).next
+
         before = le.size
 
         if bsize == 1:
