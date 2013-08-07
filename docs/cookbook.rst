@@ -215,3 +215,54 @@ collection, and iteratively copy from the old collection:
 
     >>> new_coll.puts(old_coll.values())
 
+
+
+
+Managing Hierarchies
+++++++++++++++++++++
+
+There are several options for storing an object hierarchy. Some are explored
+below.
+
+
+Hierarchical key functions
+--------------------------
+
+When handling with a subtree-query heavy load such as on a threaded discussion
+board, it makes sense to cluster your collection primarily using this subtree
+structure.
+
+Consider a bulletin board model:
+
+::
+
+    class Comment(metadb.Model):
+        id = metadb.Integer()
+        parent_id = metadb.Integer()
+        submitter_id = metadb.Integer()
+        text = metadb.String()
+
+        @metadb.on_create
+        def assign_id(self):
+            """Assign a unique short ID on creation."""
+            self.thing_id = cls.METADB_STORE.count('thing_id')
+
+        @metadb.index
+        def by_id(self):
+            """Maintain a secondary index mapping short ID to primary key."""
+            return self.thing_id
+
+        @metadb.key
+        def key(self):
+            """Construct our key by recording the path from our parent key to
+            the root of the tree."""
+            key = [self.id]
+            parent_id = self.parent_id
+            while parent_id:
+                key.append(parent_id)
+                parent = self.get(id=parent_id)
+                assert parent
+                parent_id = parent.id
+            return reversed(key)
+
+
