@@ -1,6 +1,8 @@
 
 .. currentmodule:: centidb
 
+.. _api-reference:
+
 API Reference
 #############
 

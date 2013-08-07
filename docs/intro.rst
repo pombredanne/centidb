@@ -4,10 +4,10 @@
 Introduction
 ############
 
-While it is possible to construct all objects from the API reference manually,
-a few helpers exist to simplify access to common objects. First we make use of
-:py:func:`centidb.open`, which simply wraps the process of constructing an
-engine and attaching it to a :py:class:`Store <centidb.Store>`.
+While it is possible to construct all objects from the :ref:`api-reference`
+manually, some helpers exist to simplify common usage. First we make use of
+:py:func:`centidb.open`, which wraps the process of constructing an engine and
+attaching it to a :py:class:`Store <centidb.Store>`.
 
 Since the library depends on an external engine, an initial consideration might
 be which to use. For now, let's forgo the nasty research and settle on the
