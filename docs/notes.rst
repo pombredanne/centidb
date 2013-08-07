@@ -376,12 +376,13 @@ History
 The first attempt came during 2011 while porting from App Engine and a
 Datastore-alike was needed. All alternatives included so much weirdness (Java?
 Erlang? JavaScript? BSON? Auto-magico-sharding?
-``PageFaultRetryableSection``?!?) that I eventually canned the project,
-rendered incapable of picking something as **simple as a database** that was
-*good enough*, overwhelmed by false promises, fake distinctions and overstated
-greatness in the endless PR veiled by marketing site designs, and driven by
-people for whom the embodiment of *elegance* is more often the choice of font
-on a Powerpoint slide.
+`PageFaultRetryableSection
+<https://github.com/mongodb/mongo/blob/master/src/mongo/db/pagefault.h#L35>`_?!?)
+that I eventually canned the project, rendered incapable of picking something
+as **simple as a database** that was *good enough*, overwhelmed by false
+promises, fake distinctions and overstated greatness in the endless PR veiled
+by marketing site designs, and driven by people for whom the embodiment of
+*elegance* is more often the choice of font on a Powerpoint slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
 when the B-tree appeared, variants of which comprise the core of SQLite 3, the
