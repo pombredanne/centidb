@@ -348,29 +348,20 @@ occur, although this restriction may be removed in future.
 
 A run of ``examples/batch.py`` illustrates the tradeoffs of compression:
 
-::
+.. raw:: html
 
-    $ PYTHONPATH=. python examples/batch.py
+    <style>
+        .pants th,
+        .pants td {
+            text-align: right !important;
+        }
+    </style>
 
-    Before sz 6952.27kb cnt  403                              (8194.45 get/s 49.37 iter/s 10513.34 iterrecs/s)
-     After sz 3250.61kb cnt  403 ratio  2.14 (   zlib size  1, 3822.55 get/s 20.28 iter/s 4315.76 iterrecs/s)
-     After sz 1878.92kb cnt  203 ratio  3.70 (   zlib size  2, 3156.00 get/s 29.51 iter/s 5280.37 iterrecs/s)
-     After sz 1177.15kb cnt  103 ratio  5.91 (   zlib size  4, 2544.36 get/s 30.88 iter/s 6297.81 iterrecs/s)
-     After sz 1029.91kb cnt   83 ratio  6.75 (   zlib size  5, 2351.24 get/s 34.14 iter/s 6621.98 iterrecs/s)
-     After sz  816.30kb cnt   53 ratio  8.52 (   zlib size  8, 1921.35 get/s 36.16 iter/s 7168.79 iterrecs/s)
-     After sz  635.69kb cnt   28 ratio 10.94 (   zlib size 16, 1098.36 get/s 31.94 iter/s 6970.13 iterrecs/s)
-     After sz  547.55kb cnt   16 ratio 12.70 (   zlib size 32, 511.96 get/s 34.20 iter/s 6628.68 iterrecs/s)
-     After sz  503.59kb cnt   10 ratio 13.81 (   zlib size 64, 288.66 get/s 28.56 iter/s 6507.69 iterrecs/s)
+.. csv-table::
+    :class: pants
+    :header-rows: 1
+    :file: batch-output.csv
 
-    Before sz 6952.27kb cnt  403                              (8198.30 get/s 50.20 iter/s 10475.25 iterrecs/s)
-     After sz 4508.79kb cnt  405 ratio  1.54 ( snappy size  1, 6456.26 get/s 39.59 iter/s 7765.54 iterrecs/s)
-     After sz 2994.95kb cnt  205 ratio  2.32 ( snappy size  2, 5314.67 get/s 38.72 iter/s 7860.98 iterrecs/s)
-     After sz 2995.79kb cnt  105 ratio  2.32 ( snappy size  4, 4091.23 get/s 38.66 iter/s 8175.65 iterrecs/s)
-     After sz 3049.17kb cnt   85 ratio  2.28 ( snappy size  5, 3609.85 get/s 39.07 iter/s 8184.12 iterrecs/s)
-     After sz 2953.20kb cnt   55 ratio  2.35 ( snappy size  8, 2789.39 get/s 41.48 iter/s 8308.94 iterrecs/s)
-     After sz 2909.70kb cnt   30 ratio  2.39 ( snappy size 16, 1721.41 get/s 42.48 iter/s 8427.12 iterrecs/s)
-     After sz 2874.35kb cnt   18 ratio  2.42 ( snappy size 32, 987.66 get/s 39.33 iter/s 8388.72 iterrecs/s)
-     After sz 2859.89kb cnt   12 ratio  2.43 ( snappy size 64, 528.00 get/s 35.33 iter/s 8384.39 iterrecs/s)
 
 
 .. _query-parameters:
