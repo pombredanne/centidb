@@ -469,9 +469,10 @@ class Collection(object):
         instance describing the index. This method may only be invoked once for
         each unique `name` for each collection.
 
-        *Note:* only index metadata is persistent. You must invoke
-        :py:meth:`Collection.add_index` with the same arguments every time you
-        create a :py:class:`Collection` instance.
+        .. note::
+            Only index metadata is persistent. You must invoke
+            :py:meth:`Collection.add_index` with the same arguments every time
+            you create a :py:class:`Collection` instance.
 
         `name`:
             ASCII name for the index.
@@ -482,7 +483,11 @@ class Collection(object):
             primitive values, a list of primitive values, or a list of tuples
             of primitive values.
 
-            `Note:` the index function must have no side-effects. Example:
+            .. caution::
+                The index function must have no side-effects, as it may be
+                invoked repeatedly.
+
+            Example:
 
             ::
 
