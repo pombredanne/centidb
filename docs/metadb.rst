@@ -92,3 +92,39 @@ Specifying constraints
 
 .. autofunction:: centidb.metadb.constraint
 
+
+Triggers
+++++++++
+
+It is possible to register functions to be called when models are modified
+somehow. Inheritance is respected, in that triggers registered against a base
+class will be invoked prior to any registered against the class of the model
+being modified.
+
+.. autofunction:: centidb.metadb.on_create ()
+.. autofunction:: centidb.metadb.on_update ()
+.. autofunction:: centidb.metadb.on_delete ()
+
+.. autofunction:: centidb.metadb.after_create ()
+.. autofunction:: centidb.metadb.after_update ()
+.. autofunction:: centidb.metadb.after_delete ()
+
+
+External triggers
+-----------------
+
+It is also possible to create a trigger from outside the model definition. This
+uses the same `on_*` and `after_*` functions, but includes a second parameter,
+which is a reference to the model class to subscribe to.
+
+::
+
+    def log_create(model):
+        print 'Model created!', model
+    def log_delete(model):
+        print 'Model deleted!', model
+
+    def install_debug_helpers():
+        if config.DEBUG:
+            metadb.after_create(log_create, models.Base)
+            metadb.after_delete(log_delete, models.Base)

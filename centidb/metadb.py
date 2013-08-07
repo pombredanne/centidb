@@ -236,9 +236,102 @@ def constraint(func):
         @metadb.constraint
         def age_sane(self):
             return 0 < age < 150
-
     """
     func.metadb_constraint = True
+    return func
+
+
+def on_create(func, klass=None):
+    """Mark a function to be called prior to initial save (creation) of a
+    model.
+
+    ::
+
+        @metadb.on_create
+        def set_created(self):
+            '''Update the model's creation time.'''
+            self.created = datetime.datetime.now()
+    """
+    assert klass is None, 'external triggers not supported yet.'
+    func.metadb_on_create = True
+    return func
+
+
+def on_update(func, klass=None):
+    """Mark a function to be called prior to create or update of a model.
+
+    ::
+
+        @metadb.on_update
+        def set_modified(self):
+            '''Update the model's modified time.'''
+            self.modified = datetime.datetime.utcnow()
+    """
+    assert klass is None, 'external triggers not supported yet.'
+    func.metadb_on_update = True
+    return func
+
+
+def on_delete(func, klass=None):
+    """Mark a function to be called prior to deletion of a model.
+
+    ::
+
+        @metadb.on_delete
+        def ensure_can_delete(self):
+            '''Prevent deletion if account is active.'''
+            if self.state == 'active':
+                raise Exception("can't delete while account is active.")
+    """
+    assert klass is None, 'external triggers not supported yet.'
+    func.metadb_on_delete = True
+    return func
+
+
+def after_create(func, klass=None):
+    """Mark a function to be called after initial save (creation) of a model.
+
+    ::
+
+        @metadb.after_create
+        def send_welcome_message(self):
+            '''Send the user a welcome message.'''
+            msg = Message(user_id=self.id, text='Welcome to our service!')
+            msg.save()
+    """
+    assert klass is None, 'external triggers not supported yet.'
+    func.metadb_after_create = True
+    return func
+
+
+def after_update(func, klass=None):
+    """Mark a function to be called prior to create or update of a model.
+
+    ::
+
+        @metadb.after_update
+        def notify_update(self):
+            '''Push an update event to message queue subscribers.'''
+            my_message_queue.send(topic='account-updated', id=self.id)
+    """
+    assert klass is None, 'external triggers not supported yet.'
+    func.metadb_after_update = True
+    return func
+
+
+def after_delete(func, klass=None):
+    """Mark a function to be called after deletion of a model.
+
+    ::
+
+        @metadb.after_delete
+        def delete_messages(self):
+            '''Delete all the account's messages.'''
+            for msg in Message.user_index.find(prefix=self.id):
+                msg.delete()
+    """
+    assert klass is None, 'external triggers not supported yet.'
+    func.metadb_on_delete = True
     return func
 
 
