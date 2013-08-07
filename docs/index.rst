@@ -2,17 +2,14 @@
 centidb
 #######
 
-.. raw:: html
+.. warning::
 
-    <div style="border: 2px solid #7f0000; background: #ffefef; color: black;
-                padding: 1ex; width: 66%; font-size: larger">
-        This is a design prototype, focusing on useful APIs and physical data
-        layout.<br>
-        <br>
-        Some parts are missing, others are slow, broken and/or nasty. Even if
-        finished it may only be useful as the basis for a library that may
-        never exist.
-    </div>
+    This is a design prototype, focusing on useful APIs and physical data
+    layout.
+
+    Some parts are missing, many others are slow, broken and/or nasty. Even if
+    finished it may only be useful as the basis for a library that may never
+    exist.
 
 **centidb** is a compromise between the minimalism of key/value stores and the
 convenience of SQL. It augments any store offering an ordered-map interface to
