@@ -161,6 +161,18 @@ class SkiplistEngine(object):
         self.delete = self.sl.delete
         self.iter = self.sl.items
 
+    def begin(self, write=False):
+        return self
+
+    def close(self):
+        self.sl = None
+
+    def abort(self):
+        pass
+
+    def commit(self):
+        pass
+
 
 class ListEngine(object):
     """Storage engine that backs onto a sorted list of `(key, value)` tuples.
@@ -225,9 +237,20 @@ class PlyvelEngine(object):
             import plyvel
             db = plyvel.DB(**kwargs)
         self.db = db
+        self.wb = wb
         self.get = db.get
         self.put = (wb or db).put
         self.delete = (wb or db).delete
+
+    def close(self):
+        self.db.close()
+
+    def begin(self, write=False):
+        wb = self.db.write_batch(sync=True)
+        return PlyvelEngine(self.db, wb)
+
+    def commit(self):
+        self.wb.write()
 
     def iter(self, k, reverse):
         it = self.db.iterator()
@@ -306,6 +329,9 @@ class LmdbEngine(object):
         self.delete = (txn or env).delete
         self.cursor = (txn or env).cursor
 
+    def close(self):
+        self.env.close()
+
     def begin(self, write=False, db=None):
         """Start a transaction. Only valid if `txn` was not passed to the
         constructor.
@@ -315,6 +341,9 @@ class LmdbEngine(object):
         """
         assert not self.txn
         return LmdbEngine(self.env, self.env.begin(write=write))
+
+    def commit(self):
+        self.txn.commit()
 
     def iter(self, k, reverse):
         return self.cursor(db=self.db)._iter_from(k, reverse)
