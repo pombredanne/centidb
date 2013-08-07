@@ -109,6 +109,25 @@ Indices disabled:
 * Compared to ZODB, MongoDB, PostgreSQL
 
 
+
+benchy.py
++++++++++
+
+.. raw:: html
+
+    <style>
+        .pants th,
+        .pants td {
+            text-align: right !important;
+        }
+    </style>
+
+.. csv-table:: ``examples/benchy.py``
+    :class: pants
+    :header-rows: 1
+    :file: benchy.csv
+
+
 Glossary
 ########
 
