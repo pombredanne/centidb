@@ -1,4 +1,5 @@
 
+import gzip
 import json
 import os
 import random
@@ -7,8 +8,8 @@ import time
 import centidb
 
 
-INPUT_PATH = os.path.join(os.path.dirname(__file__), 'hn-comments.json')
-recs = json.load(file(INPUT_PATH))
+INPUT_PATH = os.path.join(os.path.dirname(__file__), 'laforge.json.gz')
+recs = json.load(gzip.open(INPUT_PATH))
 
 
 def dotestget():
