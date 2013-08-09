@@ -4,12 +4,7 @@
 Declarative Interface
 #####################
 
-The `centidb.metadb` module provides an ORM-like metaclass that allows
-simplified definition of database models using Python code.
-
-This module is a work in progress, and the most interesting aspect of it is
-missing. A future version will use the model definition to automatically
-produce and maintain a compact encoding. For now this is just a curiosity.
+.. automodule:: centidb.metadb
 
 ::
 
@@ -121,6 +116,7 @@ which is a reference to the model class to subscribe to.
 
     def log_create(model):
         print 'Model created!', model
+
     def log_delete(model):
         print 'Model deleted!', model
 
