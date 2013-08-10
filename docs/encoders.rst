@@ -5,45 +5,62 @@
 Encoders
 ########
 
+
+Encoder Interface
++++++++++++++++++
+
 .. autoclass:: Encoder
 
 
-Predefined Encoders
+centidb.KEY_ENCODER
 +++++++++++++++++++
 
-The ``centidb`` module contains the following predefined :py:class:`Encoder`
-instances.
-
-    ``KEY_ENCODER``
-        Uses :py:func:`keycoder.packs` and
-        :py:func:`keycoder.unpacks` to serialize tuples. It is used
-        internally to represent keys, counters, and :py:class:`Store` metadata.
-
-    ``PICKLE_ENCODER``
-        Uses :py:func:`pickle.dumps` and :py:func:`pickle.loads` with protocol
-        2 to serialize any pickleable object. It is the default encoder if no
-        specific `encoder=` argument is given to the
-        :py:class:`centidb.Collection` constructor.
-
-**Compressors**
-
-These are just :py:class:`Encoder` instances with the convention that their
-names end in ``_PACKER``.
-
-    ``PLAIN_PACKER``
-        Performs no compression; the input is returned unchanged. This is the
-        default packer.
-
-    ``ZLIB_PACKER``
-        Uses :py:func:`zlib.compress` and :py:func:`zlib.decompress` to provide
-        value compression. It may be passed as the `packer=` argument to
-        :py:meth:`centidb.Collection.put`, or specified as the default using
-        the `packer=` argument to the :py:class:`centidb.Collection`
-        constructor.
+This predefined Encoder uses :py:func:`keycoder.packs` and
+:py:func:`keycoder.unpacks` to serialize tuples. It is used internally to
+represent keys, counters, and :py:class:`Store <centidb.Store>` metadata.
 
 
-Thrift Integration
-++++++++++++++++++
+centidb.PICKLE_ENCODER
+++++++++++++++++++++++
+
+This predefined Encoder uses :py:func:`pickle.dumps` and
+:py:func:`pickle.loads` with protocol 2 to serialize any pickleable object. It
+is the default encoder if no specific `encoder=` argument is given to the
+:py:class:`Collection <centidb.Collection>` constructor.
+
+
+centidb.PLAIN_PACKER
++++++++++++++++++++++
+
+This predefined Encoder performs no work; the input is returned unchanged. It
+is used as the default :py:class:`Collection(..., packer=)
+<centidb.Collection>` argument when no other packer is provided.
+
+
+centidb.ZLIB_PACKER
++++++++++++++++++++
+
+This predefined Encoder uses :py:func:`zlib.compress` and
+:py:func:`zlib.decompress` to provide value compression. It may be passed as
+the `packer=` argument to :py:meth:`Collection.put <centidb.Collection.put>`,
+or specified as the default using the `packer=` argument to the
+:py:class:`Collection <centidb.Collection>` constructor.
+
+
+make_json_encoder
++++++++++++++++++
+
+.. autofunction:: centidb.encoders.make_json_encoder
+
+
+make_msgpack_encoder
+++++++++++++++++++++
+
+.. autofunction:: centidb.encoders.make_msgpack_encoder
+
+
+make_thrift_encoder
++++++++++++++++++++
 
 .. autofunction:: centidb.encoders.make_thrift_encoder
 
@@ -82,12 +99,3 @@ Now define a collection:
     # Minimal overhead:
     packed = coll.encoder.pack(Person(username='dave'))
     assert packed == '\x18\x04dave\x00'
-
-
-Other Encoders
-++++++++++++++
-
-The `centidb.support` module includes helpers for a few more encodings.
-
-.. autofunction:: centidb.encoders.make_json_encoder
-.. autofunction:: centidb.encoders.make_msgpack_encoder
