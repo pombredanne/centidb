@@ -61,36 +61,6 @@ Another option would be to allow alternative key encodings for
 be tuples in order to remain compatible with :py:class:`Index`. Needs further
 consideration.
 
-Mapping Protocol
-++++++++++++++++
-
-There are a bunch of reasons why the mapping protocol isn't supported by
-:py:class:`Collection`.
-
-Firstly, the mapping protocol was designed with unordered maps in mind, and
-provides no support for range queries. This greatly limits the 'adaptive power'
-of grafting the mapping interface on to :py:class:`Collection`.
-
-Secondly, our 'mapping' is only superficial in nature. Given some key, we map
-it to **a copy of** it's associated value, not some unique object itself. In
-this respect our interface is more like a translator than a mapper.
-Implementing an interface that usually returns identical value objects when
-repeatedly given the same key would only encourage buggy code, by implying its
-usefulness in circumstances that aren't valid.
-
-Thirdly, to get reasonable performance from :py:meth:`Collection.put` requires
-that a :py:class:`Record` descriptor is provided, rather than the record value
-itself. Attempting to mimic this using the mapping protocol would feel stupid
-and broken.
-
-Fourthly, many storage engines permit duplicate keys, which is directly in
-contravention to how the mapping protocol works. While :py:class:`Collection`
-does not yet support duplicate keys, an obvious future extension would.
-
-Finally, encouraging users to think about extremely distinct implementations as
-painlessly interchangeable is a bad idea. Users should understand the code they
-are integrating with, rather than being encouraged to treat it as a black box.
-
 
 History
 +++++++
