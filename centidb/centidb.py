@@ -28,10 +28,7 @@ import importlib
 import itertools
 import operator
 import os
-import struct
 import sys
-import time
-import uuid
 import warnings
 import zlib
 
@@ -42,18 +39,7 @@ from centidb.encoders import Encoder
 __all__ = '''Store Collection Record Index Encoder KEY_ENCODER PICKLE_ENCODER
     PLAIN_PACKER ZLIB_PACKER next_greater open'''.split()
 
-KIND_NULL = chr(15)
-KIND_NEG_INTEGER = chr(20)
-KIND_INTEGER = chr(21)
-KIND_BOOL = chr(30)
-KIND_BLOB = chr(40)
-KIND_TEXT = chr(50)
-KIND_UUID = chr(90)
-KIND_KEY = chr(95)
-KIND_SEP = chr(102)
-INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 IndexKeyBuilder = None
-
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
 
@@ -231,8 +217,7 @@ class Index(object):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order. If `rec` is ``True``, :py:class:`Record` instances are yielded
         instead of record values."""
-        for idx_key, key in self.pairs(args, lo, hi, reverse, max,
-                                       include, txn):
+        for _, key in self.pairs(args, lo, hi, reverse, max, include, txn):
             obj = self.coll.get(key, txn=txn, rec=rec)
             if obj:
                 yield key, obj
@@ -261,14 +246,14 @@ class Index(object):
         """Return True if an entry with the exact tuple `x` exists in the
         index."""
         x = tuplize(x)
-        tup, key = next(self.pairs(x), (None, None))
+        tup, _ = next(self.pairs(x, txn=txn), (None, None))
         return tup == x
 
     def get(self, x, txn=None, rec=None, default=None):
         """Return the first matching record referred to by the index, in tuple
         order. If `rec` is ``True`` a :py:class:`Record` instance is returned
         of the record value."""
-        for tup in self.items(lo=x, hi=x, include=False, rec=rec):
+        for tup in self.items(lo=x, hi=x, include=False, rec=rec, txn=txn):
             return tup[1]
         if rec and default is not None:
             return Record(self.coll, default)
@@ -911,7 +896,7 @@ class Collection(object):
             keys, deleted = coll.deletes(request.form['names'].split(','))
             print 'Deleted %d names of %d provided.' % (deleted, keys)
         """
-        return _eat(eat, (self.delete(obj) for obj in objs))
+        return _eat(eat, (self.delete(obj, txn) for obj in objs))
 
     def delete(self, obj, txn=None):
         """Delete a record by key or using a :py:class:`Record` instance. The
@@ -944,7 +929,7 @@ class Collection(object):
         keys processed, and the number of records deleted, otherwise returns an
         iterator that lazily calls :py:meth:`delete_value` and yields its
         return values."""
-        return _eat(eat, (self.delete_value(v) for v in vals))
+        return _eat(eat, (self.delete_value(v, txn) for v in vals))
 
     def delete_value(self, val, txn=None):
         """Delete a record value without knowing its key. The deleted record is
