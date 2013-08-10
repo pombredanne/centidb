@@ -141,7 +141,8 @@ are removed from the lifecycle of a typical request. For example:
   obviated:
 
   * No need to deserialize DBMS-specific data format, only to re-serialize to
-    store in Memcache.
+    store in Memcache using some completely difference encoding (e.g. BSON vs.
+    pickle).
   * No need for subtle/bug ridden race avoidance strategies when handling
     updates to multiple copies of data.
   * No need for multiple duplicate copies of data in RAM: one in the OS page
@@ -156,7 +157,9 @@ are removed from the lifecycle of a typical request. For example:
 
 * Much finer control over commit strategies. For example when handling updates
   via a greenlet style server, closures describing an update can be queued for
-  a dedicated hardware *writer* thread to implement group commit.
+  a dedicated hardware thread to implement group commit. Similarly it is
+  possible to prioritize work for the thread, e.g. by having separate queues
+  for paid and free users.
 
 
 Futures
