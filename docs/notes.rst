@@ -104,7 +104,7 @@ as MongoDB. Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it
 is even possible to make consistent online backups without resorting to
 platform tricks, very much unlike MongoDB.
 
-With carefully picked primitives, more of MongoDB's problem domain could be
+With carefully chosen primitives, more of MongoDB's problem domain could be
 subsumed. For instance, supporting sharding and replication are definitely
 interesting, and there is no reason why either feature should require a 300kLOC
 codebase to implement, or even a 3kLOC codebase.
