@@ -4,12 +4,8 @@ centidb
 
 .. warning::
 
-    This is a design prototype, focusing on useful APIs and physical data
-    layout.
-
-    Some parts are missing, many others are slow, broken and/or nasty. Even if
-    finished it may only be useful as the basis for a library that may never
-    exist.
+    This is a prototype, focusing on useful APIs and physical data layout. Many
+    parts are missing, slow, broken and/or very nasty.
 
 **centidb** is a compromise between the minimalism of key/value stores and the
 convenience of SQL. It augments any store offering an ordered-map interface to
@@ -24,8 +20,8 @@ allowing transparent access to individual records. Arbitrary key ranges may be
 compressed and the batch size is configurable.
 
 The name is due to the core being under 500 lines of code excluding docstrings
-and speedups, making it over 100 times smaller than alternatives with
-comparable features.
+and speedups, making it over 100 times smaller than alternatives with similar
+functionality.
 
 .. toctree::
     intro
@@ -35,5 +31,6 @@ comparable features.
     encoders
     cookbook
     notes
+    format
     perf
     :maxdepth: 1
