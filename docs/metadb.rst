@@ -106,7 +106,7 @@ being modified.
 
 
 External triggers
------------------
++++++++++++++++++
 
 It is also possible to create a trigger from outside the model definition. This
 uses the same `on_*` and `after_*` functions, but includes a second parameter,
