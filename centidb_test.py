@@ -13,6 +13,7 @@ from unittest import TestCase
 import keycoder
 import centidb
 import centidb.centidb
+import centidb.engines
 import centidb.support
 import _centidb
 
@@ -144,7 +145,7 @@ class IterTest:
         return keycoder.packs(self.prefix, s)
 
     def setUp(self):
-        self.e = centidb.support.ListEngine()
+        self.e = centidb.engines.ListEngine()
         self.e.put('X', '')
         for key in self.KEYS:
             self.e.put(self._encode(key), '')
@@ -217,7 +218,7 @@ class IterTest:
 @register(native=False)
 class SkiplistTest:
     def testFindLess(self):
-        sl = centidb.support.SkipList()
+        sl = centidb.engines.SkipList()
         update = sl._update[:]
         assert sl._findLess(update, 'missing') is sl.head
 
@@ -235,7 +236,7 @@ class SkiplistTest:
 class SkipListTest:
     def testDeleteDepth(self):
         # Ensure 'shallowing' works correctly.
-        sl = centidb.support.SkipList()
+        sl = centidb.engines.SkipList()
         keys = []
         while sl.level < 4:
             k = time.time()
@@ -314,13 +315,13 @@ class EngineTestBase:
 @register()
 class ListEngineTest(EngineTestBase):
     def setUp(self):
-        self.e = centidb.support.ListEngine()
+        self.e = centidb.engines.ListEngine()
 
 
 @register()
 class SkiplistEngineTest(EngineTestBase):
     def setUp(self):
-        self.e = centidb.support.SkiplistEngine()
+        self.e = centidb.engines.SkiplistEngine()
 
 
 @register()
@@ -328,7 +329,7 @@ class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
         rm_rf('test.ldb')
-        cls.e = centidb.support.PlyvelEngine(
+        cls.e = centidb.engines.PlyvelEngine(
             name='test.ldb', create_if_missing=True)
 
     def setUp(self):
@@ -347,7 +348,7 @@ class KyotoEngineTest(EngineTestBase):
     def _setUpClass(cls):
         if os.path.exists('test.kct'):
             os.unlink('test.kct')
-        cls.e = centidb.support.KyotoEngine(path='test.kct')
+        cls.e = centidb.engines.KyotoEngine(path='test.kct')
 
     def setUp(self):
         for key, value in list(self.e.iter('', False)):
@@ -366,7 +367,7 @@ class LmdbEngineTest(EngineTestBase):
         rm_rf('test.lmdb')
         import lmdb
         cls.env = lmdb.open('test.lmdb')
-        cls.e = centidb.support.LmdbEngine(cls.env)
+        cls.e = centidb.engines.LmdbEngine(cls.env)
 
     def setUp(self):
         for key, value in list(self.e.iter('', False)):
@@ -381,7 +382,7 @@ class LmdbEngineTest(EngineTestBase):
 @register()
 class CollBasicTest:
     def setUp(self):
-        self.e = centidb.support.ListEngine()
+        self.e = centidb.engines.ListEngine()
         self.store = centidb.Store(self.e)
         self.coll = centidb.Collection(self.store, 'coll1')
 
@@ -426,7 +427,7 @@ class CollBasicTest:
 @register()
 class IndexTest:
     def setUp(self):
-        self.e = centidb.support.ListEngine()
+        self.e = centidb.engines.ListEngine()
         self.store = centidb.Store(self.e)
         self.coll = centidb.Collection(self.store, 'stuff')
         self.i = self.coll.add_index('idx', lambda obj: (69, obj))
@@ -540,7 +541,7 @@ class BatchTest:
     ]
 
     def setUp(self):
-        self.e = centidb.support.ListEngine()
+        self.e = centidb.engines.ListEngine()
         self.store = centidb.Store(self.e)
         self.coll = centidb.Collection(self.store, 'people')
 
@@ -556,7 +557,7 @@ class BatchTest:
 @register()
 class CountTest:
     def setUp(self):
-        self.e = CountingEngine(centidb.support.ListEngine())
+        self.e = CountingEngine(centidb.engines.ListEngine())
         self.store = centidb.Store(self.e)
 
     def testNoExistNoCount(self):
