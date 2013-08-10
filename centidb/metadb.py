@@ -138,7 +138,7 @@ class ModelMeta(type):
         cls.setup_index_properties(klass, bases, attrs)
         cls.setup_field_properties(klass, bases, attrs)
         cls.setup_constraints(klass, bases, attrs)
-        cls.setup_encoding(klass, bases, attrs)
+        cls.setup_binding(klass, bases, attrs)
         return klass
 
     @classmethod
