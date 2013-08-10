@@ -33,8 +33,9 @@ import warnings
 import keycoder
 from keycoder import tuplize
 from centidb import encoders
+from centidb.encoders import Encoder
 
-__all__ = 'Store Collection Record Index next_greater open'.split()
+__all__ = 'Store Encoder Collection Record Index next_greater open'.split()
 
 IndexKeyBuilder = None
 ITEMGETTER_0 = operator.itemgetter(0)
