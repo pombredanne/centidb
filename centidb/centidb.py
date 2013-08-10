@@ -41,6 +41,12 @@ IndexKeyBuilder = None
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
 
+KIND_TABLE = 0
+KIND_INDEX = 1
+KIND_ENCODER = 2
+KIND_COUNTER = 3
+KIND_STRUCT = 4
+
 
 def open(engine, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
@@ -107,6 +113,7 @@ def _eat(pred, it, total_only=False):
 def __kcmp(fn, o):
     return fn(o[1])
 _kcmp = functools.partial(functools.partial, __kcmp)
+
 
 class Index(object):
     """Provides query and manipulation access to a single index on a
@@ -343,33 +350,6 @@ class Collection(object):
             transactional counter (like auto-increment in SQL). See
             `counter_name`.
 
-        `derived_keys`:
-            If ``True``, indicates the key function derives a record's key from
-            its value, and should be re-invoked for each change. If the key
-            changes, the previous key and index entries are automatically
-            deleted.
-
-            ::
-
-                # Since names are used as keys, if a person record changes
-                # name, its key must also change.
-                coll = Collection(store, 'people',
-                    key_func=lambda person: person['name'],
-                    derived_keys=True)
-
-            If ``False``, record keys are preserved across saves, so long as
-            `get(rec=True)` and `put(<Record instance>)` are used. In either
-            case, `put(..., key=...)` may be used to override default behavior.
-
-        `blind`:
-            If ``True``, indicates the key function never reassigns the same
-            key twice, for example when using a time-based key. In this case,
-            checks for old records with the same key may be safely skipped,
-            significantly improving performance.
-
-            This mode is always active when a collection has no indices
-            defined, and does not need explicitly set in that case.
-
         `encoder`:
             :py:class:`Encoder` used to serialize record values to bytestrings;
             defaults to ``PICKLE_ENCODER``.
@@ -386,17 +366,13 @@ class Collection(object):
             ``"key:<name>"``. Unused when `key_func` or `txn_key_func`
             are specified.
     """
-    def __init__(self, store, name, key_func=None, txn_key_func=None,
-            derived_keys=False, blind=False, encoder=None, packer=None,
-            _idx=None, counter_name=None):
+    def __init__(self, store, info, key_func=None, txn_key_func=None,
+            encoder=None, packer=None, counter_name=None):
         """Create an instance; see class docstring."""
         self.store = store
         self.engine = store.engine
-        if _idx is not None:
-            self.info = {'name': name, 'idx': _idx, 'index_for': None}
-        else:
-            self.info = store._get_info(name, idx=_idx)
-        self.prefix = store.prefix + keycoder.pack_int(self.info['idx'])
+        self.info = info
+        self.prefix = store.prefix + keycoder.pack_int(info['idx'])
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
@@ -405,8 +381,8 @@ class Collection(object):
         self.key_func = key_func
         self.txn_key_func = txn_key_func
 
-        self.derived_keys = derived_keys
-        self.blind = blind
+        self.derived_keys = info.get('derived_keys', False)
+        self.blind = info.get('blind', False)
         self.encoder = encoder or encoders.PICKLE_ENCODER
         self.encoder_prefix = self.store.add_encoder(self.encoder)
         #: Default packer used when calls to :py:meth:`Collection.put` do not
@@ -420,6 +396,42 @@ class Collection(object):
         #:      idx = coll.add_index('some index', lambda v: v[0])
         #:      assert coll.indices['some index'] is idx
         self.indices = {}
+
+    def set_blind(self, blind):
+        """Set the default blind write behaviour to `blind`.. If ``True``,
+        indicates the key function never reassigns the same key twice, for
+        example when using a time-based key. In this case, checks for old
+        records with the same key may be safely skipped, significantly
+        improving performance.
+
+        This mode is always active when a collection has no indices defined,
+        and does not need explicitly set in that case.
+        """
+        self.info['blind'] = bool(blind)
+        self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
+        self.blind = self.info['blind']
+
+    def set_derived_keys(self, derived_keys):
+        """Enable derived keys. If ``True``, indicates the key function derives
+        a record's key from its value, and should be re-invoked for each
+        change. If the key changes, the previous key and index entries are
+        automatically deleted.
+
+            ::
+
+                # Since names are used as keys, if a person record changes
+                # name, its key must also change.
+                coll = Collection(store, 'people',
+                    key_func=lambda person: person['name'],
+                    derived_keys=True)
+
+            If ``False``, record keys are preserved across saves, so long as
+            `get(rec=True)` and `put(<Record instance>)` are used. In either
+            case, `put(..., key=...)` may be used to override default behavior.
+        """
+        self.info['derived_keys'] = bool(derived_keys)
+        self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
+        self.derived_keys = self.info['derived_keys']
 
     def add_index(self, name, func):
         """Associate an index with the collection. Index metadata will be
@@ -961,13 +973,8 @@ class Store(object):
             Prefix for all keys used by any associated object (record, index,
             counter, metadata). This allows the storage engine's key space to
             be shared amongst several users.
-
-        `tls`:
-            Instance that behaves like a :py:class:`threading.local`, used for
-            tracking the active transaction. If ``None``, a new
-            :py:class:`local <threading.local>` instance is used.
     """
-    def __init__(self, engine, prefix='', tls=None):
+    def __init__(self, engine, prefix=''):
         self.engine = engine
         self.prefix = prefix
         self._encoder_prefix = (
@@ -976,27 +983,56 @@ class Store(object):
         self._prefix_encoder = (
             dict((keycoder.pack_int(1 + i), e)
                  for i, e in enumerate(encoders._ENCODERS)))
-        self._meta = Collection(self, '\x00meta', _idx=3,
-            encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:2])
-        self._encoder_coll = Collection(self, '\x00encoders', _idx=2,
+        self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
+            encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:3])
+        self._colls = {}
+
+        self._encoder_coll = Collection(self, {'name': '\x00encoders', 'idx': 2},
             encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
-        self._info_coll = Collection(self, '\x00collections', _idx=0,
+        self._info_coll = Collection(self, {'name': '\x00collections', 'idx': 0},
             encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
-        self._counter_coll = Collection(self, '\x00counters', _idx=1,
+        self._counter_coll = Collection(self, {'name': '\x00counters', 'idx': 1},
             encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
 
-        self._tls = tls or threading.local()
-        self._tls.txn = self.engine
+    # ((kind, name, attr), value)
+    def get_info2(self, kind, name):
+        items = self._meta.items((kind, name))
+        return dict((a, v) for (k, n, a), (v,) in items)
 
-    def begin(self):
-        pass
+    def delete_info2(self, kind, name):
+        self._meta.deletes(self._meta.keys((kind, name)))
 
-    def collection(self, name, *args, **kwargs):
-        """Shorthand for `centidb.Collection(self, *args, **kwargs)`."""
-        return Collection(self, name, *args, **kwargs)
+    def set_info2(self, kind, name, dct):
+        for key, value in dct.iteritems():
+            self._meta.put(value, key=(kind, name, key))
+
+    def check_info2(self, old, new):
+        for key, value in old.iteritems():
+            if new.setdefault(key, value) != value:
+                raise ValueError('attribute %r mismatch: %r vs %r' %\
+                                 (key, value, new[key]))
+
+    def add_collection(self, name, **kwargs):
+        """Shorthand for `centidb.Collection(self, **kwargs)`."""
+        old = self.get_info2(KIND_TABLE, name)
+        encoder = kwargs.get('encoder', encoders.PICKLE_ENCODER)
+        new = {'name': name, 'encoder': encoder.name}
+        if old:
+            self.check_info2(old or {}, new)
+        else:
+            new['idx'] = self.count('\x00collections_idx', init=10)
+            self.set_info2(KIND_TABLE, name, new)
+        return self[name]
 
     def __getitem__(self, name):
-        return self.collection(name)
+        coll = self._colls.get(name)
+        if coll:
+            return coll
+        info = self.get_info2(KIND_TABLE, name)
+        if not info:
+            raise KeyError(name)
+        self._colls[name] = Collection(self, info)
+        return self._colls[name]
 
     _INFO_KEYS = ('name', 'idx', 'index_for')
     def _get_info(self, name, idx=None, index_for=None):
@@ -1051,13 +1087,11 @@ class Store(object):
                 Transaction to use, or ``None`` to indicate the default
                 behaviour of the storage engine.
         """
-        default = (name, init)
-        rec = self._counter_coll.get(name, default, rec=True, txn=txn)
-        val = long(rec.data[1])
+        key = (KIND_COUNTER, name, None)
+        value, = self._meta.get(key, default=(init,), txn=txn)
         if n:
-            rec.data = (name, val + n)
-            self._counter_coll.put(rec, txn=txn)
-        return val
+            self._meta.put(value + n, key=key, txn=txn)
+        return 0L + value
 
 # Hack: disable speedups while testing or reading docstrings.
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
