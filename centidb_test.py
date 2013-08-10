@@ -14,7 +14,6 @@ import keycoder
 import centidb
 import centidb.centidb
 import centidb.engines
-import centidb.support
 import _centidb
 
 
