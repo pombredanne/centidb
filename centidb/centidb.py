@@ -891,27 +891,6 @@ class Collection(object):
             rec.index_keys = None
             return rec
 
-    def delete_value(self, val, txn=None):
-        """Delete a record value without knowing its key. The deleted record is
-        returned, if it existed.
-
-        `Note`: it is impossible (and does not make sense) to delete by value
-        when ``derived_keys=False``, since the key function will generate an
-        unrelated ID for the value. Example:
-
-        ::
-
-            coll = Collection(store, 'people',
-                key_func=lambda person: person['name'],
-                derived_keys=True)
-            val = {"name": "David"}
-            coll.put(val)
-            # key_func will generate the correct key:
-            call.delete_value(val)
-        """
-        assert self.derived_keys
-        return self.delete(self.key_func(val), txn)
-
 class Store(object):
     """Represents access to the underlying storage engine, and manages
     counters.
