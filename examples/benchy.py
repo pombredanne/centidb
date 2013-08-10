@@ -10,7 +10,7 @@ import sys
 import time
 
 import centidb
-import centidb.support
+import centidb.encoders
 import pymongo
 
 writer = csv.writer(sys.stdout, quoting=csv.QUOTE_ALL)
@@ -22,7 +22,7 @@ if not os.path.exists(BASE_PATH):
 
 
 class CentiEngine(object):
-    ENCODER = centidb.support.make_msgpack_encoder()
+    ENCODER = centidb.encoders.make_msgpack_encoder()
     KEY_FUNC = operator.itemgetter('name', 'location')
 
     def create(self):
@@ -120,6 +120,19 @@ class MongoEngine(object):
         pass
 
 
+def mode_name(blind, use_indices):
+    return 'insert-%sblind-%sindices' %\
+        ('' if blind else 'no',
+         '' if use_indices else 'no')
+
+
+
+import locale
+
+locale.setlocale(locale.LC_ALL, 'en_US')
+f = lambda f, n: locale.format(f, n, grouping=True)
+
+
 def x():
     global store
 
@@ -131,7 +144,7 @@ def x():
     ids = range(len(words))
     random.shuffle(ids)
 
-    out('Engine', 'Blind', 'UseIndices', 'Keys', 'Time', 'Ops/s')
+    out('Engine', 'Mode', 'Keys', 'Time', 'Ops/s')
     eng = None
     for engine in LmdbEngine, SkiplistEngine, PlyvelEngine, MongoEngine:
         print
@@ -149,8 +162,11 @@ def x():
 
                 keycnt = len(words) * (3 if use_indices else 1)
                 engine_name = engine.__name__
-                out(engine_name, blind, use_indices, keycnt, '%.2f' % t,
-                    int((keycnt if blind else (keycnt + len(words))) / t))
+
+                out(engine_name, mode_name(blind, use_indices),
+                    f('%d', keycnt),
+                    f('%.2f', t),
+                    f('%d', int((keycnt if blind else (keycnt + len(words))) / t)))
 
         idxcnt = 0
         t0 = time.time()
@@ -158,7 +174,10 @@ def x():
             eng.randget_idx(words)
             idxcnt += len(words)
         idxtime = time.time() - t0
-        out(engine_name, '-', 'idx', idxcnt, '%.2f' % t, int(idxcnt/idxtime))
+        out(engine_name, 'rand-index',
+            f('%d', idxcnt),
+            f('%.2f', t),
+            f('%d', int(idxcnt/idxtime)))
 
         idcnt = 0
         t0 = time.time()
@@ -166,6 +185,9 @@ def x():
             eng.randget_id(words, upper)
             idcnt += len(words)
         idtime = time.time() - t0
-        out(engine_name, '-', 'id', idcnt, '%.2f' % t, int(idcnt/idtime))
+        out(engine_name, 'rand-key',
+            f('%d', idcnt),
+            f('%.2f', t),
+            f('%d', int(idcnt/idtime)))
 
 x()
