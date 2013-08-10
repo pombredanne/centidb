@@ -208,6 +208,7 @@ Probably:
 9. **join()** function: accept multiple indices producing keys in the same
    order, return an iterator producing the union or intersection of those
    indices.
+10. Index function versioning, either using bytecode hash or explicit strings.
 
 Maybe:
 
