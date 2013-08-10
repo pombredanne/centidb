@@ -12,3 +12,6 @@ install:
   - pip install . --use-mirrors
 
 script: python centidb_test.py
+
+notifications:
+  email: false
