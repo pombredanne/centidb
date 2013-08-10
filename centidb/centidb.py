@@ -148,7 +148,9 @@ class Encoder(object):
             sole argument, and should return the encoded bytestring.
     """
     def __init__(self, name, unpack, pack):
-        vars(self).update(locals())
+        self.name = name
+        self.unpack = unpack
+        self.pack = pack
 
 class Index(object):
     """Provides query and manipulation access to a single index on a
