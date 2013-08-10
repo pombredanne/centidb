@@ -346,11 +346,7 @@ simply a case of constructing an :py:class:`Encoder`.
 
     coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
 
-
-Custom Compressors
-------------------
-
-Constructing a custom compressor is trivial:
+Supporting a new custom compressor is trivial:
 
 .. code-block:: python
 
@@ -363,14 +359,13 @@ Constructing a custom compressor is trivial:
     # persistent numeric ID, and saving the encoder's record in the engine.
     store.add_encoder(LZ4_PACKER)
 
-
 Note that custom compressors must always be re-registered with
 :py:meth:`Store.add_encoder` each time the store is re-opened, otherwise the
 library will raise exceptions when a compressed record is encountered.
 
 
 Batch compression
------------------
++++++++++++++++++
 
 Batch compression is supported by way of :py:meth:`Collection.batch`: this is
 where a range of records *have their values concatenated* before being passed
@@ -389,21 +384,8 @@ occur, although this restriction may be removed in future.
     Batch compression is currently only possible on a collection. A future
     version may also support the ability to batch compress secondary indices.
 
-A run of ``examples/batch.py`` illustrates the tradeoffs of compression.
-
-.. raw:: html
-
-    <style>
-        .pants th,
-        .pants td {
-            text-align: right !important;
-        }
-    </style>
-
-.. csv-table:: ``examples/batch.py`` with 777 1.51kb records.
-    :class: pants
-    :header-rows: 1
-    :file: batch-output.csv
+Please see :ref:`batch_perf` in the performance chapter for a comparison of
+compression parameters.
 
 
 .. _query-parameters:
