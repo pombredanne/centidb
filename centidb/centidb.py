@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 """
 Minimalist object DBMS for Python
 
@@ -20,7 +21,6 @@ See http://centidb.readthedocs.org/
 """
 
 from __future__ import absolute_import
-
 import cStringIO
 import functools
 import itertools
