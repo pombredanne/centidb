@@ -58,7 +58,7 @@ def open(engine, **kwargs):
     """
     modname, _, classname = engine.rpartition('.')
     module = __import__(modname or 'centidb.engines')
-    return Store(getattr(module, classname)(**kwargs))
+    return Store(getattr(sys.modules[modname], classname)(**kwargs))
 
 def decode_offsets(s):
     io = cStringIO.StringIO(s)
