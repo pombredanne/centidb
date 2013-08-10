@@ -57,7 +57,9 @@ def open(engine, **kwargs):
         >>> centidb.open('mymodule.BlarghEngine')
     """
     modname, _, classname = engine.rpartition('.')
-    module = __import__(modname or 'centidb.engines')
+    if not modname:
+        modname = 'centidb.engines'
+    module = __import__(modname)
     return Store(getattr(sys.modules[modname], classname)(**kwargs))
 
 def decode_offsets(s):
