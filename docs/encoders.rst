@@ -2,8 +2,8 @@
 .. currentmodule:: centidb.encoders
 
 
-Encodings
-#########
+Encoders
+########
 
 .. autoclass:: Encoder
 

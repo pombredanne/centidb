@@ -61,36 +61,6 @@ Another option would be to allow alternative key encodings for
 be tuples in order to remain compatible with :py:class:`Index`. Needs further
 consideration.
 
-Mapping Protocol
-++++++++++++++++
-
-There are a bunch of reasons why the mapping protocol isn't supported by
-:py:class:`Collection`.
-
-Firstly, the mapping protocol was designed with unordered maps in mind, and
-provides no support for range queries. This greatly limits the 'adaptive power'
-of grafting the mapping interface on to :py:class:`Collection`.
-
-Secondly, our 'mapping' is only superficial in nature. Given some key, we map
-it to **a copy of** it's associated value, not some unique object itself. In
-this respect our interface is more like a translator than a mapper.
-Implementing an interface that usually returns identical value objects when
-repeatedly given the same key would only encourage buggy code, by implying its
-usefulness in circumstances that aren't valid.
-
-Thirdly, to get reasonable performance from :py:meth:`Collection.put` requires
-that a :py:class:`Record` descriptor is provided, rather than the record value
-itself. Attempting to mimic this using the mapping protocol would feel stupid
-and broken.
-
-Fourthly, many storage engines permit duplicate keys, which is directly in
-contravention to how the mapping protocol works. While :py:class:`Collection`
-does not yet support duplicate keys, an obvious future extension would.
-
-Finally, encouraging users to think about extremely distinct implementations as
-painlessly interchangeable is a bad idea. Users should understand the code they
-are integrating with, rather than being encouraged to treat it as a black box.
-
 
 History
 +++++++
@@ -125,24 +95,23 @@ thing reasonably.
 Use cases
 +++++++++
 
-The library is experimental, but eventually it should become a small, highly
-convenient way to store data for programs with small to medium size datasets.
+The library is experimental, but eventually it should become a small,
+convenient way to store data for programs with medium sized datasets.
 
-Already with the righ storage engine it can offer better guarantees about data
-consistency, and vastly better performance than much larger and more
-established systems, such as MongoDB. Coupled with :py:class:`LmdbEngine
-<centidb.engines.LmdbEngine>` it is even possible to make consistent online
-snapshots without resorting to platform trickery, very much unlike MongoDB.
+Already with a suitable engine it can offer better durability guarantees, and
+vastly better performance than much larger and more established systems, such
+as MongoDB. Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it
+is even possible to make consistent online backups without resorting to
+platform tricks, very much unlike MongoDB.
 
-Ideally with the right set of primitives, more of MongoDB's problem domain
-could be subsumed. For instance, supporting sharding and replication are
-definitely interesting, and there is no reason why either of these features
-requires a 300kLOC codebase to implement, or even a 30kLOC codebase.
+With carefully picked primitives, more of MongoDB's problem domain could be
+subsumed. For instance, supporting sharding and replication are definitely
+interesting, and there is no reason why either of these features requires a
+300kLOC codebase to implement, or even a 3kLOC codebase.
 
-By removing so much complexity from the simple task of persisting data, more
-room is left for pondering *legitimately hard problems*, such as serving an
-application's data after it outgrows a single computer or automagically sharded
-DBMS cluster.
+By removing complexity from the simple task of persisting data, more room is
+left to ponder *legitimately hard problems*, such as serving an application's
+data after it outgrows a single computer or automagically sharded DBMS cluster.
 
 
 General ideas
@@ -152,22 +121,23 @@ By pushing the DBMS into the application itself, numerous layers of indirection
 are removed from the lifecycle of a typical request. For example:
 
 * By explicitly naming indices, there is no need for a query planner.
+
 * By explicitly controlling the encoding, there may be no need for ever
   deserializing data before passing it to the user, such as via
   :py:func:`make_json_encoder <centidb.encoders.make_json_encoder>` and
   :py:meth:`get(... raw=True) <centidb.Collection.get>`.
-* Since the DBMS lives within the process, there is no need to:
 
-  * Establish a connection using the network layer.
-  * Serialize the query.
-  * Context switch to the DBMS.
-  * Deserialize the query.
-  * While there are more results:
-      * Serialize the results.
-      * Context switch
-      * Deserialize the results.
+* Through careful buffer control during a transaction, memory copies are
+  drastically reduced.
 
-* As the cost of a query approaches 0, the need to separately cache results is
+* No need to establish a DBMS connection using the network layer.
+* No need to serialize the query.
+* No need to context switch to the DBMS.
+* No need to deserialize the query.
+* While there are more results, no need to endlessly serialize/context
+  switch/deserialize the results.
+
+* As the query cost approaches 0, the need to separately cache results is
   obviated:
 
   * No need to deserialize DBMS-specific data format, only to re-serialize to
@@ -184,6 +154,10 @@ are removed from the lifecycle of a typical request. For example:
   expensive context switch/query cost. Implementing data-specific walks such as
   graph searches can be done more simply and clearly in Python.
 
+* Much finer control over commit strategies. For example when handling updates
+  via a greenlet style server, closures describing an update can be queued for
+  a dedicated hardware *writer* thread to implement group commit.
+
 
 Futures
 +++++++
@@ -193,21 +167,17 @@ Probably:
 1. Support inverted index keys nicely
 2. Avoid key decoding when only used for comparison
 3. Unique index constraints, or validation callbacks
-4. Better documentation
-5. Index and collection type signatures (prevent writes using broken
+4. Index and collection type signatures (prevent writes using broken
    configuration)
-6. Smaller
-7. Safer
-8. C++ library
-9. Key splitting (better support DBs that dislike large records)
-10. putbatch()
-11. More future proof metadata format.
-12. Convert Index/Collection guts to visitor-style design, replace find/iter
-    methods with free functions implemented once.
-13. datetime support
-14. **join()** function: accept multiple indices producing keys in the same
-    order, return an iterator producing the union or intersection of those
-    indices.
+5. putbatch()
+6. More future proof metadata format.
+7. Convert Index/Collection guts to visitor-style design, replace find/iter
+   methods with free functions implemented once.
+8. datetime support
+9. **join()** function: accept multiple indices producing keys in the same
+   order, return an iterator producing the union or intersection of those
+   indices.
+10. Index function versioning, either using bytecode hash or explicit strings.
 
 Maybe:
 
@@ -216,15 +186,13 @@ Maybe:
    the highest and lowest member keys in their key, since member record keys
    can be perfectly reconstructed. Lookup would expand varint offset array then
    bisect+decode until desired member is found.
-2. Value compressed covered indices
-3. `Query` object to simplify index intersections.
-4. Configurable key scheme
-5. Make key/value scheme prefix optional
-6. Make indices work as :py:class:`Collection` observers, instead of hard-wired
-7. Convert :py:class:`Index` to reuse :py:class:`Collection`
-8. User-defined key blob types. Allocate a small range from the key encoding to
+2. Covered indices: store/compress large values within index records.
+3. Make indices work as :py:class:`Collection` observers, instead of hard-wired
+4. Convert :py:class:`Index` to reuse :py:class:`Collection`
+5. User-defined key blob types. Allocate a small range from the key encoding to
    logic that looks up a name for the byte from metadata, then looks up that
    name in a list of factories registered with the store.
+6. C++ library
 
 Probably not:
 

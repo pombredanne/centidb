@@ -6,11 +6,8 @@ This documents any centidb-specific representations data uses inside the
 storage engine.
 
 
-Record Format
-+++++++++++++
-
-Non-batch
----------
+Individual records
+++++++++++++++++++
 
 A non-batch record is indicated when key decoding yields a single tuple.
 
@@ -19,8 +16,9 @@ In this case the record key corresponds exactly to the output of
 variable length integer prefix indicating the packer used, and the remainder is
 the output of :py:meth:`Encoder.pack` from the collection's associated encoder.
 
-Batch
------
+
+Batch records
++++++++++++++
 
 A batch record is indicated when key decoding yields multiple tuples.
 
