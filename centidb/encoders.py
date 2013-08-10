@@ -15,7 +15,12 @@
 #
 from __future__ import absolute_import
 
+import functools
+import cPickle as pickle
+import zlib
+
 import centidb
+import keycoder
 
 __all__ = ['Encoder', 'make_json_encoder', 'make_msgpack_encoder',
            'make_thrift_encoder']
@@ -103,3 +108,20 @@ def make_thrift_encoder(klass, factory=None):
     # Form a name from the Thrift ttypes module and struct name.
     name = 'thrift:%s.%s' % (klass.__module__, klass.__name__)
     return centidb.Encoder(name, loads, dumps)
+
+
+#: Encode Python tuples using keycoder.packs()/keycoder.unpacks().
+KEY_ENCODER = Encoder('key', functools.partial(keycoder.unpack, ''),
+                             functools.partial(keycoder.packs, ''))
+
+#: Encode Python objects using the cPickle version 2 protocol."""
+PICKLE_ENCODER = Encoder('pickle', lambda b: pickle.loads(str(b)),
+                         functools.partial(pickle.dumps, protocol=2))
+
+#: Perform no compression at all.
+PLAIN_PACKER = Encoder('plain', str, lambda o: o)
+
+#: Compress bytestrings using zlib.compress()/zlib.decompress().
+ZLIB_PACKER = Encoder('zlib', zlib.decompress, zlib.compress)
+
+_ENCODERS = (KEY_ENCODER, PICKLE_ENCODER, PLAIN_PACKER, ZLIB_PACKER)

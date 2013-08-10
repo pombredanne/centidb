@@ -21,22 +21,20 @@ See http://centidb.readthedocs.org/
 
 from __future__ import absolute_import
 
-import cPickle as pickle
 import cStringIO
 import functools
 import itertools
 import operator
 import os
 import sys
+import threading
 import warnings
-import zlib
 
 import keycoder
 from keycoder import tuplize
-from centidb.encoders import Encoder
+from centidb import encoders
 
-__all__ = '''Store Collection Record Index Encoder KEY_ENCODER PICKLE_ENCODER
-    PLAIN_PACKER ZLIB_PACKER next_greater open'''.split()
+__all__ = 'Store Collection Record Index next_greater open'.split()
 
 IndexKeyBuilder = None
 ITEMGETTER_0 = operator.itemgetter(0)
@@ -403,13 +401,14 @@ class Collection(object):
             blind = True
         self.key_func = key_func
         self.txn_key_func = txn_key_func
+
         self.derived_keys = derived_keys
         self.blind = blind
-        self.encoder = encoder or PICKLE_ENCODER
+        self.encoder = encoder or encoders.PICKLE_ENCODER
         self.encoder_prefix = self.store.add_encoder(self.encoder)
         #: Default packer used when calls to :py:meth:`Collection.put` do not
         #: specify a `packer=` argument. Defaults to ``PLAIN_PACKER``.
-        self.packer = packer or PLAIN_PACKER
+        self.packer = packer or encoders.PLAIN_PACKER
         #: Dict mapping indices added using :py:meth:`Collection.add_index` to
         #: :py:class:`Index` instances representing them.
         #:
@@ -801,7 +800,7 @@ class Collection(object):
         return _eat(eat, (self.put(rec, txn, packer) for rec in recs), True)
 
     def putitems(self, it, txn=None, packer=None, eat=True):
-        """Invoke :py:meth:`put(y, key=x)` for each (x, y) in the iterable
+        """Invoke :py:meth:`put(y, key=x) <put>` for each (x, y) in the iterable
         `it`. If `eat` is ``True``, returns the number of items processed,
         otherwise returns an iterator that lazily calls :py:meth:`put` and
         yields its return values."""
@@ -959,24 +958,35 @@ class Store(object):
             Prefix for all keys used by any associated object (record, index,
             counter, metadata). This allows the storage engine's key space to
             be shared amongst several users.
+
+        `tls`:
+            Instance that behaves like a :py:class:`threading.local`, used for
+            tracking the active transaction. If ``None``, a new
+            :py:class:`local <threading.local>` instance is used.
     """
-    def __init__(self, engine, prefix=''):
+    def __init__(self, engine, prefix='', tls=None):
         self.engine = engine
         self.prefix = prefix
         self._encoder_prefix = (
             dict((e, keycoder.pack_int(1 + i))
-                 for i, e in enumerate(_ENCODERS)))
+                 for i, e in enumerate(encoders._ENCODERS)))
         self._prefix_encoder = (
             dict((keycoder.pack_int(1 + i), e)
-                 for i, e in enumerate(_ENCODERS)))
+                 for i, e in enumerate(encoders._ENCODERS)))
         self._meta = Collection(self, '\x00meta', _idx=3,
-            encoder=KEY_ENCODER, key_func=lambda t: t[:2])
+            encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:2])
         self._encoder_coll = Collection(self, '\x00encoders', _idx=2,
-            encoder=KEY_ENCODER, key_func=ITEMGETTER_0)
+            encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
         self._info_coll = Collection(self, '\x00collections', _idx=0,
-            encoder=KEY_ENCODER, key_func=ITEMGETTER_0)
+            encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
         self._counter_coll = Collection(self, '\x00counters', _idx=1,
-            encoder=KEY_ENCODER, key_func=ITEMGETTER_0)
+            encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
+
+        self._tls = tls or threading.local()
+        self._tls.txn = self.engine
+
+    def begin(self):
+        pass
 
     def collection(self, name, *args, **kwargs):
         """Shorthand for `centidb.Collection(self, *args, **kwargs)`."""
@@ -1053,19 +1063,3 @@ if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
         from _centidb import *
     except ImportError:
         pass
-
-#: Encode Python tuples using keycoder.packs()/keycoder.unpacks().
-KEY_ENCODER = Encoder('key', functools.partial(keycoder.unpack, ''),
-                             functools.partial(keycoder.packs, ''))
-
-#: Encode Python objects using the cPickle version 2 protocol."""
-PICKLE_ENCODER = Encoder('pickle', lambda b: pickle.loads(str(b)),
-                         functools.partial(pickle.dumps, protocol=2))
-
-#: Perform no compression at all.
-PLAIN_PACKER = Encoder('plain', str, lambda o: o)
-
-#: Compress bytestrings using zlib.compress()/zlib.decompress().
-ZLIB_PACKER = Encoder('zlib', zlib.decompress, zlib.compress)
-
-_ENCODERS = (KEY_ENCODER, PICKLE_ENCODER, PLAIN_PACKER, ZLIB_PACKER)
