@@ -165,10 +165,7 @@ class ModelMeta(type):
 
     @classmethod
     def setup_index_funcs(cls, klass, bases, attrs):
-        base_index_funcs = getattr(klass, 'METADB_INDEX_FUNCS', [])
-        index_funcs = []
-        if attrs.get('METADB_INHERIT_INDEX_FUNCS', True):
-            index_funcs.extend(base_index_funcs)
+        index_funcs = list(getattr(klass, 'METADB_INDEX_FUNCS', []))
         for key, value in attrs.iteritems():
             if not hasattr(value, 'metadb_index_func'):
                 continue
@@ -186,10 +183,7 @@ class ModelMeta(type):
 
     @classmethod
     def setup_constraints(cls, klass, bases, attrs):
-        base_constraints = getattr(klass, 'METADB_CONSTRAINTS', [])
-        constraints = []
-        if attrs.get('METADB_INHERIT_CONSTRAINTS', True):
-            constraints.extend(base_constraints)
+        constraints = list(getattr(klass, 'METADB_CONSTRAINTS', []))
         for key, value in attrs.iteritems():
             if getattr(value, 'metadb_constraint', False):
                 constraints.append(value)
