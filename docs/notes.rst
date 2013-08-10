@@ -106,8 +106,8 @@ platform tricks, very much unlike MongoDB.
 
 With carefully picked primitives, more of MongoDB's problem domain could be
 subsumed. For instance, supporting sharding and replication are definitely
-interesting, and there is no reason why either of these features requires a
-300kLOC codebase to implement, or even a 3kLOC codebase.
+interesting, and there is no reason why either feature should require a 300kLOC
+codebase to implement, or even a 3kLOC codebase.
 
 By removing complexity from the simple task of persisting data, more room is
 left to ponder *legitimately hard problems*, such as serving an application's
