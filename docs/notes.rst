@@ -178,6 +178,7 @@ Probably:
    order, return an iterator producing the union or intersection of those
    indices.
 10. Index function versioning, either using bytecode hash or explicit strings.
+11. Refuse to operate unless all index functions provided.
 
 Maybe:
 
