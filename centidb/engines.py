@@ -26,6 +26,52 @@ __all__ = ['SkipList', 'SkiplistEngine', 'ListEngine', 'PlyvelEngine',
            'KyotoEngine', 'LmdbEngine']
 
 
+class Engine(object):
+    """
+    A storage engine or transaction is any object that implements the following
+    methods. Engines need not inherit from this class, it exists purely for
+    documentary purposes. All key and value variables below are ``NUL``-safe
+    bytestrings.
+    """
+
+    def get(self, key):
+        """Return the value of `key` or ``None`` if it does not exist."""
+        raise NotImplementedError
+
+    def put(self, key, value):
+        """Set the value of `key` to `value`, overwriting any prior value."""
+        raise NotImplementedError
+
+    def delete(self, key):
+        """Delete `key` if it exists."""
+        raise NotImplementedError
+
+    def iter(self, key, reverse=False):
+        """Yield `(key, value)` tuples in key order, starting at `key` and
+        moving in a fixed direction.
+
+        Key order must match the C `memcmp()
+        <http://linux.die.net/man/3/memcmp>`_ function.
+
+        `key`:
+            Starting key. The first yielded element should correspond to this
+            key if it exists, or the next highest key, or the highest key in
+            the store.
+
+        `reverse`:
+            If ``False``, iteration proceeds until the lexicographically
+            highest key is reached, otherwise it proceeds until the lowest key
+            is reached.
+        """
+        raise NotImplementedError
+
+    #: Name for the transaction represented by the object; may be any Python
+    #: value. Omit the attribute for engines or "transaction objects" that do
+    #: not support transactions. If your engine supports transactions but
+    #: cannot provide an ID, simply set it to :py:func:`time.time`.
+    txn_id = None
+
+
 class SkipList(object):
     """Doubly linked non-indexable skip list, providing logarithmic insertion
     and deletion. Keys are any orderable Python object.
