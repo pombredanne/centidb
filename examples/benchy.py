@@ -176,7 +176,7 @@ def x():
         idxtime = time.time() - t0
         out(engine_name, 'rand-index',
             f('%d', idxcnt),
-            f('%.2f', t),
+            f('%.2f', idxtime),
             f('%d', int(idxcnt/idxtime)))
 
         idcnt = 0
@@ -187,7 +187,7 @@ def x():
         idtime = time.time() - t0
         out(engine_name, 'rand-key',
             f('%d', idcnt),
-            f('%.2f', t),
+            f('%.2f', idtime),
             f('%d', int(idcnt/idtime)))
 
 x()
