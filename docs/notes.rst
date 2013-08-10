@@ -121,13 +121,69 @@ Cold War era technology. No "inventions", no lies, no claims to beauty, no
 religious debates about scaleability, just 500ish lines that try to do one
 thing reasonably.
 
-And so that remains the primary design goal: **size**. The library should be
-*small* and *convenient*. Few baked in assumptions, no overcooked
-superstructure of pure whack that won't matter anyway in a year, just indexing
-and some helpers to make queries work nicely. If you've read this far, then you
-hopefully understand why my receptiveness towards extending this library to be
-made "awesome" in some way is all but missing. Patch it at your peril, but
-please, bug fixes and obvious omissions only.
+
+Use cases
++++++++++
+
+The library is experimental, but eventually it should become a small, highly
+convenient way to store data for programs with small to medium size datasets.
+
+Already with the righ storage engine it can offer better guarantees about data
+consistency, and vastly better performance than much larger and more
+established systems, such as MongoDB. Coupled with :py:class:`LmdbEngine
+<centidb.engines.LmdbEngine>` it is even possible to make consistent online
+snapshots without resorting to platform trickery, very much unlike MongoDB.
+
+Ideally with the right set of primitives, more of MongoDB's problem domain
+could be subsumed. For instance, supporting sharding and replication are
+definitely interesting, and there is no reason why either of these features
+requires a 300kLOC codebase to implement, or even a 30kLOC codebase.
+
+By removing so much complexity from the simple task of persisting data, more
+room is left for pondering *legitimately hard problems*, such as serving an
+application's data after it outgrows a single computer or automagically sharded
+DBMS cluster.
+
+
+General ideas
++++++++++++++
+
+By pushing the DBMS into the application itself, numerous layers of indirection
+are removed from the lifecycle of a typical request. For example:
+
+* By explicitly naming indices, there is no need for a query planner.
+* By explicitly controlling the encoding, there may be no need for ever
+  deserializing data before passing it to the user, such as via
+  :py:func:`make_json_encoder <centidb.encoders.make_json_encoder>` and
+  :py:meth:`get(... raw=True) <centidb.Collection.get>`.
+* Since the DBMS lives within the process, there is no need to:
+
+  * Establish a connection using the network layer.
+  * Serialize the query.
+  * Context switch to the DBMS.
+  * Deserialize the query.
+  * While there are more results:
+      * Serialize the results.
+      * Context switch
+      * Deserialize the results.
+
+* As the cost of a query approaches 0, the need to separately cache results is
+  obviated:
+
+  * No need to deserialize DBMS-specific data format, only to re-serialize to
+    store in Memcache.
+  * No need for subtle/bug ridden race avoidance strategies when handling
+    updates to multiple copies of data.
+  * No need for multiple duplicate copies of data in RAM: one in the OS page
+    cache, one in Memcache, and (depending on DBMS) one in the DBMS application
+    layer cache.
+
+* No need to monitor buffers and connection limits for the DBMS.
+
+* No need to write some application logic in Javascript or PL/SQL to avoid
+  expensive context switch/query cost. Implementing data-specific walks such as
+  graph searches can be done more simply and clearly in Python.
+
 
 Futures
 +++++++
@@ -149,6 +205,9 @@ Probably:
 12. Convert Index/Collection guts to visitor-style design, replace find/iter
     methods with free functions implemented once.
 13. datetime support
+14. **join()** function: accept multiple indices producing keys in the same
+    order, return an iterator producing the union or intersection of those
+    indices.
 
 Maybe:
 
