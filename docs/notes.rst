@@ -96,23 +96,22 @@ Use cases
 +++++++++
 
 The library is experimental, but eventually it should become a small,
-convenient way to store data for programs with small to medium size datasets.
+convenient way to store data for programs with medium sized datasets.
 
-Already with the righ storage engine it can offer better guarantees about data
-consistency, and vastly better performance than much larger and more
-established systems, such as MongoDB. Coupled with :py:class:`LmdbEngine
-<centidb.engines.LmdbEngine>` it is even possible to make consistent online
-snapshots without resorting to platform trickery, very much unlike MongoDB.
+Already with a suitable engine it can offer better durability guarantees, and
+vastly better performance than much larger and more established systems, such
+as MongoDB. Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it
+is even possible to make consistent online backups without resorting to
+platform tricks, very much unlike MongoDB.
 
-Ideally with the right set of primitives, more of MongoDB's problem domain
-could be subsumed. For instance, supporting sharding and replication are
-definitely interesting, and there is no reason why either of these features
-requires a 300kLOC codebase to implement, or even a 30kLOC codebase.
+With carefully picked primitives, more of MongoDB's problem domain could be
+subsumed. For instance, supporting sharding and replication are definitely
+interesting, and there is no reason why either of these features requires a
+300kLOC codebase to implement, or even a 3kLOC codebase.
 
-By removing so much complexity from the simple task of persisting data, more
-room is left for pondering *legitimately hard problems*, such as serving an
-application's data after it outgrows a single computer or automagically sharded
-DBMS cluster.
+By removing complexity from the simple task of persisting data, more room is
+left to ponder *legitimately hard problems*, such as serving an application's
+data after it outgrows a single computer or automagically sharded DBMS cluster.
 
 
 General ideas
