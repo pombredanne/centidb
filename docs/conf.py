@@ -42,6 +42,7 @@ source_suffix = '.rst'
 
 # The encoding of source files.
 #source_encoding = 'utf-8-sig'
+autodoc_member_order = 'groupwise'
 
 # The master toctree document.
 master_doc = 'index'
