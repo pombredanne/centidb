@@ -98,17 +98,6 @@ def next_greater(s):
     s2 = s.rstrip('\xff')
     return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
 
-def _eat(pred, it, total_only=False):
-    if not pred:
-        return it
-    total = 0
-    true = 0
-    for elem in it:
-        total += 1
-        true += elem is not None
-    if total_only:
-        return total
-    return total, true
 
 def __kcmp(fn, o):
     return fn(o[1])
@@ -807,20 +796,6 @@ class Collection(object):
             return tuplize(self.txn_key_func(txn or self.engine, rec.data))
         return tuplize(self.key_func(rec.data))
 
-    def puts(self, recs, txn=None, packer=None, eat=True):
-        """Invoke :py:meth:`put` for each element in the iterable `recs`. If
-        `eat` is ``True``, returns the number of items processed, otherwise
-        returns an iterator that lazily calls :py:meth:`put` and yields its
-        return values."""
-        return _eat(eat, (self.put(rec, txn, packer) for rec in recs), True)
-
-    def putitems(self, it, txn=None, packer=None, eat=True):
-        """Invoke :py:meth:`put(y, key=x) <put>` for each (x, y) in the iterable
-        `it`. If `eat` is ``True``, returns the number of items processed,
-        otherwise returns an iterator that lazily calls :py:meth:`put` and
-        yields its return values."""
-        return _eat(eat, (self.put(y, txn, packer, x) for x, y in it), True)
-
     def put(self, rec, txn=None, packer=None, key=None, blind=False):
         """Create or overwrite a record.
 
@@ -891,26 +866,6 @@ class Collection(object):
         rec.index_keys = index_keys
         return rec
 
-    def deletes(self, objs, txn=None, eat=True):
-        """Invoke :py:meth:`delete` for each element in the iterable `objs`. If
-        `eat` is ``True``, returns a tuple containing the number of keys
-        processed, and the number of records deleted, otherwise returns an
-        iterator that lazily calls :py:meth:`delete` and yields its return
-        values.
-
-        ::
-
-            keys = request.form['names'].split(',')
-            for rec in coll.deletes(key):
-                if rec:
-                    print '%(name)s was deleted.' % (rec.data,)
-
-            # Summary version.
-            keys, deleted = coll.deletes(request.form['names'].split(','))
-            print 'Deleted %d names of %d provided.' % (deleted, keys)
-        """
-        return _eat(eat, (self.delete(obj, txn) for obj in objs))
-
     def delete(self, obj, txn=None):
         """Delete a record by key or using a :py:class:`Record` instance. The
         deleted record is returned if it existed.
@@ -935,14 +890,6 @@ class Collection(object):
             rec.batch = False
             rec.index_keys = None
             return rec
-
-    def delete_values(self, vals, txn=None, eat=True):
-        """Invoke :py:meth:`delete_value` for each element in the iterable
-        `vals`. If `eat` is ``True``, returns a tuple containing the number of
-        keys processed, and the number of records deleted, otherwise returns an
-        iterator that lazily calls :py:meth:`delete_value` and yields its
-        return values."""
-        return _eat(eat, (self.delete_value(v, txn) for v in vals))
 
     def delete_value(self, val, txn=None):
         """Delete a record value without knowing its key. The deleted record is
