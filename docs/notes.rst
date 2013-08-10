@@ -117,8 +117,8 @@ data after it outgrows a single computer or automagically sharded DBMS cluster.
 General ideas
 +++++++++++++
 
-By pushing the DBMS into the application itself, numerous layers of indirection
-are removed from the lifecycle of a typical request. For example:
+By pushing the DBMS into the application, numerous layers of indirection are
+removed from the lifecycle of a typical request. For example:
 
 * By explicitly naming indices, there is no need for a query planner.
 
@@ -141,7 +141,7 @@ are removed from the lifecycle of a typical request. For example:
   obviated:
 
   * No need to deserialize DBMS-specific data format, only to re-serialize to
-    store in Memcache using some completely difference encoding (e.g. BSON vs.
+    store in Memcache using some completely different encoding (e.g. BSON vs.
     pickle).
   * No need for subtle/bug ridden race avoidance strategies when handling
     updates to multiple copies of data.
