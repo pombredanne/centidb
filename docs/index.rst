@@ -32,7 +32,8 @@ comparable features.
     api
     metadb
     engines
-    encodings
+    encoders
     cookbook
     notes
+    perf
     :maxdepth: 1

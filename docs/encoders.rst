@@ -44,7 +44,7 @@ names end in ``_PACKER``.
 Thrift Integration
 ++++++++++++++++++
 
-.. autofunction:: centidb.support.make_thrift_encoder
+.. autofunction:: centidb.encoders.make_thrift_encoder
 
 
 Example
@@ -88,6 +88,6 @@ Other Encoders
 
 The `centidb.support` module includes helpers for a few more encodings.
 
-.. autofunction:: centidb.support.make_json_encoder
-.. autofunction:: centidb.support.make_msgpack_encoder
+.. autofunction:: centidb.encoders.make_json_encoder
+.. autofunction:: centidb.encoders.make_msgpack_encoder
 
