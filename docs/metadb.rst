@@ -124,3 +124,13 @@ which is a reference to the model class to subscribe to.
         if config.DEBUG:
             metadb.after_create(log_create, models.Base)
             metadb.after_delete(log_delete, models.Base)
+
+
+Extension
++++++++++
+
+.. autoclass:: centidb.metadb.EncoderBinding
+    :members:
+
+
+.. autofunction:: centidb.metadb.make_thrift_binding

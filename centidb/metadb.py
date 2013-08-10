@@ -24,6 +24,7 @@ produce and maintain a compact encoding. For now this is just a curiosity.
 """
 
 from __future__ import absolute_import
+import operator
 
 import centidb
 import centidb.encoders
@@ -34,15 +35,15 @@ class Field(object):
     """
     def __get__(self, instance, klass):
         if instance:
-            return instance._rec.data.get(self.name)
+            return klass.METADB_BINDING.get(instance._rec.data, self.name)
         return self
 
     def __set__(self, instance, value):
-        instance._rec.data[self.name] = value
+        klass.METADB_BINDING.set(instance._rec.data, self.name, value)
 
     def __delete__(self, instance):
         try:
-            del instance._rec.data[self.name]
+            instance.METADB_BINDING.delete(instance._rec.data, self.name)
         except KeyError:
             raise AttributeError(self.name)
 
@@ -77,6 +78,55 @@ class LazyIndexProperty(object):
         index = klass.collection().indices[self.name]
         setattr(klass, self.name, index)
         return index
+
+
+class EncoderBinding(object):
+    """Wrap implementations for value manipulation on a model's underlying
+    encoder. You must instantiate this to support new encoders.
+
+    `encoder`
+        The :py:class:`centidb.encoders.Encoder` instance itself.
+
+    `new`
+        Callable that produces a new, empty instance of the encoder's value
+        type.
+
+        The default is :py:class:`dict`.
+
+    `get`
+        Callable that when invoked as `func(obj, attr)` returns the value of
+        the named attribute `attr` from `obj`.
+
+        The default is :py:func:`operator.getitem`.
+
+    `set`
+        Callable that when invoked as `func(obj, attr, value)` sets the value
+        of the named attribute `attr` on `obj` to `value`.
+
+        The default is :py:func:`operator.setitem`.
+
+    `delete`
+        Callable that when invoked as `func(obj, attr)` deletes the named
+        attribute `attr` from `obj`.
+
+        The default is :py:func:`operator.delitem`.
+    """
+    def __init__(self, new=None, get=None, set=None, delete=None):
+        self.new = new or dict
+        self.get = get or operator.getitem
+        self.set = set or operator.setitem
+        self.delete = delete or operator.delitem
+
+
+def make_thrift_binding(klass, factory=None):
+    """Creates a binding for a Thrift type. Since Thrift exposes user data as
+    attributes we must :py:func:`getattr`, :py:func:`setattr` and
+    :py:func:`delattr` for value access.
+    """
+    import centidb.encoders
+    encoder = encoders.make_thrift_encoder(klass, factory=factory)
+    return EncoderBinding(encoder=encoder, factory=klass,
+                          get=getattr, set=setattr, delete=delattr)
 
 
 class ModelMeta(type):
@@ -152,8 +202,8 @@ class ModelMeta(type):
                 value.name = key
 
     @classmethod
-    def setup_encoding(cls, klass, bases, attrs):
-        cls.METADB_ENCODER = centidb.encoders.make_json_encoder()
+    def setup_binding(cls, klass, bases, attrs):
+        cls.METADB_BINDING = EncoderBinding()
 
 
 def key(func):
@@ -415,9 +465,10 @@ class BaseModel(object):
 
     def __init__(self, _rec=None, **kwargs):
         if not _rec:
-            _rec = centidb.Record(self.collection(), {})
+            _rec = centidb.Record(self.collection(), self.METADB_BINDING.new())
         if kwargs:
-            _rec.data.update(kwargs)
+            for name, value in kwargs.iteritems():
+                setattr(self, name, value)
         self._rec = _rec
 
     @property
