@@ -411,8 +411,10 @@ class BaseModel(object):
         return cls.collection().values(key, lo, hi, reverse, max, include)
 
     def __init__(self, _rec=None, **kwargs):
-        if _rec is None:
+        if not _rec:
             _rec = centidb.Record(self.collection(), {})
+        if kwargs:
+            _rec.data.update(kwargs)
         self._rec = _rec
 
     @property
