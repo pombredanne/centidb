@@ -125,7 +125,7 @@ thing reasonably.
 Use cases
 +++++++++
 
-The library is experimental, but eventually it should become a small, highly
+The library is experimental, but eventually it should become a small,
 convenient way to store data for programs with small to medium size datasets.
 
 Already with the righ storage engine it can offer better guarantees about data
@@ -152,22 +152,23 @@ By pushing the DBMS into the application itself, numerous layers of indirection
 are removed from the lifecycle of a typical request. For example:
 
 * By explicitly naming indices, there is no need for a query planner.
+
 * By explicitly controlling the encoding, there may be no need for ever
   deserializing data before passing it to the user, such as via
   :py:func:`make_json_encoder <centidb.encoders.make_json_encoder>` and
   :py:meth:`get(... raw=True) <centidb.Collection.get>`.
-* Since the DBMS lives within the process, there is no need to:
 
-  * Establish a connection using the network layer.
-  * Serialize the query.
-  * Context switch to the DBMS.
-  * Deserialize the query.
-  * While there are more results:
-      * Serialize the results.
-      * Context switch
-      * Deserialize the results.
+* Through careful buffer control during a transaction, memory copies are
+  drastically reduced.
 
-* As the cost of a query approaches 0, the need to separately cache results is
+* No need to establish a DBMS connection using the network layer.
+* No need to serialize the query.
+* No need to context switch to the DBMS.
+* No need to deserialize the query.
+* While there are more results, no need to endlessly serialize/context
+  switch/deserialize the results.
+
+* As the query cost approaches 0, the need to separately cache results is
   obviated:
 
   * No need to deserialize DBMS-specific data format, only to re-serialize to
@@ -184,6 +185,10 @@ are removed from the lifecycle of a typical request. For example:
   expensive context switch/query cost. Implementing data-specific walks such as
   graph searches can be done more simply and clearly in Python.
 
+* Much finer control over commit strategies. For example when handling updates
+  via a greenlet style server, closures describing an update can be queued for
+  a dedicated hardware *writer* thread to implement group commit.
+
 
 Futures
 +++++++
@@ -193,21 +198,16 @@ Probably:
 1. Support inverted index keys nicely
 2. Avoid key decoding when only used for comparison
 3. Unique index constraints, or validation callbacks
-4. Better documentation
-5. Index and collection type signatures (prevent writes using broken
+4. Index and collection type signatures (prevent writes using broken
    configuration)
-6. Smaller
-7. Safer
-8. C++ library
-9. Key splitting (better support DBs that dislike large records)
-10. putbatch()
-11. More future proof metadata format.
-12. Convert Index/Collection guts to visitor-style design, replace find/iter
-    methods with free functions implemented once.
-13. datetime support
-14. **join()** function: accept multiple indices producing keys in the same
-    order, return an iterator producing the union or intersection of those
-    indices.
+5. putbatch()
+6. More future proof metadata format.
+7. Convert Index/Collection guts to visitor-style design, replace find/iter
+   methods with free functions implemented once.
+8. datetime support
+9. **join()** function: accept multiple indices producing keys in the same
+   order, return an iterator producing the union or intersection of those
+   indices.
 
 Maybe:
 
@@ -216,15 +216,13 @@ Maybe:
    the highest and lowest member keys in their key, since member record keys
    can be perfectly reconstructed. Lookup would expand varint offset array then
    bisect+decode until desired member is found.
-2. Value compressed covered indices
-3. `Query` object to simplify index intersections.
-4. Configurable key scheme
-5. Make key/value scheme prefix optional
-6. Make indices work as :py:class:`Collection` observers, instead of hard-wired
-7. Convert :py:class:`Index` to reuse :py:class:`Collection`
-8. User-defined key blob types. Allocate a small range from the key encoding to
+2. Covered indices: store/compress large values within index records.
+3. Make indices work as :py:class:`Collection` observers, instead of hard-wired
+4. Convert :py:class:`Index` to reuse :py:class:`Collection`
+5. User-defined key blob types. Allocate a small range from the key encoding to
    logic that looks up a name for the byte from metadata, then looks up that
    name in a list of factories registered with the store.
+6. C++ library
 
 Probably not:
 
