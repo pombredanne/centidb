@@ -11,7 +11,7 @@ attaching it to a :py:class:`Store <centidb.Store>`.
 
 Since the library depends on an external engine, an initial consideration might
 be which to use. For now, let's forgo the nasty research and settle on the
-simplest engine available, :py:class:`ListEngine <centidb.support.ListEngine>`:
+simplest engine available, :py:class:`ListEngine <centidb.engines.ListEngine>`:
 
 ::
 

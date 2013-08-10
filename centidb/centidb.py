@@ -38,6 +38,7 @@ import zlib
 
 import keycoder
 from keycoder import tuplize
+from centidb.encoders import Encoder
 
 __all__ = '''Store Collection Record Index Encoder KEY_ENCODER PICKLE_ENCODER
     PLAIN_PACKER ZLIB_PACKER next_greater open'''.split()
@@ -61,19 +62,19 @@ ITEMGETTER_1 = operator.itemgetter(1)
 def open(engine, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
     `engine(**kwargs)` and wrap the result in a :py:class:`Store`. `engine`
-    can either be a name from :py:mod:`centidb.support` or a fully qualified
+    can either be a name from :py:mod:`centidb.engines` or a fully qualified
     name for a class in another module.
 
     ::
 
-        >>> # Uses centidb.support.SkiplistEngine
+        >>> # Uses centidb.engines.SkiplistEngine
         >>> centidb.open('SkiplistEngine')
 
         >>> # Uses mymodule.BlarghEngine
         >>> centidb.open('mymodule.BlarghEngine')
     """
     modname, _, classname = engine.rpartition('.')
-    module = importlib.import_module(modname or 'centidb.support')
+    module = importlib.import_module(modname or 'centidb.engines')
     return Store(getattr(module, classname)(**kwargs))
 
 def decode_offsets(s):
@@ -124,33 +125,6 @@ def _eat(pred, it, total_only=False):
 def __kcmp(fn, o):
     return fn(o[1])
 _kcmp = functools.partial(functools.partial, __kcmp)
-
-
-class Encoder(object):
-    """Instances of this class represent an encoding.
-
-        `name`:
-            ASCII string uniquely identifying the encoding. A future version
-            may use this to verify the encoding matches what was used to create
-            the :py:class:`Collection`. For encodings used as compressors, this
-            name is persisted forever in :py:class:`Store`'s metadata after
-            first use.
-
-        `unpack`:
-            Function to deserialize an encoded value. It may be called with **a
-            buffer object containing the encoded bytestring** as its argument,
-            and should return the decoded value. If your encoder does not
-            support :py:func:`buffer` objects (many C extensions do), then
-            convert the buffer using :py:func:`str`.
-
-        `pack`:
-            Function to serialize a value. It is called with the value as its
-            sole argument, and should return the encoded bytestring.
-    """
-    def __init__(self, name, unpack, pack):
-        self.name = name
-        self.unpack = unpack
-        self.pack = pack
 
 class Index(object):
     """Provides query and manipulation access to a single index on a
@@ -1027,6 +1001,9 @@ class Store(object):
     def collection(self, name, *args, **kwargs):
         """Shorthand for `centidb.Collection(self, *args, **kwargs)`."""
         return Collection(self, name, *args, **kwargs)
+
+    def __getitem__(self, name):
+        return self.collection(name)
 
     _INFO_KEYS = ('name', 'idx', 'index_for')
     def _get_info(self, name, idx=None, index_for=None):

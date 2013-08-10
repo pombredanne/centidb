@@ -14,8 +14,8 @@ Setup:
 
     ::
 
-        engine = centidb.support.PlyvelEngine(name='test.ldb')
-        store = centidb.Store(engine)
+        store = centidb.open('PlyvelEngine', name='test.ldb',
+                             create_if_missing=True)
 
 * `msgpack <http://msgpack.org/>`_ encoder:
 

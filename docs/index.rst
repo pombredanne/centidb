@@ -29,8 +29,10 @@ comparable features.
 
 .. toctree::
     intro
-    metadb
     api
+    metadb
+    engines
+    encodings
     cookbook
     notes
     :maxdepth: 1
