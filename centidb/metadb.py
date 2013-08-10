@@ -25,7 +25,7 @@ produce and maintain a compact encoding. For now this is just a curiosity.
 from __future__ import absolute_import
 
 import centidb
-import centidb.support
+import centidb.encodings
 
 
 class Field(object):
@@ -152,7 +152,7 @@ class ModelMeta(type):
 
     @classmethod
     def setup_encoding(cls, klass, bases, attrs):
-        cls.METADB_ENCODING = centidb.support.make_json_encoder()
+        cls.METADB_ENCODING = centidb.encodings.make_json_encoder()
 
 
 def key(func):
