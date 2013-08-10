@@ -24,7 +24,6 @@ from __future__ import absolute_import
 import cPickle as pickle
 import cStringIO
 import functools
-import importlib
 import itertools
 import operator
 import os
@@ -59,7 +58,7 @@ def open(engine, **kwargs):
         >>> centidb.open('mymodule.BlarghEngine')
     """
     modname, _, classname = engine.rpartition('.')
-    module = importlib.import_module(modname or 'centidb.engines')
+    module = __import__(modname or 'centidb.engines')
     return Store(getattr(module, classname)(**kwargs))
 
 def decode_offsets(s):
