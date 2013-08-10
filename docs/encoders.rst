@@ -22,8 +22,8 @@ instances.
     ``PICKLE_ENCODER``
         Uses :py:func:`pickle.dumps` and :py:func:`pickle.loads` with protocol
         2 to serialize any pickleable object. It is the default encoder if no
-        specific `encoder=` argument is given to the :py:class:`Collection`
-        constructor.
+        specific `encoder=` argument is given to the
+        :py:class:`centidb.Collection` constructor.
 
 **Compressors**
 
@@ -37,8 +37,9 @@ names end in ``_PACKER``.
     ``ZLIB_PACKER``
         Uses :py:func:`zlib.compress` and :py:func:`zlib.decompress` to provide
         value compression. It may be passed as the `packer=` argument to
-        :py:meth:`Collection.put`, or specified as the default using the
-        `packer=` argument to the :py:class:`Collection` constructor.
+        :py:meth:`centidb.Collection.put`, or specified as the default using
+        the `packer=` argument to the :py:class:`centidb.Collection`
+        constructor.
 
 
 Thrift Integration
@@ -90,4 +91,3 @@ The `centidb.support` module includes helpers for a few more encodings.
 
 .. autofunction:: centidb.encoders.make_json_encoder
 .. autofunction:: centidb.encoders.make_msgpack_encoder
-
