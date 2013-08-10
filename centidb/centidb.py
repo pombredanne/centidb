@@ -28,7 +28,6 @@ import importlib
 import itertools
 import operator
 import os
-import re
 import struct
 import sys
 import time
@@ -87,9 +86,6 @@ def decode_offsets(s):
         pos += more()
         out.append(pos)
     return out, io.tell()
-
-_encode_pat = re.compile(r'[\x00\x01]')
-_encode_subber = lambda m: '\x01\x01' if m.group(0) == '\x00' else '\x01\x02'
 
 def next_greater(s):
     """Given a bytestring `s`, return the most compact bytestring that is
