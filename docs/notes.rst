@@ -65,31 +65,21 @@ consideration.
 History
 +++++++
 
-The first attempt came during 2011 while porting from App Engine and a
-Datastore-alike was needed. All alternatives included so much weirdness (Java?
-Erlang? JavaScript? BSON? Auto-magico-sharding?
-`PageFaultRetryableSection
-<https://github.com/mongodb/mongo/blob/master/src/mongo/db/pagefault.h#L35>`_?!?)
-that I eventually canned the project, rendered incapable of picking something
-as **simple as a database** that was *good enough*, overwhelmed by false
-promises, fake distinctions and overstated greatness in the endless PR veiled
-by marketing site designs, and driven by people for whom the embodiment of
-*elegance* is more often the choice of font on a Powerpoint slide.
+While the idea is older, an implementation did not occur until 2011 after an
+abortive migration from App Engine. All alternatives included so much weirdness
+(Java? Erlang? Javascript? BSON?) that I canned the project in sheer
+displeasure, rendered unable to choose something as **simple as a database**,
+overwhelmed by false promises, fake distinctions, and overstated greatness in
+the endless PR veiled by marketing site designs, and driven by those for whom
+*elegance* is the choice of font on a Powerpoint slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
-when the B-tree appeared, variants of which comprise the core of SQLite 3, the
-core of MongoDB, and just about 90% of all DBMS wheel reinventions existing in
-the 40 years since. Yet today when faced with a B-tree adulterated with
-JavaScript and a million more dumb concepts, upon rejecting it as **junk** we
-are instantly drowned in the torrential cries of a million: *"you just don't
-get it!"*. I fear I do get it, all too well, and I hate it.
-
-So this module is borne out of frustration. On a recent project while
-experimenting with compression, I again found myself partially implementing
-what this module wants to be: a tiny layer that does little but add indices to
-Cold War era technology. No "inventions", no lies, no claims to beauty, no
-religious debates about scaleability, just 500ish lines that try to do one
-thing reasonably.
+when the B-tree appeared, variants of which comprise the core of SQLite,
+MongoDB, and 90% of all DBMS wheel reinventions existing since. So this library
+is the product of frustration. On a recent project while experimenting with
+compression, I again found myself partially implementing what this library
+should be: a tiny layer that does little but implement indexing, and gently
+placate the use of some Cold War era technology.
 
 
 Use cases
