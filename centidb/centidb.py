@@ -343,12 +343,6 @@ class Collection(object):
             :py:class:`Encoder` used to serialize record values to bytestrings;
             defaults to ``PICKLE_ENCODER``.
 
-        `packer`:
-            :py:class:`Encoder` used to compress one or more serialized record
-            values as a unit. Used only if `packer=` isn't specified during
-            :py:meth:`Collection.put` or :py:meth:`Collection.batch`. Defaults
-            to ``PLAIN_PACKER`` (uncompressed).
-
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
             generating auto-incremented keys. If unspecified, defaults to
@@ -356,7 +350,7 @@ class Collection(object):
             are specified.
     """
     def __init__(self, store, info, key_func=None, txn_key_func=None,
-            encoder=None, packer=None, counter_name=None):
+                 encoder=None, counter_name=None):
         """Create an instance; see class docstring."""
         self.store = store
         self.engine = store.engine
@@ -370,13 +364,11 @@ class Collection(object):
         self.key_func = key_func
         self.txn_key_func = txn_key_func
 
-        self.derived_keys = info.get('derived_keys', False)
-        self.blind = info.get('blind', False)
+        info.setdefault('derived_keys', False)
+        info.setdefault('blind', False)
+
         self.encoder = encoder or encoders.PICKLE_ENCODER
         self.encoder_prefix = self.store.add_encoder(self.encoder)
-        #: Default packer used when calls to :py:meth:`Collection.put` do not
-        #: specify a `packer=` argument. Defaults to ``PLAIN_PACKER``.
-        self.packer = packer or encoders.PLAIN_PACKER
         #: Dict mapping indices added using :py:meth:`Collection.add_index` to
         #: :py:class:`Index` instances representing them.
         #:
@@ -398,7 +390,6 @@ class Collection(object):
         """
         self.info['blind'] = bool(blind)
         self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
-        self.blind = self.info['blind']
 
     def set_derived_keys(self, derived_keys):
         """Enable derived keys. If ``True``, indicates the key function derives
@@ -420,7 +411,6 @@ class Collection(object):
         """
         self.info['derived_keys'] = bool(derived_keys)
         self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
-        self.derived_keys = self.info['derived_keys']
 
     def add_index(self, name, func):
         """Associate an index with the collection. Index metadata will be
@@ -695,9 +685,7 @@ class Collection(object):
                 contribute to the currently building batch.
 
             `packer`:
-                Specifies the value compressor to use. If ``None``, defaults to
-                the `packer=` argument given to the :py:class:`Collection`
-                constructor, or uncompressed.
+                Encoding to use as compressor, defaults to PLAIN_PACKER.
 
             `txn`:
                 Transaction to use, or ``None`` to indicate the default
@@ -721,7 +709,7 @@ class Collection(object):
         assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
         txn = txn or self.engine
-        packer = packer or self.packer
+        packer = packer or encoders.PLAIN_PACKER
         it = self._iter(txn, None, lo, hi, False, None, True, max_phys)
         groupval = None
         items = []
@@ -790,7 +778,7 @@ class Collection(object):
         rec.batch = False
 
     def _reassign_key(self, rec, txn):
-        if rec.key and not self.derived_keys:
+        if rec.key and not self.info['derived_keys']:
             return rec.key
         elif self.txn_key_func:
             return tuplize(self.txn_key_func(txn or self.engine, rec.data))
@@ -812,8 +800,7 @@ class Collection(object):
                 behaviour of the storage engine.
 
             `packer`:
-                Encoding to use to compress the value. Defaults to
-                :py:attr:`Collection.packer`.
+                Encoding to use as compressor, defaults to PLAIN_PACKER.
 
             `key`:
                 If specified, overrides the use of collection's key function
@@ -848,12 +835,12 @@ class Collection(object):
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     txn.delete(index_key)
-        elif self.indices and not (blind or self.blind):
+        elif self.indices and not (blind or self.info['blind']):
             # TODO: delete() may be unnecessary when no indices are defined
             # Old key might already exist, so delete it.
             self.delete(obj_key)
 
-        packer = packer or self.packer
+        packer = packer or encoders.PLAIN_PACKER
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer)
