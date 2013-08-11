@@ -19,10 +19,6 @@ allows read performance to be traded for storage efficiency, while still
 allowing transparent access to individual records. Arbitrary key ranges may be
 compressed and the batch size is configurable.
 
-The name is due to the core being under 500 lines of code excluding docstrings
-and speedups, making it over 100 times smaller than alternatives with similar
-functionality.
-
 .. toctree::
     intro
     api
