@@ -27,7 +27,6 @@ import itertools
 import operator
 import os
 import sys
-import threading
 import warnings
 
 import keycoder
@@ -359,12 +358,14 @@ class Collection(object):
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
-            derived_keys = False
-            blind = True
+            info['derived_keys'] = False
+            info['blind'] = True
+        else:
+            info.setdefault('derived_keys', False)
+            info.setdefault('blind', False)
+
         self.key_func = key_func
         self.txn_key_func = txn_key_func
-        info.setdefault('derived_keys', False)
-        info.setdefault('blind', False)
 
         self.encoder = encoder or encoders.PICKLE_ENCODER
         self.encoder_prefix = self.store.add_encoder(self.encoder)
