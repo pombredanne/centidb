@@ -77,31 +77,29 @@ Storing data isn't hard: it has effectively been solved **since at least 1972**
 when the B-tree appeared, variants of which comprise the core of SQLite,
 MongoDB, and 90% of all DBMS wheel reinventions existing since. So this library
 is the product of frustration. On a recent project while experimenting with
-compression, I again found myself partially implementing what this library
-should be: a tiny layer that does little but implement indexing, and gently
-placate the use of some Cold War era technology.
+compression, I again began to partially implement what this library should be:
+a small layer that implements indexing, and gently placates the use of some
+Cold War era technology.
 
 
 Use cases
 +++++++++
 
 The library is experimental, but eventually it should become a small,
-convenient way to store data for programs with medium sized datasets.
+convenient way to store data for programs with medium sized datasets. Already
+with a suitable engine it can offer better durability guarantees, and vastly
+better performance than larger and more established systems, such as MongoDB.
+Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it is even
+possible to make consistent online backups without resorting to platform
+tricks, unlike MongoDB.
 
-Already with a suitable engine it can offer better durability guarantees, and
-vastly better performance than much larger and more established systems, such
-as MongoDB. Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it
-is even possible to make consistent online backups without resorting to
-platform tricks, very much unlike MongoDB.
-
-With carefully chosen primitives, more of MongoDB's problem domain could be
-subsumed. For instance, supporting sharding and replication are definitely
-interesting, and there is no reason why either feature should require a 300kLOC
-codebase to implement, or even a 3kLOC codebase.
-
-By removing complexity from the simple task of persisting data, more room is
-left to ponder *legitimately hard problems*, such as serving an application's
-data after it outgrows a single computer or automagically sharded DBMS cluster.
+With carefully selected primitives, more of the problem domain could be
+supported. For instance, supporting explicit sharding and replication are
+interesting, and neither feature should require a 300kLOC codebase to
+implement, or even a 3kLOC codebase. By removing complexity from the task of
+persisting data, greater room is left to ponder *legitimately hard problems*,
+such as serving an application's data after it outgrows a single computer or
+magically partitioned DBMS cluster.
 
 
 General ideas
