@@ -9,9 +9,9 @@ centidb
 
 **centidb** is a compromise between the minimalism of key/value stores and the
 convenience of SQL. It augments any store offering an ordered-map interface to
-add support for keys composed of tuples rather than bytestrings, and easy
-maintenance of secondary indices, with key and index functions written directly
-in Python syntax.
+support keys composed of tuples rather than bytestrings, and easy maintenance
+of secondary indices, with key and index functions written directly in Python
+syntax.
 
 There is no fixed value type or encoding, key scheme, compressor, or storage
 engine, allowing integration with whatever suits a project. Batch compression
