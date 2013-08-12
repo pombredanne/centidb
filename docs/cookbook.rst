@@ -11,39 +11,39 @@ Index Usage
 
     import itertools
     import centidb
+
+    from operator import itemgetter
     from pprint import pprint
 
-    import plyvel
-    store = centidb.Store(plyvel.DB('test.ldb', create_if_missing=True))
-    people = centidb.Collection(store, 'people', key_func=lambda p: p['name'])
-    people.add_index('age', lambda p: p['age'])
-    people.add_index('name', lambda p: p['age'])
-    people.add_index('city_age', lambda p: (p.get('city'), p['age']))
+    store = centidb.open('ListEngine')
+    people = store.add_collection('people', key_func=itemgetter(u'name'))
 
-    make_person = lambda name, city, age: dict(locals())
+    people.add_index('name',     itemgetter(u'name'))
+    people.add_index('age',      itemgetter(u'age'))
+    people.add_index('city_age', itemgetter(u'city', u'age'))
 
-    people.put(make_person(u'Alfred', u'Nairobi', 46))
-    people.put(make_person(u'Jemima', u'Madrid', 64))
-    people.put(make_person(u'Mildred', u'Paris', 34))
-    people.put(make_person(u'Winnifred', u'Paris', 24))
+    people.put({u'name': u'Alfred',    u'city': u'Nairobi',  u'age': 46})
+    people.put({u'name': u'Jemima',    u'city': u'Madrid',   u'age': 64})
+    people.put({u'name': u'Mildred',   u'city': u'Paris',    u'age': 34})
+    people.put({u'name': u'Winnifred', u'city': u'Paris',    u'age': 24})
 
     # Youngest to oldest:
-    pprint(list(people.indices['age'].items()))
+    pprint(list(people.indices['age'].values()))
 
     # Oldest to youngest:
     pprint(list(people.indices['age'].values(reverse=True)))
 
     # Youngest to oldest, by city:
     it = people.indices['city_age'].values()
-    for city, items in itertools.groupby(it, lambda p: p['city']):
+    for city, items in itertools.groupby(it, itemgetter(u'city')):
         print '  ', city
         for person in items:
             print '    ', person
 
-    # Fetch youngest person:
+    # Youngest person:
     print people.indices['age'].get()
 
-    # Fetch oldest person:
+    # Oldest person:
     print people.indices['age'].get(reverse=True)
 
 
