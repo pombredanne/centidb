@@ -23,6 +23,7 @@ See http://keycoder.readthedocs.org/
 from __future__ import absolute_import
 
 import functools
+import itertools
 import operator
 import os
 import struct
@@ -37,15 +38,15 @@ except ImportError:
 
 __all__ = '''invert unpacks packs unpack_int pack_int'''.split()
 
-KIND_NULL = chr(15)
-KIND_NEG_INTEGER = chr(20)
-KIND_INTEGER = chr(21)
-KIND_BOOL = chr(30)
-KIND_BLOB = chr(40)
-KIND_TEXT = chr(50)
-KIND_UUID = chr(90)
-KIND_KEY = chr(95)
-KIND_SEP = chr(102)
+KIND_NULL = 15
+KIND_NEG_INTEGER = 20
+KIND_INTEGER = 21
+KIND_BOOL = 30
+KIND_BLOB = 40
+KIND_TEXT = 50
+KIND_UUID = 90
+KIND_KEY = 95
+KIND_SEP = 102
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 
 
@@ -156,7 +157,11 @@ def pack_int(i):
     return str(ba)
 
 
-def unpack_int(getc, read):
+def unpack_int(s):
+    return read_int(itertools.imap(ord, s).next)
+
+
+def read_int(getc):
     """Decode and return an integer encoded by :py:func:`write_int`.
 
     `get`:
@@ -170,28 +175,53 @@ def unpack_int(getc, read):
         i = unpack_int(lambda: io.read(1), io.read)
         # io.tell() is now positioned one byte past end of integer.
     """
-    c = getc()
-    o = ord(c)
+    o = getc()
     if o <= 240:
         return o
     elif o <= 248:
-        c2 = getc()
-        o2 = ord(c2)
+        o2 = getc()
         return 240 + (256 * (o - 241) + o2)
     elif o == 249:
-        return 2288 + (256*ord(getc())) + ord(getc())
+        return 2288 + (256*getc()) + getc()
     elif o == 250:
-        return struct.unpack('>L', '\x00' + read(3))[0]
+        return ((getc() << 16) |
+                (getc() << 8) |
+                (getc()))
     elif o == 251:
-        return struct.unpack('>L', read(4))[0]
+        return ((getc() << 24) |
+                (getc() << 16) |
+                (getc() << 8) |
+                (getc()))
     elif o == 252:
-        return struct.unpack('>Q', '\x00\x00\x00' + read(5))[0]
+        return ((getc() << 32) |
+                (getc() << 24) |
+                (getc() << 16) |
+                (getc() << 8) |
+                (getc()))
     elif o == 253:
-        return struct.unpack('>Q', '\x00\x00' + read(6))[0]
+        return ((getc() << 40) |
+                (getc() << 32) |
+                (getc() << 24) |
+                (getc() << 16) |
+                (getc() << 8) |
+                (getc()))
     elif o == 254:
-        return struct.unpack('>Q', '\x00' + read(7))[0]
+        return ((getc() << 48) |
+                (getc() << 40) |
+                (getc() << 32) |
+                (getc() << 24) |
+                (getc() << 16) |
+                (getc() << 8) |
+                (getc()))
     elif o == 255:
-        return struct.unpack('>Q', read(8))[0]
+        return ((getc() << 56) |
+                (getc() << 48) |
+                (getc() << 40) |
+                (getc() << 32) |
+                (getc() << 24) |
+                (getc() << 16) |
+                (getc() << 8) |
+                (getc()))
 
 
 def unpack_int_s(s):
@@ -218,15 +248,14 @@ def encode_str(s, w):
     w(0)
 
 
-def decode_str(getc):
-    it = iter(getc, '')
-    lb = ord(it.next())
+def decode_str(it):
+    getc = it.next
+    lb = getc()
     if not lb:
         return ''
     out = bytearray()
     shift = 1
     for cb in it:
-        cb = ord(cb)
         if cb == 0:
             break
         ch = (lb << shift) & 0xff
@@ -237,7 +266,7 @@ def decode_str(getc):
             lb = cb
         else:
             shift = 1
-            lb = ord(it.next())
+            lb = getc()
             if not lb:
                 break
 
@@ -343,27 +372,27 @@ def unpacks(prefix, s, first=False):
     """
     if not s.startswith(prefix):
         return
-    s = buffer(s, len(prefix))
 
-    io = StringIO.StringIO(s)
-    getc = functools.partial(io.read, 1)
+    it = itertools.imap(ord, s[len(prefix):])
+    getc = it.next
+
     tups = []
     tup = []
-    for c in iter(getc, ''):
+    for c in it:
         if c == KIND_NULL:
             arg = None
         elif c == KIND_INTEGER:
-            arg = unpack_int(getc, io.read)
+            arg = read_int(getc)
         elif c == KIND_NEG_INTEGER:
-            arg = -unpack_int(getc, io.read)
+            arg = -unpack_int(getc)
         elif c == KIND_BOOL:
-            arg = bool(unpack_int(getc, io.read))
+            arg = bool(unpack_int(getc))
         elif c == KIND_BLOB:
-            arg = decode_str(getc)
+            arg = decode_str(it)
         elif c == KIND_TEXT:
-            arg = decode_str(getc).decode('utf-8')
+            arg = decode_str(it).decode('utf-8')
         elif c == KIND_UUID:
-            arg = uuid.UUID(decode_str(getc))
+            arg = uuid.UUID(decode_str(it))
         elif c == KIND_SEP:
             tups.append(tuple(tup))
             if first:
@@ -371,7 +400,7 @@ def unpacks(prefix, s, first=False):
             tup = []
             continue
         else:
-            raise ValueError('bad kind %r; key corrupt? %r' % (ord(c), tup))
+            raise ValueError('bad kind %r; key corrupt? %r' % (c, tup))
         tup.append(arg)
     tups.append(tuple(tup))
     return tups[0] if first else tups
