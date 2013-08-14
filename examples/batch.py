@@ -54,7 +54,7 @@ def out(*args):
     print '"%s","%.2fkb","%d","%.2f","%d","%.2f","%.2f","%.2f"' % args
 
 
-for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
+for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     if not packer:
         continue
 
