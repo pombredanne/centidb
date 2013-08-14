@@ -59,7 +59,7 @@ def invert(s):
     """
     return s.translate(INVERT_TBL)
 
-def pack_int(v):
+def write_int(v, w):
     """Given some positive integer of 64-bits or less, return a variable length
     bytestring representation that preserves the integer's order. The
     bytestring size is such that:
@@ -73,45 +73,91 @@ def pack_int(v):
         +-------------+------------------------+
         + 3 bytes     | <= 67823               |
         +-------------+------------------------+
-        + 4 bytes     | <= 16777215            |
+        + 4 bytes     | <= 0xffffff            |
         +-------------+------------------------+
-        + 5 bytes     | <= 4294967295          |
+        + 5 bytes     | <= 0xffffffff          |
         +-------------+------------------------+
-        + 6 bytes     | <= 1099511627775       |
+        + 6 bytes     | <= 0xffffffffff        |
         +-------------+------------------------+
-        + 7 bytes     | <= 281474976710655     |
+        + 7 bytes     | <= 0xffffffffffff      |
         +-------------+------------------------+
-        + 8 bytes     | <= 72057594037927935   |
+        + 8 bytes     | <= 0xffffffffffffff    |
         +-------------+------------------------+
-        + 9 bytes     | <= (2**64)-1           |
+        + 9 bytes     | <= 0xffffffffffffffff  |
         +-------------+------------------------+
     """
     if v < 240:
-        return chr(v)
+        w(v)
     elif v <= 2287:
         v -= 240
-        d, m = divmod(v, 256)
-        return chr(241 + d) + chr(m)
+        w(241 + (v >> 8))
+        w(v & 0xff)
     elif v <= 67823:
         v -= 2288
-        d, m = divmod(v, 256)
-        return '\xf9' + chr(d) + chr(m)
-    elif v <= 16777215:
-        return '\xfa' + struct.pack('>L', v)[-3:]
-    elif v <= 4294967295:
-        return '\xfb' + struct.pack('>L', v)
-    elif v <= 1099511627775:
-        return '\xfc' + struct.pack('>Q', v)[-5:]
-    elif v <= 281474976710655:
-        return '\xfd' + struct.pack('>Q', v)[-6:]
-    elif v <= 72057594037927935:
-        return '\xfe' + struct.pack('>Q', v)[-7:]
+        w(0xf9)
+        w((v >> 8))
+        w((v & 0xff))
+    elif v <= 0xffffff:
+        w(0xfa)
+        w((v >> 16))
+        w((v >> 8) & 0xff)
+        w((v & 0xff))
+    elif v <= 0xffffffff:
+        w(0xfb)
+        w((v >> 24))
+        w((v >> 16) & 0xff)
+        w((v >> 8) & 0xff)
+        w((v & 0xff))
+    elif v <= 0xffffffffff:
+        w(0xfc)
+        w((v >> 32) & 0xff)
+        w((v >> 24) & 0xff)
+        w((v >> 16) & 0xff)
+        w((v >> 8) & 0xff)
+        w((v & 0xff))
+    elif v <= 0xffffffffffff:
+        w(0xfd)
+        w((v >> 40))
+        w((v >> 32) & 0xff)
+        w((v >> 24) & 0xff)
+        w((v >> 16) & 0xff)
+        w((v >> 8) & 0xff)
+        w((v & 0xff))
+    elif v <= 0xffffffffffffff:
+        w(0xfe)
+        w((v >> 48))
+        w((v >> 40) & 0xff)
+        w((v >> 32) & 0xff)
+        w((v >> 24) & 0xff)
+        w((v >> 16) & 0xff)
+        w((v >> 8) & 0xff)
+        w((v & 0xff))
+    elif v <= 0xffffffffffffffff:
+        w(0xff)
+        w((v >> 56))
+        w((v >> 48) & 0xff)
+        w((v >> 40) & 0xff)
+        w((v >> 32) & 0xff)
+        w((v >> 24) & 0xff)
+        w((v >> 16) & 0xff)
+        w((v >> 8) & 0xff)
+        w((v & 0xff))
     else:
-        assert v.bit_length() <= 64
-        return '\xff' + struct.pack('>Q', v)
+        raise ValueError('Cannot encode integers >= 64 bits, got %d bits (%#x)'
+                         % (v.bit_length(), v))
+
+
+def pack_int(i):
+    """Invoke :py:func:`write_int(i, ba) <write_int>` using a temporary
+    :py:class:`bytearray` `ba`, returning the result as a bytestring.
+    """
+    ba = bytearray()
+    write_int(i, ba)
+    return str(ba)
+
 
 def unpack_int(getc, read):
-    """Decode and return an integer encoded by :py:func:`pack_int`.
+    """Decode and return an integer encoded by :py:func:`write_int`.
 
     `get`:
         Function that returns the next byte of input.
@@ -256,14 +302,14 @@ def packs(prefix, tups):
                 w(KIND_NULL)
             elif type_ is bool:
                 w(KIND_BOOL)
-                e(pack_int(arg))
+                write_int(arg, w)
             elif type_ is int or type_ is long:
                 if arg < 0:
                     w(KIND_NEG_INTEGER)
-                    e(pack_int(-arg))
+                    write_int(-arg, w)
                 else:
                     w(KIND_INTEGER)
-                    e(pack_int(arg))
+                    write_int(arg, w)
             elif type_ is uuid.UUID:
                 w(KIND_UUID)
                 encode_str(arg.get_bytes(), w)
