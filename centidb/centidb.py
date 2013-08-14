@@ -490,14 +490,19 @@ class Collection(object):
                 data = self._decompress(buffer(value, dstart))
                 keys.reverse()
                 if reverse:
-                    rit = xrange(lenk - 1, -1, -1)
+                    stop = -1
+                    step = -1
+                    i = lenk
                 else:
-                    rit = xrange(lenk)
-                for i in rit:
+                    stop = lenk
+                    step = 1
+                    i = 0
+                while i != stop:
                     key = keys[i]
                     offs = offsets[i]
                     size = offsets[i+1] - offs
                     yield True, key, buffer(data, offs, size)
+                    i += step
 
     # -----------------------------------------------------------
     # prefix: a
