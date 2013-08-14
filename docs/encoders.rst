@@ -99,3 +99,40 @@ Now define a collection:
     # Minimal overhead:
     packed = coll.encoder.pack(Person(username='dave'))
     assert packed == '\x18\x04dave\x00'
+
+
+
+Key Functions
++++++++++++++
+
+These functions are based on `SQLite 4's key encoding
+<http://sqlite.org/src4/doc/trunk/www/key_encoding.wiki>`_, except that:
+
+* Support for ``uuid.UUID`` is added.
+* Floats are removed.
+* Varints are used for integers.
+
+.. currentmodule:: centidb.keycoder
+
+.. function:: pack (prefix, tups)
+
+    Alias for :py:func:`packs`
+
+.. autofunction:: packs
+
+.. function:: unpack
+
+    Alias for :py:func:`unpacks` with `first=True`.
+
+.. autofunction:: unpacks
+.. autofunction:: invert
+
+
+Integer Functions
++++++++++++++++++
+
+These functions are based on `SQLite 4's sortable varint encoding
+<http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
+
+.. autofunction:: pack_int
+.. autofunction:: unpack_int
