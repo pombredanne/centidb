@@ -7,6 +7,8 @@ import random
 import time
 
 import centidb
+import centidb.encoders
+import centidb.engines
 
 
 INPUT_PATH = os.path.join(os.path.dirname(__file__), 'laforge.json.gz')
@@ -58,10 +60,10 @@ for packer in centidb.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
 
     print
     for bsize in 1, 2, 4, 5, 8, 16, 32, 64:
-        le = centidb.support.ListEngine()
+        le = centidb.engines.ListEngine()
         st = centidb.Store(le)
         co = centidb.Collection(st, 'people',
-            encoder=centidb.support.make_json_encoder(sort_keys=True))
+            encoder=centidb.encoders.make_json_encoder(sort_keys=True))
 
         keys = [co.put(rec).key for rec in recs]
         random.shuffle(keys)
