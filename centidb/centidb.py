@@ -27,7 +27,6 @@ import itertools
 import operator
 import os
 import sys
-import threading
 import warnings
 
 import keycoder
@@ -359,13 +358,14 @@ class Collection(object):
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
-            derived_keys = False
-            blind = True
+            info['derived_keys'] = False
+            info['blind'] = True
+        else:
+            info.setdefault('derived_keys', False)
+            info.setdefault('blind', False)
+
         self.key_func = key_func
         self.txn_key_func = txn_key_func
-
-        info.setdefault('derived_keys', False)
-        info.setdefault('blind', False)
 
         self.encoder = encoder or encoders.PICKLE_ENCODER
         self.encoder_prefix = self.store.add_encoder(self.encoder)
@@ -895,12 +895,11 @@ class Store(object):
     def __init__(self, engine, prefix=''):
         self.engine = engine
         self.prefix = prefix
-        self._encoder_prefix = (
-            dict((e, keycoder.pack_int(1 + i))
-                 for i, e in enumerate(encoders._ENCODERS)))
-        self._prefix_encoder = (
-            dict((keycoder.pack_int(1 + i), e)
-                 for i, e in enumerate(encoders._ENCODERS)))
+        self._encoder_prefix = dict((e, keycoder.pack_int(1 + i))
+                                    for i, e in enumerate(encoders._ENCODERS))
+        self._prefix_encoder = dict((keycoder.pack_int(1 + i), e)
+                                    for i, e in enumerate(encoders._ENCODERS))
+        # ((kind, name, attr), value)
         self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
             encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:3])
         self._colls = {}

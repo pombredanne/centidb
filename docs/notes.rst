@@ -65,53 +65,41 @@ consideration.
 History
 +++++++
 
-The first attempt came during 2011 while porting from App Engine and a
-Datastore-alike was needed. All alternatives included so much weirdness (Java?
-Erlang? JavaScript? BSON? Auto-magico-sharding?
-`PageFaultRetryableSection
-<https://github.com/mongodb/mongo/blob/master/src/mongo/db/pagefault.h#L35>`_?!?)
-that I eventually canned the project, rendered incapable of picking something
-as **simple as a database** that was *good enough*, overwhelmed by false
-promises, fake distinctions and overstated greatness in the endless PR veiled
-by marketing site designs, and driven by people for whom the embodiment of
-*elegance* is more often the choice of font on a Powerpoint slide.
+While the idea is older, an implementation did not occur until 2011 after an
+abortive migration from App Engine. All alternatives included so much weirdness
+(Java? Erlang? Javascript? BSON?) that I canned the project in sheer
+displeasure, rendered unable to choose something as **simple as a database**,
+overwhelmed by false promises, fake distinctions, and overstated greatness in
+the endless PR veiled by marketing site designs, and driven by those for whom
+*elegance* is the choice of font on a Powerpoint slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
-when the B-tree appeared, variants of which comprise the core of SQLite 3, the
-core of MongoDB, and just about 90% of all DBMS wheel reinventions existing in
-the 40 years since. Yet today when faced with a B-tree adulterated with
-JavaScript and a million more dumb concepts, upon rejecting it as **junk** we
-are instantly drowned in the torrential cries of a million: *"you just don't
-get it!"*. I fear I do get it, all too well, and I hate it.
-
-So this module is borne out of frustration. On a recent project while
-experimenting with compression, I again found myself partially implementing
-what this module wants to be: a tiny layer that does little but add indices to
-Cold War era technology. No "inventions", no lies, no claims to beauty, no
-religious debates about scaleability, just 500ish lines that try to do one
-thing reasonably.
+when the B-tree appeared, variants of which comprise the core of SQLite,
+MongoDB, and 90% of all DBMS wheel reinventions existing since. So this library
+is the product of frustration. On a recent project while experimenting with
+compression, I again partially implemented what this library should be: a small
+layer that implements indexing, and gently placates the use of Cold War era
+technology.
 
 
 Use cases
 +++++++++
 
 The library is experimental, but eventually it should become a small,
-convenient way to store data for programs with medium sized datasets.
+convenient way to store data for programs with medium sized datasets. Already
+with a suitable engine it can offer better durability guarantees, and vastly
+better performance than larger and more established systems, such as MongoDB.
+Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it is even
+possible to make consistent online backups without resorting to platform
+tricks, unlike MongoDB.
 
-Already with a suitable engine it can offer better durability guarantees, and
-vastly better performance than much larger and more established systems, such
-as MongoDB. Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it
-is even possible to make consistent online backups without resorting to
-platform tricks, very much unlike MongoDB.
-
-With carefully chosen primitives, more of MongoDB's problem domain could be
-subsumed. For instance, supporting sharding and replication are definitely
-interesting, and there is no reason why either feature should require a 300kLOC
-codebase to implement, or even a 3kLOC codebase.
-
-By removing complexity from the simple task of persisting data, more room is
-left to ponder *legitimately hard problems*, such as serving an application's
-data after it outgrows a single computer or automagically sharded DBMS cluster.
+With carefully selected primitives, more of the problem domain could be
+supported. For instance, supporting explicit sharding and replication are
+interesting, and neither feature should require a 300kLOC codebase to
+implement, or even a 3kLOC codebase. By removing complexity from the task of
+persisting data, greater room is left to ponder *legitimately hard problems*,
+such as serving an application's data after it outgrows a single computer or
+magically partitioned DBMS cluster.
 
 
 General ideas

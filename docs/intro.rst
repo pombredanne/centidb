@@ -6,12 +6,13 @@ Introduction
 
 While it is possible to construct all objects from the :ref:`api-reference`
 manually, some helpers exist to simplify common usage. First we make use of
-:py:func:`centidb.open`, which wraps the process of constructing an engine and
-attaching it to a :py:class:`Store <centidb.Store>`.
+:py:func:`centidb.open`, which wraps the process of constructing an
+:py:class:`Engine <centidb.engines.Engine>` and attaching it to a
+:py:class:`Store <centidb.Store>`.
 
 Since the library depends on an external engine, an initial consideration might
 be which to use. For now, let's forgo the nasty research and settle on the
-simplest engine available, :py:class:`ListEngine <centidb.engines.ListEngine>`:
+simplest available, :py:class:`ListEngine <centidb.engines.ListEngine>`:
 
 ::
 
@@ -27,7 +28,7 @@ Let's create a ``people`` collection:
 
 ::
 
-    people = store.collection('people')
+    people = store.add_collection('people')
 
 Underneath a few interesting things just occurred. Since the engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
@@ -52,7 +53,7 @@ Now let's insert some people using :py:meth:`Collection.put`:
 
 Since we didn't specify an encoder during construction, the default pickle
 encoder is used which allows almost any Python value, although here we use
-tuples. Since no key function was given, the collection defaults to
+tuples. As no key function was given, the collection defaults to
 auto-incrementing keys.
 
 More magic is visible underneath:
