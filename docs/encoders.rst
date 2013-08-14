@@ -126,13 +126,3 @@ These functions are based on `SQLite 4's key encoding
 
 .. autofunction:: unpacks
 .. autofunction:: invert
-
-
-Integer Functions
-+++++++++++++++++
-
-These functions are based on `SQLite 4's sortable varint encoding
-<http://sqlite.org/src4/doc/trunk/www/varint.wiki>`_.
-
-.. autofunction:: pack_int
-.. autofunction:: unpack_int

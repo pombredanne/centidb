@@ -60,10 +60,14 @@ def invert(s):
     """
     return s.translate(INVERT_TBL)
 
+
 def write_int(v, w):
-    """Given some positive integer of 64-bits or less, return a variable length
-    bytestring representation that preserves the integer's order. The
-    bytestring size is such that:
+    """Given a positive integer of 64-bits or less, encode it in a
+    variable-length form that preserves the original integer order. Invokes
+    `w()` repeatedly with integer bytes corresponding to its encoded
+    representation.
+
+    The output size is such that:
 
         +-------------+------------------------+
         + *Size*      | *Largest integer*      |
@@ -148,32 +152,9 @@ def write_int(v, w):
                          % (v.bit_length(), v))
 
 
-def pack_int(i):
-    """Invoke :py:func:`write_int(i, ba) <write_int>` using a temporary
-    :py:class:`bytearray` `ba`, returning the result as a bytestring.
-    """
-    ba = bytearray()
-    write_int(i, ba)
-    return str(ba)
-
-
-def unpack_int(s):
-    return read_int(itertools.imap(ord, s).next)
-
-
 def read_int(getc):
-    """Decode and return an integer encoded by :py:func:`write_int`.
-
-    `get`:
-        Function that returns the next byte of input.
-    `read`:
-        Function accepting a byte count and returning that many bytes of input.
-
-    ::
-
-        io = StringIO.StringIO(encoded_int)
-        i = unpack_int(lambda: io.read(1), io.read)
-        # io.tell() is now positioned one byte past end of integer.
+    """Decode and return an integer encoded by :py:func:`write_int`. Invokes
+    `getc` repeatedly, which should yield integer bytes from the input stream.
     """
     o = getc()
     if o <= 240:
@@ -224,12 +205,13 @@ def read_int(getc):
                 (getc()))
 
 
-def unpack_int_s(s):
-    io = StringIO.StringIO(s)
-    return unpack_int(functools.partial(io.read, 1), io.read)
-
-
-def encode_str(s, w):
+def write_str(s, w):
+    """Encode the bytestring `s` so that no NUL appears in the output. A
+    constant-space encoding is used that treats the input as a stream of bits,
+    packing each group of 7 bits into a byte with the highest bit always set,
+    except for the final byte. A delimiting NUL is appended to the output.
+    Invokes `w()` repeatedly with integer bytes corresponding to the encoded
+    representation."""
     shift = 1
     trailer = 0
 
@@ -248,8 +230,12 @@ def encode_str(s, w):
     w(0)
 
 
-def decode_str(it):
-    getc = it.next
+def read_str(getc, it=None):
+    """Decode and return a bytestring encoded by :py:func:`read_str`. Invokes
+    `getc` repeatedly, which should yield integer bytes from the input
+    stream."""
+    if not it:
+        it = iter(getc, '')
     lb = getc()
     if not lb:
         return ''
@@ -271,6 +257,20 @@ def decode_str(it):
                 break
 
     return str(out)
+
+
+def pack_int(prefix, i):
+    """Invoke :py:func:`write_int(i, ba) <write_int>` using a temporary
+    :py:class:`bytearray` initialized to contain `prefix`, returning the result
+    as a bytestring."""
+    ba = bytearray(prefix)
+    write_int(i, ba)
+    return str(ba)
+
+
+def unpack_int(s):
+    """Invoke :py:func:`read_int`, wrapping `s` in a temporary iterator."""
+    return read_int(itertools.imap(ord, s).next)
 
 
 def tuplize(o):
@@ -339,13 +339,13 @@ def packs(prefix, tups):
                     write_int(arg, w)
             elif type_ is uuid.UUID:
                 w(KIND_UUID)
-                encode_str(arg.get_bytes(), w)
+                write_str(arg.get_bytes(), w)
             elif type_ is str:
                 w(KIND_BLOB)
-                encode_str(arg, w)
+                write_str(arg, w)
             elif type_ is unicode:
                 w(KIND_TEXT)
-                encode_str(arg.encode('utf-8'), w)
+                write_str(arg.encode('utf-8'), w)
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
     return str(ba)
@@ -382,15 +382,15 @@ def unpacks(prefix, s, first=False):
         elif c == KIND_INTEGER:
             arg = read_int(getc)
         elif c == KIND_NEG_INTEGER:
-            arg = -unpack_int(getc)
+            arg = -read_int(getc)
         elif c == KIND_BOOL:
-            arg = bool(unpack_int(getc))
+            arg = bool(read_int(getc))
         elif c == KIND_BLOB:
-            arg = decode_str(it)
+            arg = read_str(getc, it)
         elif c == KIND_TEXT:
-            arg = decode_str(it).decode('utf-8')
+            arg = read_str(getc, it).decode('utf-8')
         elif c == KIND_UUID:
-            arg = uuid.UUID(decode_str(it))
+            arg = uuid.UUID(read_str(getc, it))
         elif c == KIND_SEP:
             tups.append(tuple(tup))
             if first:
