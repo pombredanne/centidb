@@ -135,7 +135,7 @@ class Index(object):
         self.info = info
         #: The index function.
         self.func = func
-        self.prefix = self.store.prefix + keycoder.pack_int(info['idx'])
+        self.prefix = keycoder.pack_int(self.store.prefix, info['idx'])
         self._decode = functools.partial(keycoder.unpacks, self.prefix)
 
     def _iter(self, txn, key, lo, hi, reverse, max, include):
@@ -354,7 +354,7 @@ class Collection(object):
         self.store = store
         self.engine = store.engine
         self.info = info
-        self.prefix = store.prefix + keycoder.pack_int(info['idx'])
+        self.prefix = keycoder.pack_int(self.store.prefix, info['idx'])
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
@@ -757,9 +757,9 @@ class Collection(object):
         if len(items) == 1:
             io.write(packer_prefix + packer.pack(items[0][1]))
         else:
-            io.write(keycoder.pack_int(len(items)))
+            io.write(keycoder.pack_int('', len(items)))
             for _, data in items:
-                io.write(keycoder.pack_int(len(data)))
+                io.write(keycoder.pack_int('', len(data)))
             io.write(packer_prefix)
             concat = ''.join(data for _, data in items)
             io.write(packer.pack(concat))
@@ -895,9 +895,9 @@ class Store(object):
     def __init__(self, engine, prefix=''):
         self.engine = engine
         self.prefix = prefix
-        self._encoder_prefix = dict((e, keycoder.pack_int(1 + i))
+        self._encoder_prefix = dict((e, keycoder.pack_int('', 1 + i))
                                     for i, e in enumerate(encoders._ENCODERS))
-        self._prefix_encoder = dict((keycoder.pack_int(1 + i), e)
+        self._prefix_encoder = dict((keycoder.pack_int('', 1 + i), e)
                                     for i, e in enumerate(encoders._ENCODERS))
         # ((kind, name, attr), value)
         self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
