@@ -29,10 +29,10 @@ import os
 import sys
 import warnings
 
-import keycoder
-from keycoder import tuplize
 from centidb import encoders
+from centidb import keycoder
 from centidb.encoders import Encoder
+from centidb.keycoder import tuplize
 
 __all__ = 'Store Encoder Collection Record Index next_greater open'.split()
 
