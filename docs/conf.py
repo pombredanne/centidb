@@ -31,8 +31,7 @@ extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode',
               'sphinx.ext.intersphinx', 'sphinxcontrib.fulltoc']
 
 intersphinx_mapping = {'python': ('http://docs.python.org/3.2', None),
-                       'lmdb': ('http://lmdb.readthedocs.org/en/latest/', None),
-                       'keycoder': ('https://keycoder.readthedocs.org/en/latest/', None)}
+                       'lmdb': ('http://lmdb.readthedocs.org/en/latest/', None)}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

@@ -204,7 +204,7 @@ we can efficiently iterate key ranges, by controlling the key we can order the
 collection in ways that are very useful for queries.
 
 To make this ordering easy to exploit, keys are treated as tuples of one or
-more :py:func:`primitive values <keycoder.packs>`, with the order of
+more :py:func:`primitive values <centidb.keycoder.packs>`, with the order of
 earlier elements taking precedence over later elements, just like a Python
 tuple. When written to storage, tuples are carefully encoded so their ordering
 is preserved by the engine.

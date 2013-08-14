@@ -15,9 +15,9 @@ Encoder Interface
 centidb.KEY_ENCODER
 +++++++++++++++++++
 
-This predefined Encoder uses :py:func:`keycoder.packs` and
-:py:func:`keycoder.unpacks` to serialize tuples. It is used internally to
-represent keys, counters, and :py:class:`Store <centidb.Store>` metadata.
+This predefined Encoder uses :py:func:`centidb.keycoder.packs` and
+:py:func:`centidb.keycoder.unpacks` to serialize tuples. It is used internally
+to represent keys, counters, and :py:class:`Store <centidb.Store>` metadata.
 
 
 centidb.PICKLE_ENCODER

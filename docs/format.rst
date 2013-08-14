@@ -12,7 +12,7 @@ Individual records
 A non-batch record is indicated when key decoding yields a single tuple.
 
 In this case the record key corresponds exactly to the output of
-:py:func:`keycoder.packs` for the single key present. The value has a
+:py:func:`centidb.keycoder.packs` for the single key present. The value has a
 variable length integer prefix indicating the packer used, and the remainder is
 the output of :py:meth:`Encoder.pack` from the collection's associated encoder.
 
