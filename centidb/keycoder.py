@@ -153,25 +153,24 @@ def unpack_int_s(s):
     return unpack_int(functools.partial(io.read, 1), io.read)
 
 
-def encode_str(s):
+def encode_str(s, out):
     shift = 1
     trailer = 0
 
-    out = bytearray()
+    w = out.append
     for o in bytearray(s):
-        out.append(0x80 | trailer | (o >> shift))
+        w(0x80 | trailer | (o >> shift))
         if shift < 7:
             trailer = (o << (7 - shift)) & 0xff
             shift += 1
         else:
-            out.append(0x80 | o)
+            w(0x80 | o)
             shift = 1
             trailer = 0
 
     if shift > 1:
-        out.append(trailer)
-    out.append(0)
-    return str(out)
+        w(trailer)
+    w(0)
 
 
 def decode_str(getc):
@@ -268,14 +267,13 @@ def packs(prefix, tups):
                     e(pack_int(arg))
             elif type_ is uuid.UUID:
                 w(KIND_UUID)
-                e(encode_str(arg.get_bytes()))
-                w('\x00')
+                encode_str(arg.get_bytes(), ba)
             elif type_ is str:
                 w(KIND_BLOB)
-                e(encode_str(arg))
+                encode_str(arg, ba)
             elif type_ is unicode:
                 w(KIND_TEXT)
-                e(encode_str(arg.encode('utf-8')))
+                encode_str(arg.encode('utf-8'), ba)
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
     return str(ba)
