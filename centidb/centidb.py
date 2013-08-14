@@ -68,15 +68,18 @@ def open(engine, **kwargs):
     return Store(getattr(sys.modules[modname], classname)(**kwargs))
 
 def decode_offsets(s):
-    io = cStringIO.StringIO(s)
-    getc = functools.partial(io.read, 1)
-    more = functools.partial(keycoder.unpack_int, getc, io.read)
+    getc = itertools.imap(ord, s).next
+    ipos = [0]
+    def wrapped():
+        ipos[0] += 1
+        return getc()
+
     pos = 0
     out = [0]
-    for _ in xrange(more()):
-        pos += more()
+    for _ in xrange(keycoder.read_int(wrapped)):
+        pos += keycoder.read_int(wrapped)
         out.append(pos)
-    return out, io.tell()
+    return out, ipos[0]
 
 def next_greater(s):
     """Given a bytestring `s`, return the most compact bytestring that is
