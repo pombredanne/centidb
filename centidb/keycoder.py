@@ -150,31 +150,27 @@ def unpack_int(getc, read):
 
 def unpack_int_s(s):
     io = StringIO.StringIO(s)
-    return unpack_int(lambda: io.read(1), io.read)
+    return unpack_int(functools.partial(io.read, 1), io.read)
 
 
 def encode_str(s):
     shift = 1
     trailer = 0
 
-    out = bytearray(1 + (((len(s) * 8) + 6) / 7))
-    pos = 0
-
+    out = bytearray()
     for o in bytearray(s):
-        out[pos] = 0x80 | trailer | (o >> shift)
-        pos += 1
-
+        out.append(0x80 | trailer | (o >> shift))
         if shift < 7:
             trailer = (o << (7 - shift)) & 0xff
             shift += 1
         else:
-            out[pos] = 0x80 | o
-            pos += 1
+            out.append(0x80 | o)
             shift = 1
             trailer = 0
 
     if shift > 1:
-        out[pos] = trailer
+        out.append(trailer)
+    out.append(0)
     return str(out)
 
 
