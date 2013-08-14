@@ -1014,6 +1014,6 @@ class Store(object):
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
         os.getenv('CENTIDB_NO_SPEEDUPS') is None:
     try:
-        from _centidb import *
+        from centidb._centidb import *
     except ImportError:
         pass
