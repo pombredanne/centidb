@@ -344,7 +344,7 @@ def unpack(prefix, s):
 
 # Hack: disable speedups while testing or reading docstrings.
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
-        os.getenv('KEYCODER_NO_SPEEDUPS') is None:
+        os.getenv('CENTIDB_NO_SPEEDUPS') is None:
     try:
         from _keycoder import *
     except ImportError:
