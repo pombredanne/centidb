@@ -14,12 +14,7 @@
  * under the License.
  */
 
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-
-#define PY_SSIZE_T_CLEAN
-#include "Python.h"
+#include "centidb.h"
 
 #include <assert.h>
 #include <string.h>
@@ -27,12 +22,6 @@
 #include <arpa/inet.h>
 #include <structmember.h>
 
-#include "keycoder.h"
-
-#define DEBUG(x, y...) printf(x "\n", ## y);
-
-#define LIST_START_SIZE 4
-#define TUPLE_START_SIZE 3
 
 static struct KeyCoderModule KeyCoder;
 
