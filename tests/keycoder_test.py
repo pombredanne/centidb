@@ -1,0 +1,206 @@
+
+import cStringIO
+import operator
+import os
+import unittest
+import uuid
+
+from pprint import pprint
+from unittest import TestCase
+
+import keycoder
+import _keycoder
+
+
+#
+# Module reloads are necessary because KEY_ENCODER & co bind whatever
+# packs() & co happens to exist before we get a chance to interfere. It
+# also improves the chance of noticing any not-planned-for speedups related
+# side effects, rather than relying on explicit test coverage.
+# 
+# There are nicer approaches to this (e.g. make_key_encoder()), but these would
+# optimize for the uncommon case of running tests.
+#
+
+class PythonMixin:
+    """Reload modules with speedups disabled."""
+    @classmethod
+    def setUpClass(cls):
+        global keycoder
+        os.environ['KEYCODER_NO_SPEEDUPS'] = '1'
+        keycoder = reload(keycoder)
+        keycoder = reload(keycoder)
+        getattr(cls, '_setUpClass', lambda: None)()
+
+class NativeMixin:
+    """Reload modules with speedups enabled."""
+    @classmethod
+    def setUpClass(cls):
+        global keycoder
+        os.environ.pop('KEYCODER_NO_SPEEDUPS', None)
+        keycoder = reload(keycoder)
+        keycoder = reload(keycoder)
+        getattr(cls, '_setUpClass', lambda: None)()
+
+def register(python=True, native=True):
+    def fn(klass):
+        if python:
+            name = 'Py' + klass.__name__
+            globals()[name] = type(name, (klass, PythonMixin, TestCase), {})
+        if native:
+            name = 'C' + klass.__name__
+            globals()[name] = type(name, (klass, NativeMixin, TestCase), {})
+        return klass
+    return fn
+
+
+def ddb():
+    pprint(list(db))
+
+def copy(it, dst):
+    for tup in it:
+        dst.put(*tup)
+
+
+def make_asserter(op, ops):
+    def ass(x, y, msg='', *a):
+        if msg:
+            if a:
+                msg %= a
+            msg = ' (%s)' % msg
+
+        f = '%r %s %r%s'
+        assert op(x, y), f % (x, ops, y, msg)
+    return ass
+
+lt = make_asserter(operator.lt, '<')
+eq = make_asserter(operator.eq, '==')
+le = make_asserter(operator.le, '<=')
+
+
+@register()
+class KeysTest:
+    SINGLE_VALS = [
+        None,
+        1,
+        'x',
+        u'hehe',
+        True,
+        False,
+        -1
+    ]
+
+    def _enc(self, *args, **kwargs):
+        return keycoder.packs('', *args, **kwargs)
+
+    def _dec(self, *args, **kwargs):
+        return keycoder.unpacks('', *args, **kwargs)
+
+    def test_counter(self):
+        s = self._enc(('dave', 1))
+        eq([('dave', 1)], self._dec(s))
+
+    def test_single(self):
+        for val in self.SINGLE_VALS:
+            encoded = keycoder.packs('', (val,))
+            decoded = keycoder.unpacks('', encoded)
+            eq([(val,)], decoded, 'input was %r' % (val,))
+
+    def test_single_sort_lower(self):
+        for val in self.SINGLE_VALS:
+            e1 = keycoder.packs('', (val,))
+            e2 = keycoder.packs('', [(val, val),])
+            lt(e1, e2, 'eek %r' % (val,))
+
+    def test_list(self):
+        lst = [(1,), (2,)]
+        eq(lst, self._dec(self._enc(lst)))
+
+
+@register()
+class StringEncodingTest:
+    def do_test(self, k):
+        eq(k, keycoder.unpack('', keycoder.packs('', k)))
+
+    def test_simple(self):
+        self.do_test(('dave',))
+
+    def test_escapes(self):
+        self.do_test(('dave\x00\x00',))
+        self.do_test(('dave\x00\x01',))
+        self.do_test(('dave\x01\x01',))
+        self.do_test(('dave\x01\x02',))
+        self.do_test(('dave\x01',))
+
+
+@register()
+class TuplizeTest:
+    def test_already_tuple(self):
+        eq((), keycoder.tuplize(()))
+
+    def test_not_already_tuple(self):
+        eq(("",), keycoder.tuplize(""))
+
+
+@register()
+class EncodeIntTest:
+    INTS = [0, 1, 240, 241, 2286, 2287, 2288,
+            67823, 67824, 16777215, 16777216,
+            4294967295, 4294967296,
+            1099511627775, 1099511627776,
+            281474976710655, 281474976710656,
+            72057594037927935, 72057594037927936]
+
+    def testInts(self):
+        for i in self.INTS:
+            io = cStringIO.StringIO(keycoder.pack_int(i))
+            j = keycoder.unpack_int(lambda: io.read(1), io.read)
+            assert j == i, (i, j, io.getvalue())
+
+
+@register()
+class TupleTest:
+    def assertOrder(self, tups):
+        tups = [keycoder.tuplize(x) for x in tups]
+        encs = map(keycoder.packs, tups)
+        encs.sort()
+        eq(tups, [keycoder.unpack(x) for x in encs])
+
+    def testStringSorting(self):
+        strs = [(x,) for x in ('dave', 'dave\x00', 'dave\x01', 'davee\x01')]
+        encs = map(lambda o: keycoder.packs('', o), strs)
+        encs.sort()
+        eq(strs, [keycoder.unpack('', x) for x in encs])
+
+    def testTupleNonTuple(self):
+        pass
+
+
+@register()
+class UuidTest:
+    def testUuid(self):
+        t = ('a', uuid.uuid4(), 'b')
+        s = keycoder.packs('', t)
+        eq(t, keycoder.unpack('', s))
+
+
+@register()
+class Mod7BugTest:
+    def test1(self):
+        t = [('', 11, 'item')]
+        p = keycoder.packs('', t)
+        eq(keycoder.unpacks('', p), t)
+
+    def test2(self):
+        t = [('index:I', 11, 'item')]
+        p = keycoder.packs('', t)
+        eq(keycoder.unpacks('', p), t)
+
+    def test3(self):
+        t = [('index:Item:first_last', 11, 'item')]
+        p = keycoder.packs('', t)
+        eq(keycoder.unpacks('', p), t)
+
+
+if __name__ == '__main__':
+    unittest.main()
