@@ -8,8 +8,8 @@ import uuid
 from pprint import pprint
 from unittest import TestCase
 
-import keycoder
-import _keycoder
+from centidb import keycoder
+from centidb import _keycoder
 
 
 #
