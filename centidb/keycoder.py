@@ -311,14 +311,12 @@ def packs(prefix, tups):
         >>> packs([1])    # Treated like packs([(1,)])
         >>> packs([(1,)]) # Treated like packs([(1,)])
     """
-    ba = bytearray()
+    ba = bytearray(prefix)
     w = ba.append
-    e = ba.extend
 
     if type(tups) is not list:
         tups = [tups]
 
-    e(prefix)
     last = len(tups) - 1
     for i, tup in enumerate(tups):
         if i:
