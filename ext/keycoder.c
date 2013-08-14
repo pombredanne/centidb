@@ -751,7 +751,7 @@ init_keycoder(void)
     assert(PyType_CheckExact((PyObject *) UUID_Type));
 
 
-    mod = Py_InitModule("_keycoder", KeyCoderMethods);
+    mod = Py_InitModule("centidb._keycoder", KeyCoderMethods);
     if(! mod) {
         return;
     }
@@ -761,7 +761,7 @@ init_keycoder(void)
         return;
     }
 
-    PyObject *capi = PyCapsule_New(&C_API, "_keycoder._C_API", NULL);
+    PyObject *capi = PyCapsule_New(&C_API, "centidb._keycoder._C_API", NULL);
     if(capi) {
         PyDict_SetItemString(dct, "_C_API", capi);
     }

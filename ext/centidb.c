@@ -406,6 +406,10 @@ static PyMethodDef CentidbMethods[] = {
 PyMODINIT_FUNC
 init_centidb(void)
 {
+    // PyCapsule_Import can't import modules from inside packages, so we do it.
+    PyObject *tmp = PyImport_ImportModule("centidb._keycoder");
+    Py_CLEAR(tmp);
+
     struct KeyCoderModule *keycoder = PyCapsule_Import("centidb._keycoder._C_API", 0);
     if(! keycoder) {
         return;

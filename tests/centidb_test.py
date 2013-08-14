@@ -14,7 +14,7 @@ import keycoder
 import centidb
 import centidb.centidb
 import centidb.engines
-import _centidb
+from centidb import _centidb
 
 
 def rm_rf(path):
@@ -82,7 +82,7 @@ class PythonMixin:
     @classmethod
     def setUpClass(cls):
         global centidb
-        os.environ['NO_SPEEDUPS'] = '1'
+        os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
         centidb.centidb = reload(centidb.centidb)
         centidb = reload(centidb)
         getattr(cls, '_setUpClass', lambda: None)()
@@ -92,7 +92,7 @@ class NativeMixin:
     @classmethod
     def setUpClass(cls):
         global centidb
-        os.environ.pop('NO_SPEEDUPS', None)
+        os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
         centidb.centidb = reload(centidb.centidb)
         centidb = reload(centidb)
         getattr(cls, '_setUpClass', lambda: None)()
