@@ -227,7 +227,10 @@ def write_str(s, w):
 
     if shift > 1:
         w(trailer)
-    w(0)
+        if trailer != 0:
+            w(0)
+    else:
+        w(0)
 
 
 def read_str(getc, it=None):
@@ -264,7 +267,7 @@ def pack_int(prefix, i):
     :py:class:`bytearray` initialized to contain `prefix`, returning the result
     as a bytestring."""
     ba = bytearray(prefix)
-    write_int(i, ba)
+    write_int(i, ba.append)
     return str(ba)
 
 
