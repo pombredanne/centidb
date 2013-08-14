@@ -971,9 +971,9 @@ class Store(object):
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
                 t = self._encoder_coll.put((encoder.name, idx)).data
-                self._encoder_prefix[encoder] = keycoder.pack_int(idx)
-                self._prefix_encoder[keycoder.pack_int(idx)] = encoder
-            return keycoder.pack_int(t[1])
+                self._encoder_prefix[encoder] = keycoder.pack_int('', idx)
+                self._prefix_encoder[keycoder.pack_int('', idx)] = encoder
+            return keycoder.pack_int('', t[1])
 
     def get_encoder(self, prefix):
         """Get a registered :py:class:`Encoder` given its string prefix, or
