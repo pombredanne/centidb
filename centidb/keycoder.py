@@ -322,7 +322,6 @@ def packs(prefix, tups):
         if i:
             w(KIND_SEP)
         tup = tuplize(tup)
-        tlast = len(tup) - 1
         for j, arg in enumerate(tup):
             type_ = type(arg)
             if arg is None:
