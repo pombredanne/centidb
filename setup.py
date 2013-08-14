@@ -32,13 +32,15 @@ if hasattr(platform, 'python_implementation'):
 else:
     use_cpython = True
 
+extra_compile_args = ['-std=c99']
+ext_modules = []
 if use_cpython:
     ext_modules = [
-        Extension("cpython", sources=['ext/centidb.c', 'ext/keycoder.c'],
-                  extra_compile_args=['-std=c99'])
+        Extension("_centidb", sources=['ext/centidb.c'],
+                  extra_compile_args=extra_compile_args),
+        Extension("_keycoder", sources=['ext/keycoder.c'],
+                  extra_compile_args=extra_compile_args)
     ]
-else:
-    ext_modules = []
 
 
 setup(

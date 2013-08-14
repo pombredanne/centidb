@@ -406,13 +406,13 @@ static PyMethodDef CentidbMethods[] = {
 PyMODINIT_FUNC
 init_centidb(void)
 {
-    struct KeyCoderModule *keycoder = PyCapsule_Import("_keycoder._C_API", 0);
+    struct KeyCoderModule *keycoder = PyCapsule_Import("centidb._keycoder._C_API", 0);
     if(! keycoder) {
         return;
     }
     KeyCoder = *(struct KeyCoderModule *) keycoder;
 
-    PyObject *mod = Py_InitModule("_centidb", CentidbMethods);
+    PyObject *mod = Py_InitModule("centidb._centidb", CentidbMethods);
     if(! mod) {
         return;
     }
