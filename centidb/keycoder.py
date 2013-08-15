@@ -16,8 +16,6 @@
 
 """
 SQLite4-like tuple serialization.
-
-See http://keycoder.readthedocs.org/
 """
 
 from __future__ import absolute_import
