@@ -460,7 +460,7 @@ class Collection(object):
         """
         assert name not in self.indices
         info_name = 'index:%s:%s' % (self.info['name'], name)
-        info = self.store._get_info(info_name, index_for=self.info['name'])
+        info = self.store.get_index_info(info_name, self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
         if IndexKeyBuilder:
@@ -912,20 +912,9 @@ class Store(object):
             encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:3])
         self._colls = {}
 
-        self._encoder_coll = Collection(self, {'name': '\x00encoders', 'idx': 2},
-            encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
-        self._info_coll = Collection(self, {'name': '\x00collections', 'idx': 0},
-            encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
-        self._counter_coll = Collection(self, {'name': '\x00counters', 'idx': 1},
-            encoder=encoders.KEY_ENCODER, key_func=ITEMGETTER_0)
-
-    # ((kind, name, attr), value)
     def get_info2(self, kind, name):
-        items = self._meta.items((kind, name))
-        return dict((a, v) for (k, n, a), (v,) in items)
-
-    def delete_info2(self, kind, name):
-        self._meta.deletes(self._meta.keys((kind, name)))
+        items = list(self._meta.items(prefix=(kind, name)))
+        return dict((a, v) for (n, k, a,), (v,) in items)
 
     def set_info2(self, kind, name, dct):
         for key, value in dct.iteritems():
@@ -950,23 +939,22 @@ class Store(object):
         return self[name]
 
     def __getitem__(self, name):
-        coll = self._colls.get(name)
-        if coll:
-            return coll
-        info = self.get_info2(KIND_TABLE, name)
-        if not info:
-            raise KeyError(name)
-        self._colls[name] = Collection(self, info)
-        return self._colls[name]
+        try:
+            return self._colls[name]
+        except KeyError:
+            info = self.get_info2(KIND_TABLE, name)
+            if not info:
+                raise
+            self._colls[name] = Collection(self, info)
+            return self._colls[name]
 
-    _INFO_KEYS = ('name', 'idx', 'index_for')
-    def _get_info(self, name, idx=None, index_for=None):
-        t = self._info_coll.get(name)
-        if not t:
-            idx = idx or self.count('\x00collections_idx', init=10)
-            t = self._info_coll.put((name, idx, index_for)).data
-        assert t == (name, idx or t[1], index_for)
-        return dict(itertools.izip(self._INFO_KEYS, t))
+    def get_index_info(self, name, index_for):
+        dct = self.get_info2(KIND_INDEX, name)
+        if not dct:
+            idx = self.count('\x00collections_idx', init=10)
+            dct = {'idx': idx, 'index_for': index_for}
+            self.set_info2(KIND_INDEX, name, dct)
+        return dct
 
     def add_encoder(self, encoder):
         """Register an :py:class:`Encoder` so that :py:class:`Collection` can
@@ -974,14 +962,14 @@ class Store(object):
         try:
             return self._encoder_prefix[encoder]
         except KeyError:
-            t = self._encoder_coll.get(encoder.name)
-            if not t:
+            dct = self.get_info2(KIND_ENCODER, encoder.name)
+            if not dct:
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
-                t = self._encoder_coll.put((encoder.name, idx)).data
-                self._encoder_prefix[encoder] = keycoder.pack_int('', idx)
-                self._prefix_encoder[keycoder.pack_int('', idx)] = encoder
-            return keycoder.pack_int('', t[1])
+                self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx})
+            self._encoder_prefix[encoder] = keycoder.pack_int('', idx)
+            self._prefix_encoder[keycoder.pack_int('', idx)] = encoder
+            return self._encoder_prefix[encoder]
 
     def get_encoder(self, prefix):
         """Get a registered :py:class:`Encoder` given its string prefix, or
@@ -989,7 +977,8 @@ class Store(object):
         try:
             return self._prefix_encoder[prefix]
         except KeyError:
-            dct = dict((v, k) for k, v in self._encoder_coll.itervalues())
+            it = self._meta.items(prefix=KIND_ENCODER)
+            dct = dct((v, n) for (k, n, a), v in it if a == 'idx')
             idx = keycoder.unpack_int(prefix)
             raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
 
