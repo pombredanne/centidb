@@ -35,7 +35,6 @@ from centidb.keycoder import tuplize
 
 __all__ = 'Store Encoder Collection Record Index next_greater open'.split()
 
-IndexKeyBuilder = None
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
 
@@ -463,8 +462,6 @@ class Collection(object):
         info = self.store.get_index_info(info_name, self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
-        if IndexKeyBuilder:
-            self._index_keys = IndexKeyBuilder(self.indices.values()).build
         return index
 
     def _logical_iter(self, it, reverse, prefix_s, prefix):
