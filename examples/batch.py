@@ -62,7 +62,7 @@ for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     for bsize in 1, 2, 4, 5, 8, 16, 32, 64:
         le = centidb.engines.ListEngine()
         st = centidb.Store(le)
-        co = centidb.Collection(st, 'people',
+        co = st.add_collection('people',
             encoder=centidb.encoders.make_json_encoder(sort_keys=True))
 
         keys = [co.put(rec).key for rec in recs]
