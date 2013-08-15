@@ -21,7 +21,6 @@ See http://centidb.readthedocs.org/
 """
 
 from __future__ import absolute_import
-import cStringIO
 import functools
 import itertools
 import operator
@@ -755,18 +754,19 @@ class Collection(object):
             packer_prefix = self.store.add_encoder(packer)
         keytups = [key for key, _ in reversed(items)]
         phys = keycoder.packs(self.prefix, keytups)
-        io = cStringIO.StringIO()
+        out = bytearray()
 
         if len(items) == 1:
-            io.write(packer_prefix + packer.pack(items[0][1]))
+            out.extend(packer_prefix)
+            out.extend(packer.pack(items[0][1]))
         else:
-            io.write(keycoder.pack_int('', len(items)))
+            keycoder.write_int(len(items), out.append)
             for _, data in items:
-                io.write(keycoder.pack_int('', len(data)))
-            io.write(packer_prefix)
+                keycoder.write_int(len(data), out.append)
+            out.extend(packer_prefix)
             concat = ''.join(data for _, data in items)
-            io.write(packer.pack(concat))
-        return phys, io.getvalue()
+            out.extend(packer.pack(concat))
+        return phys, str(out)
 
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
