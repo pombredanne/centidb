@@ -4,13 +4,14 @@ import itertools
 import json
 import os
 import random
+import shutil
 import time
 
 import centidb
 import centidb.encoders
 import centidb.engines
 
-
+TMP_PATH = '/ram/tmp.db'
 INPUT_PATH = os.path.join(os.path.dirname(__file__), 'laforge.json.gz')
 recs = json.load(gzip.open(INPUT_PATH))
 
@@ -53,6 +54,12 @@ print '"Packer","Size","Count","Ratio","BatchSz","Gets/sec","Iters/sec","Iterrec
 def out(*args):
     print '"%s","%.2fkb","%d","%.2f","%d","%.2f","%.2f","%.2f"' % args
 
+def engine_count(engine):
+    return sum(1 for _ in engine.iter('', False))
+
+def engine_size(engine):
+    return sum(len(k) + len(v) for k, v in engine.iter('', False))
+
 
 for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     if not packer:
@@ -60,8 +67,9 @@ for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
 
     print
     for bsize in 1, 2, 4, 5, 8, 16, 32, 64:
-        le = centidb.engines.ListEngine()
-        st = centidb.Store(le)
+        if os.path.exists(TMP_PATH):
+            shutil.rmtree(TMP_PATH)
+        st = centidb.open('LmdbEngine', path=TMP_PATH, map_size=1048576*1024)
         co = st.add_collection('people',
             encoder=centidb.encoders.make_json_encoder(sort_keys=True))
 
@@ -69,13 +77,17 @@ for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
         random.shuffle(keys)
         nextkey = iter(itertools.cycle(keys)).next
 
-        before = le.size
+        before = engine_size(st.engine)
+        itemcount = engine_count(st.engine)
 
         if bsize == 1:
             iterrecs, te = dotestiter()
-            out('plain', before / 1024., len(le.items), 1, 1, dotestget(), te, iterrecs)
+            out('plain', before / 1024., itemcount, 1, 1, dotestget(), te, iterrecs)
         co.batch(max_recs=bsize, packer=packer)
 
+        itemcount = engine_count(st.engine)
+        after = engine_size(st.engine)
+
         iterrecs, te = dotestiter()
-        out(packer.name, le.size / 1024., len(le.items), float(before) / le.size,
+        out(packer.name, after / 1024., itemcount, float(before) / after,
             bsize, dotestget(), te, iterrecs)
