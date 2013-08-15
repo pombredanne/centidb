@@ -23,16 +23,6 @@
 #include <structmember.h>
 
 
-static uint64_t swap64(uint64_t v)
-{
-    int n = 1;
-    if(*((char *) &n) == 1) {
-        v = __builtin_bswap64(v);
-    }
-    return v;
-}
-
-
 static PyTypeObject *UUID_Type;
 
 
@@ -55,7 +45,7 @@ static int reader_getc(struct reader *rdr, uint8_t *ch)
 }
 
 
-static int reader_getinto(struct reader *rdr, uint8_t *s, Py_ssize_t n)
+static int reader_ensure(struct reader *rdr, Py_ssize_t n)
 {
     if((rdr->size - rdr->pos) < n) {
         PyErr_Format(PyExc_ValueError,
@@ -64,9 +54,13 @@ static int reader_getinto(struct reader *rdr, uint8_t *s, Py_ssize_t n)
             (long long) (rdr->size - rdr->pos));
         return 0;
     }
-    memcpy(s, rdr->p + rdr->pos, n);
-    rdr->pos += n;
     return 1;
+}
+
+
+static uint64_t reader_getchar(struct reader *rdr)
+{
+    return rdr->p[rdr->pos++];
 }
 
 
@@ -111,14 +105,29 @@ static int writer_putc(struct writer *wtr, uint8_t o)
 }
 
 
-/* Append a bytestring `b` to the buffer, growing it as necessary. */
-static int writer_puts(struct writer *wtr, const char *restrict s, Py_ssize_t size)
+static int writer_ensure(struct writer *wtr, Py_ssize_t size)
 {
-    assert(wtr->s);
     while((PyString_GET_SIZE(wtr->s) - (wtr->pos + 1)) < size) {
         if(! writer_grow(wtr)) {
             return 0;
         }
+    }
+    return 1;
+}
+
+
+static void writer_putchar(struct writer *wtr, uint8_t ch)
+{
+    PyString_AS_STRING(wtr->s)[wtr->pos++] = ch;
+}
+
+
+/* Append a bytestring `b` to the buffer, growing it as necessary. */
+static int writer_puts(struct writer *wtr, const char *restrict s, Py_ssize_t size)
+{
+    assert(wtr->s);
+    if(! writer_ensure(wtr, size)) {
+        return 0;
     }
 
     memcpy(PyString_AS_STRING(wtr->s) + wtr->pos, s, size);
@@ -160,62 +169,87 @@ static PyObject *tuplize(PyObject *self, PyObject *arg)
 
 static int c_pack_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
 {
-    uint8_t tmp[16];
-    uint32_t tmp32;
-    uint64_t tmp64;
-    int size;
-
     if(kind) {
         if(! writer_putc(wtr, kind)) {
             return 0;
         }
     }
 
+    int ok = 1;
     if(v <= 240ULL) {
-        return writer_putc(wtr, v);
+        ok = writer_putc(wtr, v);
     } else if(v <= 2287ULL) {
-        v -= 240ULL;
-        tmp[0] = 241 + (uint8_t) (v / 256);
-        tmp[1] = (uint8_t) (v % 256);
-        size = 2;
+        if((ok = writer_ensure(wtr, 2))) {
+            v -= 240ULL;
+            writer_putchar(wtr, 241 + (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v & 0xff));
+        }
     } else if(v <= 67823) {
-        v -= 2288ULL;
-        tmp[0] = 0xf9;
-        tmp[1] = (uint8_t) (v / 256);
-        tmp[2] = (uint8_t) (v % 256);
-        size = 3;
-    } else if(v <= 16777215ULL) {
-        tmp[0] = 0xfa;
-        tmp32 = htonl((uint32_t) v);
-        memcpy(tmp + 1, ((uint8_t *) &tmp32) + 1, 3);
-        size = 4;
-    } else if(v <= 4294967295ULL) {
-        tmp[0] = 0xfb;
-        tmp32 = htonl((uint32_t) v);
-        memcpy(tmp + 1, ((uint8_t *) &tmp32), 4);
-        size = 5;
-    } else if(v <= 1099511627775ULL) {
-        tmp64 = swap64(v);
-        tmp[0] = 0xfc;
-        memcpy(tmp + 1, ((uint8_t *) &tmp64) + 3, 5);
-        size = 6;
-    } else if(v <= 281474976710655ULL) {
-        tmp64 = swap64(v);
-        tmp[0] = 0xfd;
-        memcpy(tmp + 1, ((uint8_t *) &tmp64) + 2, 6);
-        size = 7;
-    } else if(v <= 72057594037927935ULL) {
-        tmp64 = swap64(v);
-        tmp[0] = 0xfe;
-        memcpy(tmp + 1, ((uint8_t *) &tmp64) + 1, 7);
-        size = 8;
+        if((ok = writer_ensure(wtr, 3))) {
+            v -= 2288ULL;
+            writer_putchar(wtr, 0xf9);
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v & 0xff));
+        }
+    } else if(v <= 0xffffffULL) {
+        if((ok = writer_ensure(wtr, 4))) {
+            writer_putchar(wtr, 0xfa);
+            writer_putchar(wtr, (uint8_t) (v >> 16));
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v));
+        }
+    } else if(v <= 0xffffffffULL) {
+        if((ok = writer_ensure(wtr, 5))) {
+            writer_putchar(wtr, 0xfb);
+            writer_putchar(wtr, (uint8_t) (v >> 24));
+            writer_putchar(wtr, (uint8_t) (v >> 16));
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v));
+        }
+    } else if(v <= 0xffffffffffULL) {
+        if((ok = writer_ensure(wtr, 6))) {
+            writer_putchar(wtr, 0xfc);
+            writer_putchar(wtr, (uint8_t) (v >> 32));
+            writer_putchar(wtr, (uint8_t) (v >> 24));
+            writer_putchar(wtr, (uint8_t) (v >> 16));
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v));
+        }
+    } else if(v <= 0xffffffffffffULL) {
+        if((ok = writer_ensure(wtr, 7))) {
+            writer_putchar(wtr, 0xfd);
+            writer_putchar(wtr, (uint8_t) (v >> 40));
+            writer_putchar(wtr, (uint8_t) (v >> 32));
+            writer_putchar(wtr, (uint8_t) (v >> 24));
+            writer_putchar(wtr, (uint8_t) (v >> 16));
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v));
+        }
+    } else if(v <= 0xffffffffffffffULL) {
+        if((ok = writer_ensure(wtr, 8))) {
+            writer_putchar(wtr, 0xfe);
+            writer_putchar(wtr, (uint8_t) (v >> 48));
+            writer_putchar(wtr, (uint8_t) (v >> 40));
+            writer_putchar(wtr, (uint8_t) (v >> 32));
+            writer_putchar(wtr, (uint8_t) (v >> 24));
+            writer_putchar(wtr, (uint8_t) (v >> 16));
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v));
+        }
     } else {
-        tmp[0] = 0xff;
-        tmp64 = swap64(v);
-        memcpy(tmp + 1, &tmp64, 8);
-        size = 9;
+        if((ok = writer_ensure(wtr, 9))) {
+            writer_putchar(wtr, 0xff);
+            writer_putchar(wtr, (uint8_t) (v >> 56));
+            writer_putchar(wtr, (uint8_t) (v >> 48));
+            writer_putchar(wtr, (uint8_t) (v >> 40));
+            writer_putchar(wtr, (uint8_t) (v >> 32));
+            writer_putchar(wtr, (uint8_t) (v >> 24));
+            writer_putchar(wtr, (uint8_t) (v >> 16));
+            writer_putchar(wtr, (uint8_t) (v >> 8));
+            writer_putchar(wtr, (uint8_t) (v));
+        }
     }
-    return writer_puts(wtr, (char *)tmp, size);
+    return ok;
 }
 
 
@@ -407,64 +441,75 @@ static PyObject *packs(PyObject *self, PyObject *args)
 static int c_decode_int(struct reader *rdr, uint64_t *u64)
 {
     uint8_t ch = 0;
-    uint8_t ch2 = 0;
-    uint8_t buf[8];
-
     if(! reader_getc(rdr, &ch)) {
         return 0;
     }
 
+    int ok = 1;
+
     if(ch <= 240) {
         *u64 = ch;
     } else if(ch <= 248) {
-        if(! reader_getc(rdr, &ch2)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 1))) {
+            *u64 = 240 + (256 * (ch - 241) + reader_getchar(rdr));
         }
-        *u64 = 240 + (256 * (ch - 241) + ch2);
     } else if(ch == 249) {
-        if(! reader_getinto(rdr, buf, 2)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 2))) {
+            *u64 = 2288 + (256 * reader_getchar(rdr)) + reader_getchar(rdr);
         }
-        *u64 = 2288 + (256 * buf[0]) + buf[1];
     } else if(ch == 250) {
-        buf[0] = 0;
-        if(! reader_getinto(rdr, buf + 1, 3)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 3))) {
+            *u64 = ((reader_getchar(rdr) << 16) |
+                    (reader_getchar(rdr) << 8) |
+                    (reader_getchar(rdr)));
         }
-        *u64 = ntohl(*(uint32_t *) buf);
     } else if(ch == 251) {
-        if(! reader_getinto(rdr, buf, 4)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 4))) {
+            *u64 = ((reader_getchar(rdr) << 24) |
+                    (reader_getchar(rdr) << 16) |
+                    (reader_getchar(rdr) << 8) |
+                    (reader_getchar(rdr)));
         }
-        *u64 = ntohl(*(uint32_t *) buf);
     } else if(ch == 252) {
-        buf[0] = 0;
-        buf[1] = 0;
-        buf[2] = 0;
-        if(! reader_getinto(rdr, buf+3, 5)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 5))) {
+            *u64 = ((reader_getchar(rdr) << 32) |
+                    (reader_getchar(rdr) << 24) |
+                    (reader_getchar(rdr) << 16) |
+                    (reader_getchar(rdr) << 8) |
+                    (reader_getchar(rdr)));
         }
-        *u64 = swap64(*(uint64_t *) buf);
     } else if(ch == 253) {
-        buf[0] = 0;
-        buf[1] = 0;
-        if(! reader_getinto(rdr, buf+2, 6)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 6))) {
+            *u64 = ((reader_getchar(rdr) << 40) |
+                    (reader_getchar(rdr) << 32) |
+                    (reader_getchar(rdr) << 24) |
+                    (reader_getchar(rdr) << 16) |
+                    (reader_getchar(rdr) << 8) |
+                    (reader_getchar(rdr)));
         }
-        *u64 = swap64(*(uint64_t *) buf);
     } else if(ch == 254) {
-        buf[0] = 0;
-        if(! reader_getinto(rdr, buf+1, 7)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 7))) {
+            *u64 = ((reader_getchar(rdr) << 48) |
+                    (reader_getchar(rdr) << 40) |
+                    (reader_getchar(rdr) << 32) |
+                    (reader_getchar(rdr) << 24) |
+                    (reader_getchar(rdr) << 16) |
+                    (reader_getchar(rdr) << 8) |
+                    (reader_getchar(rdr)));
         }
-        *u64 = swap64(*(uint64_t *) buf);
     } else if(ch == 255) {
-        if(! reader_getinto(rdr, buf, 8)) {
-            return 0;
+        if((ok = reader_ensure(rdr, 8))) {
+            *u64 = ((reader_getchar(rdr) << 56) |
+                    (reader_getchar(rdr) << 48) |
+                    (reader_getchar(rdr) << 40) |
+                    (reader_getchar(rdr) << 32) |
+                    (reader_getchar(rdr) << 24) |
+                    (reader_getchar(rdr) << 16) |
+                    (reader_getchar(rdr) << 8) |
+                    (reader_getchar(rdr)));
         }
-        *u64 = swap64(*(uint64_t *) buf);
     }
-    return 1;
+    return ok;
 }
 
 
