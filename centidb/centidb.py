@@ -985,7 +985,7 @@ class Store(object):
             return self._prefix_encoder[prefix]
         except KeyError:
             dct = dict((v, k) for k, v in self._encoder_coll.itervalues())
-            idx = keycoder.unpack_int_s(prefix)
+            idx = keycoder.unpack_int(prefix)
             raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
 
     def count(self, name, n=1, init=1, txn=None):
