@@ -22,11 +22,8 @@ See http://keycoder.readthedocs.org/
 
 from __future__ import absolute_import
 
-import functools
 import itertools
-import operator
 import os
-import struct
 import sys
 import uuid
 
@@ -64,7 +61,7 @@ def invert(s):
 def write_int(v, w):
     """Given a positive integer of 64-bits or less, encode it in a
     variable-length form that preserves the original integer order. Invokes
-    `w()` repeatedly with integer bytes corresponding to its encoded
+    `w()` repeatedly with byte ordinals corresponding to the encoded
     representation.
 
     The output size is such that:
@@ -115,7 +112,7 @@ def write_int(v, w):
         w((v & 0xff))
     elif v <= 0xffffffffff:
         w(0xfc)
-        w((v >> 32) & 0xff)
+        w((v >> 32))
         w((v >> 24) & 0xff)
         w((v >> 16) & 0xff)
         w((v >> 8) & 0xff)
@@ -210,7 +207,7 @@ def write_str(s, w):
     constant-space encoding is used that treats the input as a stream of bits,
     packing each group of 7 bits into a byte with the highest bit always set,
     except for the final byte. A delimiting NUL is appended to the output.
-    Invokes `w()` repeatedly with integer bytes corresponding to the encoded
+    Invokes `w()` repeatedly with byte ordinals corresponding to the encoded
     representation."""
     shift = 1
     trailer = 0
@@ -235,7 +232,7 @@ def write_str(s, w):
 
 def read_str(getc, it=None):
     """Decode and return a bytestring encoded by :py:func:`read_str`. Invokes
-    `getc` repeatedly, which should yield integer bytes from the input
+    `getc` repeatedly, which should yield byte ordinals from the input
     stream."""
     if not it:
         it = iter(getc, '')
