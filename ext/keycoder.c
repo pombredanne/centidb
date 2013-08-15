@@ -219,28 +219,22 @@ static int c_pack_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
 }
 
 
-static PyObject *py_pack_int(PyObject *self, PyObject *arg)
+static PyObject *py_pack_int(PyObject *self, PyObject *args)
 {
+    char *prefix;
+    Py_ssize_t prefix_len;
     uint64_t v;
-    if(Py_TYPE(arg) == &PyInt_Type) {
-        long l = PyInt_AsLong(arg);
-        if(l < 0) {
-            PyErr_SetString(PyExc_OverflowError,
-                "py_pack_int(): v must be >= 0");
-            return NULL;
-        }
-        v = (uint64_t) l;
-    } else {
-        v = PyLong_AsUnsignedLongLong(arg);
-        if(PyErr_Occurred()) {
-            return NULL;
-        }
+
+    if(! PyArg_ParseTuple(args, "s#l", (char **) &prefix, &prefix_len, &v)) {
+        return NULL;
     }
 
     struct writer wtr;
     if(writer_init(&wtr, 9)) {
-        if(c_pack_int(&wtr, v, 0)) {
-            return writer_fini(&wtr);
+        if(writer_puts(&wtr, prefix, prefix_len)) {
+            if(c_pack_int(&wtr, v, 0)) {
+                return writer_fini(&wtr);
+            }
         }
     }
     return NULL;
@@ -766,7 +760,7 @@ static PyMethodDef KeyCoderMethods[] = {
     {"unpacks", unpacks, METH_VARARGS, "unpacks"},
     {"pack", packs, METH_VARARGS, "pack"},
     {"packs", packs, METH_VARARGS, "packs"},
-    {"pack_int", py_pack_int, METH_O, "pack_int"},
+    {"pack_int", py_pack_int, METH_VARARGS, "pack_int"},
     {"decode_offsets", py_decode_offsets, METH_VARARGS, "decode_offsets"},
     {NULL, NULL, 0, NULL}
 };
