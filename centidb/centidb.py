@@ -467,7 +467,7 @@ class Collection(object):
             self._index_keys = IndexKeyBuilder(self.indices.values()).build
         return index
 
-    def _logical_iter(self, it, reverse):
+    def _logical_iter(self, it, reverse, prefix_s, prefix):
         #   * When iterating forward, if first yielded key lacks collection
         #     prefix, result of iteration is empty.
         #   * When iterating reverse, if first yielded key lacks collection
@@ -476,21 +476,21 @@ class Collection(object):
         #     startpred() or not self.prefix.
         #   * Records are yielded following startpred() until not endpred() or
         #     not self.prefix.
+        prefix = prefix or ()
         tup = next(it, None)
-        if tup and tup[0][:len(self.prefix)] == self.prefix:
+        if tup and tup[0][:len(prefix_s)] == prefix_s:
             it = itertools.chain((tup,), it)
         for key, value in it:
-            keys = keycoder.unpacks(self.prefix, key)
+            keys = keycoder.unpacks(prefix_s, key)
             if not keys:
                 return
 
             lenk = len(keys)
             if lenk == 1:
-                yield False, keys[0], self._decompress(value)
+                yield False, prefix + keys[0], self._decompress(value)
             else: # Batch record.
                 offsets, dstart = decode_offsets(value)
                 data = self._decompress(buffer(value, dstart))
-                keys.reverse()
                 if reverse:
                     stop = -1
                     step = -1
@@ -500,10 +500,10 @@ class Collection(object):
                     step = 1
                     i = 0
                 while i != stop:
-                    key = keys[i]
+                    key = keys[-1 - i]
                     offs = offsets[i]
                     size = offsets[i+1] - offs
-                    yield True, key, buffer(data, offs, size)
+                    yield True, prefix + key, buffer(data, offs, size)
                     i += step
 
     # -----------------------------------------------------------
@@ -520,7 +520,7 @@ class Collection(object):
     # -----------------------------------------------------------
     # _iter(, , , False): lokey=prefix, hikey=ng(prefix)
     #                     startpred=lokey, endpred=
-    def _iter(self, txn, key, lo, hi, reverse, max_, include, max_phys):
+    def _iter(self, txn, key, lo, hi, prefix, reverse, max_, include, max_phys):
         if key is not None:
             key = tuplize(key)
             if reverse:
@@ -529,14 +529,19 @@ class Collection(object):
             else:
                 lo = key
 
+        if prefix:
+            prefix_s = keycoder.packs(self.prefix, prefix)
+        else:
+            prefix_s = self.prefix
+
         if lo is None:
-            lokey = self.prefix
+            lokey = prefix_s
         else:
             lo = tuplize(lo)
             lokey = keycoder.packs(self.prefix, lo)
 
         if hi is None:
-            hikey = next_greater(self.prefix)
+            hikey = next_greater(prefix_s)
             include = False
         else:
             hi = tuplize(hi)
@@ -555,7 +560,7 @@ class Collection(object):
         if max_phys is not None:
             it = itertools.islice(it, max_phys)
 
-        it = self._logical_iter(it, reverse)
+        it = self._logical_iter(it, reverse, prefix_s, prefix)
         if max_ is not None:
             it = itertools.islice(it, max_)
         if startpred:
@@ -576,13 +581,13 @@ class Collection(object):
                 idx_keys.append(keycoder.packs(idx.prefix, [idx_key, key]))
         return idx_keys
 
-    def items(self, key=None, lo=None, hi=None, reverse=False, max=None,
-            include=False, txn=None, rec=None, raw=False):
+    def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
+              max=None, include=False, txn=None, rec=None, raw=False):
         """Yield all `(key tuple, value)` tuples in key order. If `rec` is
         ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
         txn_id = getattr(txn or self.engine, 'txn_id', None)
-        it = self._iter(txn, key, lo, hi, reverse, max, include, None)
+        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
         for batch, key, data in it:
             obj = data if raw else self.encoder.unpack(data)
             if rec:
@@ -625,7 +630,7 @@ class Collection(object):
         otherwise only the record's value is returned. If `rec` is ``True``,
         return the record without unpacking it."""
         key = tuplize(key)
-        it = self._iter(txn, None, key, key, False, None, True, None)
+        it = self._iter(txn, None, key, key, None, False, None, True, None)
         tup = next(it, None)
         if tup:
             txn_id = getattr(txn or self.engine, 'txn_id', None)
@@ -639,9 +644,9 @@ class Collection(object):
             return Record(self, default) if rec else default
         return
 
-    def batch(self, lo=None, hi=None, max_recs=None, max_bytes=None,
-              max_keylen=None, preserve=True, packer=None, txn=None,
-              max_phys=None, grouper=None):
+    def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
+              max_bytes=None, max_keylen=None, preserve=True, packer=None,
+              txn=None, max_phys=None, grouper=None):
         """
         Search the key range *lo..hi* for individual records, combining them
         into a batches.
@@ -717,7 +722,7 @@ class Collection(object):
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
         txn = txn or self.engine
         packer = packer or encoders.PLAIN_PACKER
-        it = self._iter(txn, None, lo, hi, False, None, True, max_phys)
+        it = self._iter(txn, None, lo, hi, prefix, False, None, True, max_phys)
         groupval = None
         items = []
 
@@ -771,7 +776,7 @@ class Collection(object):
     def _split_batch(self, rec, txn):
         assert rec.key and rec.batch
         assert False
-        it = _iter(txn, rec.key, None, None, None, None, None)
+        it = self._iter(txn, rec.key, None, None, None, None, None, None)
         keys, data = next(it, (None, None))
         assert len(keys) > 1 and rec.key in keys, \
             'Physical key missing: %r' % (rec.key,)
