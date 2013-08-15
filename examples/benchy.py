@@ -6,6 +6,7 @@ import operator
 import os
 import random
 import shutil
+import sqlite3
 import sys
 import time
 
@@ -96,6 +97,50 @@ class PlyvelEngine(CentiEngine):
                                   create_if_missing=True)
 
 
+class SqliteEngine(object):
+    PATH = BASE_PATH + 'test.sqlite3'
+
+    def create(self):
+        if self.PATH and os.path.exists(self.PATH):
+            os.unlink(self.PATH)
+        self.make_engine()
+
+    def make_engine(self):
+        self.db = sqlite3.connect(self.PATH)
+
+    def make_coll(self, use_indices):
+        self.db.execute('CREATE TABLE stuff(stub, name, location)')
+        if use_indices:
+            self.db.execute('CREATE INDEX foo ON stuff(name)')
+            self.db.execute('CREATE INDEX bar ON stuff(location)')
+
+    def close(self):
+        self.db.close()
+        if self.PATH:
+            os.unlink(self.PATH)
+
+    def insert(self, words, upper, stub, blind):
+        c = self.db.cursor()
+        for i in xrange(len(words)):
+            c.execute('INSERT INTO stuff VALUES(?, ?, ?)',
+                      (stub, words[i], upper[i]))
+        print 'commit'
+        self.db.commit()
+        print 'done'
+
+    def randget_idx(self, words):
+        c = self.db.cursor()
+        for word in words:
+            c.execute('SELECT * FROM stuff WHERE name = ?', (word,))
+            next(c)
+
+    def randget_id(self, words, upper):
+        c = self.db.cursor()
+        for i in xrange(len(words)):
+            c.execute('SELECT * FROM stuff WHERE oid = ?', (i,))
+            next(c)
+
+
 class MongoEngine(object):
     def create(self):
         pass
@@ -155,7 +200,7 @@ def x():
     ids = range(len(words))
     random.shuffle(ids)
 
-    engines = [LmdbEngine, SkiplistEngine]
+    engines = [LmdbEngine, SkiplistEngine, SqliteEngine]
     if plyvel:
         engines += [PlyvelEngine]
     if pymongo:
@@ -163,7 +208,7 @@ def x():
 
     out('Engine', 'Mode', 'Keys', 'Time', 'Ops/s')
     eng = None
-    for engine in LmdbEngine, SkiplistEngine, PlyvelEngine, MongoEngine:
+    for engine in engines:
         print
         for blind in True, False:
             for use_indices in False, True:
