@@ -27,11 +27,6 @@ import os
 import sys
 import uuid
 
-try:
-    import cStringIO as StringIO
-except ImportError:
-    import StringIO
-
 
 __all__ = '''invert unpacks packs unpack_int pack_int'''.split()
 
