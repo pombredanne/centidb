@@ -181,6 +181,11 @@ static PyObject *builder_build(PyObject *self_, PyObject *args)
             "IndexKeyBuilder.build() must be called with (key, obj).");
         return NULL;
     }
+    if(Py_TYPE(PyTuple_GET_ITEM(args, 0)) != &PyTuple_Type) {
+        PyErr_SetString(PyExc_TypeError,
+            "IndexKeyBuilder.build() key must be tuple.");
+        return NULL;
+    }
 
     struct writer wtr;
     if(! KeyCoder.writer_init(&wtr, 20)) {
