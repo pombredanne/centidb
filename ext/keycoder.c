@@ -219,14 +219,14 @@ static int c_pack_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
 }
 
 
-static PyObject *pack_int(PyObject *self, PyObject *arg)
+static PyObject *py_pack_int(PyObject *self, PyObject *arg)
 {
     uint64_t v;
     if(Py_TYPE(arg) == &PyInt_Type) {
         long l = PyInt_AsLong(arg);
         if(l < 0) {
             PyErr_SetString(PyExc_OverflowError,
-                "pack_int(): v must be >= 0");
+                "py_pack_int(): v must be >= 0");
             return NULL;
         }
         v = (uint64_t) l;
@@ -490,7 +490,7 @@ static PyObject *c_decode_int_(struct reader *rdr, int negate)
 }
 
 
-static PyObject *decode_str(struct reader *rdr)
+static PyObject *read_str(struct reader *rdr)
 {
     struct writer wtr;
     if(! writer_init(&wtr, 20)) {
@@ -564,17 +564,17 @@ static PyObject *unpack(struct reader *rdr)
             }
             break;
         case KIND_BLOB:
-            arg = decode_str(rdr);
+            arg = read_str(rdr);
             break;
         case KIND_TEXT:
-            tmp = decode_str(rdr);
+            tmp = read_str(rdr);
             if(tmp) {
                 arg = PyUnicode_DecodeUTF8(PyString_AS_STRING(tmp),
                     PyString_GET_SIZE(tmp), "strict");
             }
             break;
         case KIND_UUID:
-            tmp = decode_str(rdr);
+            tmp = read_str(rdr);
             if(tmp) {
                 arg = PyObject_CallFunctionObjArgs(
                     (PyObject *)UUID_Type, Py_None, tmp, NULL);
@@ -695,6 +695,60 @@ static PyObject *unpacks(PyObject *self, PyObject *args)
 }
 
 
+static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
+{
+    uint8_t *s;
+    Py_ssize_t s_len;
+
+    if(! PyArg_ParseTuple(args, "s#", (char **) &s, &s_len)) {
+        return NULL;
+    }
+
+    struct reader rdr;
+    reader_init(&rdr, s, s_len);
+
+    uint64_t count;
+    if(! c_decode_int(&rdr, &count)) {
+        return NULL;
+    }
+
+    uint64_t pos = 0;
+    PyObject *out = PyList_New(1 + (int) count);
+    PyObject *tmp = PyInt_FromLong(0);
+    if(! (out && tmp)) {
+        Py_CLEAR(out);
+        Py_CLEAR(tmp);
+        return NULL;
+    }
+    PyList_SET_ITEM(out, 0, tmp);
+
+    for(uint64_t i = 0; i < count; i++) {
+        uint64_t offset;
+        if(! c_decode_int(&rdr, &offset)) {
+            return NULL;
+        }
+        pos += offset;
+        tmp = PyInt_FromLong((long) pos);
+        if(! tmp) {
+            Py_CLEAR(out);
+            return NULL;
+        }
+        PyList_SET_ITEM(out, 1 + i, tmp);
+    }
+
+    PyObject *tmpi = PyInt_FromLong(rdr.pos);
+    tmp = PyTuple_New(2);
+    if(! (tmp && tmpi)) {
+        Py_CLEAR(tmp);
+        Py_CLEAR(tmpi);
+        return NULL;
+    }
+    PyTuple_SET_ITEM(tmp, 0, out);
+    PyTuple_SET_ITEM(tmp, 1, tmpi);
+    return tmp;
+}
+
+
 static struct KeyCoderModule C_API = {
     .reader_init = reader_init,
     .writer_init = writer_init,
@@ -712,7 +766,8 @@ static PyMethodDef KeyCoderMethods[] = {
     {"unpacks", unpacks, METH_VARARGS, "unpacks"},
     {"pack", packs, METH_VARARGS, "pack"},
     {"packs", packs, METH_VARARGS, "packs"},
-    {"pack_int", pack_int, METH_O, "pack_int"},
+    {"pack_int", py_pack_int, METH_O, "pack_int"},
+    {"decode_offsets", py_decode_offsets, METH_VARARGS, "decode_offsets"},
     {NULL, NULL, 0, NULL}
 };
 
