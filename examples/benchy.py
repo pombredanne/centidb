@@ -11,11 +11,21 @@ import time
 
 import centidb
 import centidb.encoders
-import pymongo
+
+try:
+    import pymongo
+except ImportError:
+    pymongo = None
+
+try:
+    import plyvel
+except ImportError:
+    plyvel = None
 
 writer = csv.writer(sys.stdout, quoting=csv.QUOTE_ALL)
 out = lambda *args: writer.writerow(args)
 
+USE_SPARSE_FILES = sys.platform != 'darwin'
 BASE_PATH = '/ram/benchy/'
 if not os.path.exists(BASE_PATH):
     os.mkdir(BASE_PATH, 0744)
@@ -69,7 +79,7 @@ class LmdbEngine(CentiEngine):
     def make_engine(self):
         self.store = centidb.open('LmdbEngine',
             path=self.PATH, map_size=1048576*1024,
-            writemap=True)
+            writemap=USE_SPARSE_FILES)
 
 
 class SkiplistEngine(CentiEngine):
@@ -144,6 +154,12 @@ def x():
 
     ids = range(len(words))
     random.shuffle(ids)
+
+    engines = [LmdbEngine, SkiplistEngine]
+    if plyvel:
+        engines += [PlyvelEngine]
+    if pymongo:
+        engines += [MongoEngine]
 
     out('Engine', 'Mode', 'Keys', 'Time', 'Ops/s')
     eng = None
