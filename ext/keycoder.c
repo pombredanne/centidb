@@ -275,8 +275,8 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
 }
 
 
-static int encode_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
-                      enum ElementKind kind)
+static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
+                     enum ElementKind kind)
 {
     if(kind) {
         if(! writer_putc(wtr, kind)) {
@@ -301,10 +301,12 @@ static int encode_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length
         }
     }
 
-    if(ret && shift > 1) {
-        ret = writer_putc(wtr, 0x80 | trailer);
-    }
-    if(ret) {
+    if(shift > 1) {
+        ret = writer_putc(wtr, trailer);
+        if(trailer != 0) {
+            ret = writer_putc(wtr, 0);
+        }
+    } else {
         ret = writer_putc(wtr, 0);
     }
     return ret;
@@ -326,14 +328,14 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
             ret = c_pack_int(wtr, v, KIND_INTEGER);
         }
     } else if(type == &PyString_Type) {
-        ret = encode_str(wtr, (uint8_t *)PyString_AS_STRING(arg),
-                              PyString_GET_SIZE(arg), KIND_BLOB);
+        ret = write_str(wtr, (uint8_t *)PyString_AS_STRING(arg),
+                             PyString_GET_SIZE(arg), KIND_BLOB);
     } else if(type == &PyUnicode_Type) {
         PyObject *utf8 = PyUnicode_EncodeUTF8(PyUnicode_AS_UNICODE(arg),
             PyUnicode_GET_SIZE(arg), "strict");
         if(utf8) {
-            ret = encode_str(wtr, (uint8_t *)PyString_AS_STRING(utf8),
-                                  PyString_GET_SIZE(utf8), KIND_TEXT);
+            ret = write_str(wtr, (uint8_t *)PyString_AS_STRING(utf8),
+                                 PyString_GET_SIZE(utf8), KIND_TEXT);
             Py_DECREF(utf8);
         }
     } else if(type == &PyBool_Type) {
@@ -352,8 +354,8 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
         PyObject *ss = PyObject_CallMethod(arg, "get_bytes", NULL);
         if(ss) {
             assert(Py_TYPE(ss) == &PyString_Type);
-            ret = encode_str(wtr, (uint8_t *)PyString_AS_STRING(ss),
-                                  PyString_GET_SIZE(ss), KIND_UUID);
+            ret = write_str(wtr, (uint8_t *)PyString_AS_STRING(ss),
+                                 PyString_GET_SIZE(ss), KIND_UUID);
             Py_DECREF(ss);
         }
     } else {
@@ -548,6 +550,9 @@ static PyObject *read_str(struct reader *rdr)
     int shift = 1;
 
     int ret = reader_getc(rdr, &lb);
+    if(! ret) {
+        return 0;
+    }
     if(! lb) {
         return writer_fini(&wtr);
     }
