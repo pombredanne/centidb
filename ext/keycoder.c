@@ -445,70 +445,76 @@ static int c_decode_int(struct reader *rdr, uint64_t *u64)
         return 0;
     }
 
+    uint64_t v;
     int ok = 1;
 
     if(ch <= 240) {
         *u64 = ch;
     } else if(ch <= 248) {
         if((ok = reader_ensure(rdr, 1))) {
-            *u64 = 240 + (256 * (ch - 241) + reader_getchar(rdr));
+            v  = 240;
+            v += 256 * (ch - 241);
+            v += reader_getchar(rdr);
         }
     } else if(ch == 249) {
         if((ok = reader_ensure(rdr, 2))) {
-            *u64 = 2288 + (256 * reader_getchar(rdr)) + reader_getchar(rdr);
+            v  = 2288;
+            v += 256 * reader_getchar(rdr);
+            v += reader_getchar(rdr);
         }
     } else if(ch == 250) {
         if((ok = reader_ensure(rdr, 3))) {
-            *u64 = ((reader_getchar(rdr) << 16) |
-                    (reader_getchar(rdr) << 8) |
-                    (reader_getchar(rdr)));
+            v  = reader_getchar(rdr) << 16;
+            v |= reader_getchar(rdr) << 8;
+            v |= reader_getchar(rdr);
         }
     } else if(ch == 251) {
         if((ok = reader_ensure(rdr, 4))) {
-            *u64 = ((reader_getchar(rdr) << 24) |
-                    (reader_getchar(rdr) << 16) |
-                    (reader_getchar(rdr) << 8) |
-                    (reader_getchar(rdr)));
+            v  = reader_getchar(rdr) << 24;
+            v |= reader_getchar(rdr) << 16;
+            v |= reader_getchar(rdr) << 8;
+            v |= reader_getchar(rdr);
         }
     } else if(ch == 252) {
         if((ok = reader_ensure(rdr, 5))) {
-            *u64 = ((reader_getchar(rdr) << 32) |
-                    (reader_getchar(rdr) << 24) |
-                    (reader_getchar(rdr) << 16) |
-                    (reader_getchar(rdr) << 8) |
-                    (reader_getchar(rdr)));
+            v  = reader_getchar(rdr) << 32;
+            v |= reader_getchar(rdr) << 24;
+            v |= reader_getchar(rdr) << 16;
+            v |= reader_getchar(rdr) << 8;
+            v |= reader_getchar(rdr);
         }
     } else if(ch == 253) {
         if((ok = reader_ensure(rdr, 6))) {
-            *u64 = ((reader_getchar(rdr) << 40) |
-                    (reader_getchar(rdr) << 32) |
-                    (reader_getchar(rdr) << 24) |
-                    (reader_getchar(rdr) << 16) |
-                    (reader_getchar(rdr) << 8) |
-                    (reader_getchar(rdr)));
+            v  = reader_getchar(rdr) << 40;
+            v |= reader_getchar(rdr) << 32;
+            v |= reader_getchar(rdr) << 24;
+            v |= reader_getchar(rdr) << 16;
+            v |= reader_getchar(rdr) << 8;
+            v |= reader_getchar(rdr);
         }
     } else if(ch == 254) {
         if((ok = reader_ensure(rdr, 7))) {
-            *u64 = ((reader_getchar(rdr) << 48) |
-                    (reader_getchar(rdr) << 40) |
-                    (reader_getchar(rdr) << 32) |
-                    (reader_getchar(rdr) << 24) |
-                    (reader_getchar(rdr) << 16) |
-                    (reader_getchar(rdr) << 8) |
-                    (reader_getchar(rdr)));
+            v  = reader_getchar(rdr) << 48;
+            v |= reader_getchar(rdr) << 40;
+            v |= reader_getchar(rdr) << 32;
+            v |= reader_getchar(rdr) << 24;
+            v |= reader_getchar(rdr) << 16;
+            v |= reader_getchar(rdr) << 8;
+            v |= reader_getchar(rdr);
         }
     } else if(ch == 255) {
         if((ok = reader_ensure(rdr, 8))) {
-            *u64 = ((reader_getchar(rdr) << 56) |
-                    (reader_getchar(rdr) << 48) |
-                    (reader_getchar(rdr) << 40) |
-                    (reader_getchar(rdr) << 32) |
-                    (reader_getchar(rdr) << 24) |
-                    (reader_getchar(rdr) << 16) |
-                    (reader_getchar(rdr) << 8) |
-                    (reader_getchar(rdr)));
+            v  = reader_getchar(rdr) << 56;
+            v |= reader_getchar(rdr) << 48;
+            v |= reader_getchar(rdr) << 40;
+            v |= reader_getchar(rdr) << 32;
+            v |= reader_getchar(rdr) << 24;
+            v |= reader_getchar(rdr) << 16;
+            v |= reader_getchar(rdr) << 8;
+            v |= reader_getchar(rdr);
         }
     }
+    *u64 = v;
     return ok;
 }
 
