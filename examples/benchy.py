@@ -31,8 +31,9 @@ class CentiEngine(object):
         self.make_engine()
 
     def make_coll(self, use_indices):
-        self.coll = self.store.collection('stuff',
-            encoder=self.ENCODER, key_func=self.KEY_FUNC)
+        self.coll = self.store.add_collection('stuff',
+            encoder=self.ENCODER,
+            key_func=self.KEY_FUNC)
         if use_indices:
             self.coll.add_index('rev_name', lambda p: p['name'])
             self.coll.add_index('rev_locn', lambda p: p['location'])
