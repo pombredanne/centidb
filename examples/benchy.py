@@ -192,7 +192,7 @@ f = lambda f, n: locale.format(f, n, grouping=True)
 def x():
     global store
 
-    words = map(str.strip, gzip.open('words.gz'))
+    words = gzip.open('words.gz').read().split()[:15000]
     random.shuffle(words)
     upper = map(str.upper, words)
     stub = len('%x' % (random.getrandbits(150*4)))
