@@ -255,10 +255,6 @@ class Index(object):
             return Record(self.coll, default)
         return default
 
-    def gets(self, xs, txn=None, rec=None, default=None):
-        """Yield `get(x)` for each `x` in the iterable `xs`."""
-        return (self.get(x, txn, rec, default) for x in xs)
-
 class Record(object):
     """Wraps a record value with its last saved key, if any.
 
