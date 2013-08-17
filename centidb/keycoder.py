@@ -45,9 +45,6 @@ INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 
 UTCOFFSET_SHIFT = 64 # 16 hours * 4 (15 minute increments)
 UTCOFFSET_DIV = 15 * 60 # 15 minutes
-EPOCH_OFFSET_MS = 1000 * (
-    calendar.timegm(datetime.datetime(2010, 1, 1).utctimetuple()) -
-    calendar.timegm(datetime.datetime(1970, 1, 1).utctimetuple()))
 
 _cached_offset = 0
 _cached_offset_expires = 0
@@ -297,7 +294,6 @@ def write_time(dt, w):
     """
     msec = int(time.mktime(dt.timetuple())) * 1000
     msec += dt.microsecond / 1000
-    msec -= EPOCH_OFFSET_MS
     msec <<= 7
     if dt.tzinfo:
         offset = dt.utcoffset().total_seconds()
@@ -328,7 +324,6 @@ def read_time(kind, getc):
     msec = read_int(getc)
     offset = msec & 0x7f
     msec >>= 7
-    msec += EPOCH_OFFSET_MS
     if kind == KIND_NEG_TIME:
         msec = -msec
 
