@@ -20,9 +20,12 @@ SQLite4-like tuple serialization.
 
 from __future__ import absolute_import
 
+import calendar
+import datetime
 import itertools
 import os
 import sys
+import time
 import uuid
 
 
@@ -35,9 +38,46 @@ KIND_BOOL = 30
 KIND_BLOB = 40
 KIND_TEXT = 50
 KIND_UUID = 90
-KIND_KEY = 95
+KIND_NEG_TIME = 91
+KIND_TIME = 92
 KIND_SEP = 102
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
+
+UTCOFFSET_SHIFT = 64 # 16 hours * 4 (15 minute increments)
+UTCOFFSET_DIV = 15 * 60 # 15 minutes
+EPOCH_OFFSET_MS = 1000 * (
+    calendar.timegm(datetime.datetime(2010, 1, 1).utctimetuple()) -
+    calendar.timegm(datetime.datetime(1970, 1, 1).utctimetuple()))
+
+_cached_offset = 0
+_cached_offset_expires = 0
+_tz_cache = {}
+
+
+class FixedOffsetZone(datetime.tzinfo):
+    ZERO = datetime.timedelta(0)
+
+    def __init__(self, seconds):
+        self._offset = datetime.timedelta(seconds=seconds)
+        if seconds < 0:
+            sign = '-'
+            seconds = abs(seconds)
+        else:
+            sign = '+'
+        hours, minutes = divmod(60, seconds / 60)
+        self._name = '%s%02d:%02d' % (sign, hours, minutes)
+
+    def utcoffset(self, dt):
+        return self._offset
+
+    def tzname(self, dt):
+        return self._name
+
+    def dst(self, dt):
+        return self.ZERO
+
+    def __repr__(self):
+        return '<%s>' % (self.tzname(None),)
 
 
 def invert(s):
@@ -252,6 +292,56 @@ def read_str(getc, it=None):
     return str(out)
 
 
+def write_time(dt, w):
+    """Encode a datetime.datetime to `w`.
+    """
+    msec = int(time.mktime(dt.timetuple())) * 1000
+    msec += dt.microsecond / 1000
+    msec -= EPOCH_OFFSET_MS
+    msec <<= 7
+    if dt.tzinfo:
+        offset = dt.utcoffset().total_seconds()
+        msec |= (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
+    else:
+        global _cached_offset_expires
+        global _cached_offset
+        if time.time() > _cached_offset_expires:
+            utcnow = datetime.datetime.utcnow()
+            offset = int(round((datetime.datetime.now() -
+                                utcnow).total_seconds()))
+            _cached_offset = (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
+            expires = (utcnow.replace(minute=0, second=0) +
+                       datetime.timedelta(hours=1))
+            # Implicitly converts to int (== 0 microseconds)
+            _cached_offset_expires = calendar.timegm(expires.utctimetuple())
+        msec |= _cached_offset
+
+    if msec < 0:
+        w(KIND_NEG_TIME)
+        write_int(-msec, w)
+    else:
+        w(KIND_TIME)
+        write_int(msec, w)
+
+
+def read_time(kind, getc):
+    msec = read_int(getc)
+    offset = msec & 0x7f
+    msec >>= 7
+    msec += EPOCH_OFFSET_MS
+    if kind == KIND_NEG_TIME:
+        msec = -msec
+
+    try:
+        tz = _tz_cache[offset]
+    except KeyError:
+        tz = FixedOffsetZone((offset - UTCOFFSET_SHIFT) * UTCOFFSET_DIV)
+        _tz_cache[offset] = tz
+
+    print datetime.datetime.fromtimestamp(msec / 1000.0)#.replace(tzinfo=tz)
+    return datetime.datetime.fromtimestamp(msec / 1000.0).replace(tzinfo=tz)
+
+
 def pack_int(prefix, i):
     """Invoke :py:func:`write_int(i, ba) <write_int>` using a temporary
     :py:class:`bytearray` initialized to contain `prefix`, returning the result
@@ -289,7 +379,8 @@ def packs(prefix, tups):
         6. Bytestrings (i.e. :py:func:`str`).
         7. Unicode strings.
         8. ``uuid.UUID`` instances.
-        9. Sequences with another tuple following the last identical element.
+        9. ``datetime.datetime`` instances.
+        10. Sequences with another tuple following the last identical element.
 
     If `tups` is not exactly a list, it is assumed to a be single key, and will
     be treated as if it were wrapped in a list.
@@ -317,27 +408,29 @@ def packs(prefix, tups):
         tup = tuplize(tup)
         for j, arg in enumerate(tup):
             type_ = type(arg)
-            if arg is None:
-                w(KIND_NULL)
-            elif type_ is bool:
-                w(KIND_BOOL)
-                write_int(arg, w)
-            elif type_ is int or type_ is long:
+            if type_ is int or type_ is long:
                 if arg < 0:
                     w(KIND_NEG_INTEGER)
                     write_int(-arg, w)
                 else:
                     w(KIND_INTEGER)
                     write_int(arg, w)
-            elif type_ is uuid.UUID:
-                w(KIND_UUID)
-                write_str(arg.get_bytes(), w)
             elif type_ is str:
                 w(KIND_BLOB)
                 write_str(arg, w)
             elif type_ is unicode:
                 w(KIND_TEXT)
                 write_str(arg.encode('utf-8'), w)
+            elif arg is None:
+                w(KIND_NULL)
+            elif type_ is uuid.UUID:
+                w(KIND_UUID)
+                write_str(arg.get_bytes(), w)
+            elif type_ is bool:
+                w(KIND_BOOL)
+                write_int(arg, w)
+            elif type_ is datetime.datetime:
+                write_time(arg, w)
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
     return str(ba)
@@ -375,12 +468,14 @@ def unpacks(prefix, s, first=False):
             arg = read_int(getc)
         elif c == KIND_NEG_INTEGER:
             arg = -read_int(getc)
-        elif c == KIND_BOOL:
-            arg = bool(read_int(getc))
         elif c == KIND_BLOB:
             arg = read_str(getc, it)
         elif c == KIND_TEXT:
             arg = read_str(getc, it).decode('utf-8')
+        elif c == KIND_TIME or c == KIND_NEG_TIME:
+            arg = read_time(c, getc)
+        elif c == KIND_BOOL:
+            arg = bool(read_int(getc))
         elif c == KIND_UUID:
             arg = uuid.UUID(read_str(getc, it))
         elif c == KIND_SEP:
