@@ -164,12 +164,11 @@ Probably:
 6. More future proof metadata format.
 7. Convert Index/Collection guts to visitor-style design, replace find/iter
    methods with free functions implemented once.
-8. datetime support
-9. **join()** function: accept multiple indices producing keys in the same
+8. **join()** function: accept multiple indices producing keys in the same
    order, return an iterator producing the union or intersection of those
    indices.
-10. Index function versioning, either using bytecode hash or explicit strings.
-11. Refuse to operate unless all index functions provided.
+9. Index function versioning, either using bytecode hash or explicit strings.
+10. Refuse to operate unless all index functions provided.
 
 Maybe:
 
