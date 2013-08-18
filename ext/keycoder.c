@@ -448,7 +448,7 @@ static PyObject *packs(PyObject *self, PyObject *args)
 }
 
 
-static int c_decode_int(struct reader *rdr, uint64_t *u64)
+static int read_plain_int(struct reader *rdr, uint64_t *u64)
 {
     uint8_t ch = 0;
     if(! reader_getc(rdr, &ch)) {
@@ -529,10 +529,10 @@ static int c_decode_int(struct reader *rdr, uint64_t *u64)
 }
 
 
-static PyObject *c_decode_int_(struct reader *rdr, int negate)
+static PyObject *read_int(struct reader *rdr, int negate)
 {
     uint64_t u64;
-    if(! c_decode_int(rdr, &u64)) {
+    if(! read_plain_int(rdr, &u64)) {
         return NULL;
     }
     PyObject *v = PyLong_FromUnsignedLongLong(u64);
@@ -616,13 +616,13 @@ static PyObject *unpack(struct reader *rdr)
             Py_INCREF(arg);
             break;
         case KIND_INTEGER:
-            arg = c_decode_int_(rdr, 0);
+            arg = read_int(rdr, 0);
             break;
         case KIND_NEG_INTEGER:
-            arg = c_decode_int_(rdr, 1);
+            arg = read_int(rdr, 1);
             break;
         case KIND_BOOL:
-            if(c_decode_int(rdr, &u64)) {
+            if(read_plain_int(rdr, &u64)) {
                 arg = u64 ? Py_True : Py_False;
                 Py_INCREF(arg);
             }
@@ -776,7 +776,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
     reader_init(&rdr, s, s_len);
 
     uint64_t count;
-    if(! c_decode_int(&rdr, &count)) {
+    if(! read_plain_int(&rdr, &count)) {
         return NULL;
     }
 
@@ -792,7 +792,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
 
     for(uint64_t i = 0; i < count; i++) {
         uint64_t offset;
-        if(! c_decode_int(&rdr, &offset)) {
+        if(! read_plain_int(&rdr, &offset)) {
             return NULL;
         }
         pos += offset;
