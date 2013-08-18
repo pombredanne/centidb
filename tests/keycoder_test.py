@@ -5,9 +5,11 @@ import os
 import unittest
 import uuid
 
+from datetime import datetime
 from pprint import pprint
 from unittest import TestCase
 
+import dateutil.tz
 from centidb import keycoder
 from centidb import _keycoder
 
@@ -27,7 +29,7 @@ class PythonMixin:
     @classmethod
     def setUpClass(cls):
         global keycoder
-        os.environ['KEYCODER_NO_SPEEDUPS'] = '1'
+        os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
         keycoder = reload(keycoder)
         keycoder = reload(keycoder)
         getattr(cls, '_setUpClass', lambda: None)()
@@ -37,7 +39,7 @@ class NativeMixin:
     @classmethod
     def setUpClass(cls):
         global keycoder
-        os.environ.pop('KEYCODER_NO_SPEEDUPS', None)
+        os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
         keycoder = reload(keycoder)
         keycoder = reload(keycoder)
         getattr(cls, '_setUpClass', lambda: None)()
@@ -200,6 +202,34 @@ class Mod7BugTest:
         t = [('index:Item:first_last', 11, 'item')]
         p = keycoder.packs('', t)
         eq(keycoder.unpacks('', p), t)
+
+
+@register()
+class TimeTest:
+    def _now_truncate(self, tz=None):
+        dt = datetime.now(tz)
+        return dt.replace(microsecond=(dt.microsecond / 1000) * 1000)
+
+    def test_utc(self):
+        tz = dateutil.tz.gettz('Etc/UTC')
+        dt = self._now_truncate(tz)
+        s = keycoder.packs('', dt)
+        dt2, = keycoder.unpack('', s)
+        eq(dt, dt2)
+
+    def test_plusone(self):
+        tz = dateutil.tz.gettz('Etc/GMT+1')
+        dt = self._now_truncate(tz)
+        s = keycoder.packs('', dt)
+        dt2, = keycoder.unpack('', s)
+        eq(dt, dt2)
+
+    def test_minusone(self):
+        tz = dateutil.tz.gettz('Etc/GMT-1')
+        dt = self._now_truncate(tz)
+        s = keycoder.packs('', dt)
+        dt2, = keycoder.unpack('', s)
+        eq(dt, dt2)
 
 
 if __name__ == '__main__':
