@@ -61,7 +61,7 @@ class FixedOffsetZone(datetime.tzinfo):
             seconds = abs(seconds)
         else:
             sign = '+'
-        hours, minutes = divmod(60, seconds / 60)
+        hours, minutes = divmod(seconds / 60, 60)
         self._name = '%s%02d:%02d' % (sign, hours, minutes)
 
     def utcoffset(self, dt):
@@ -296,7 +296,7 @@ def write_time(dt, w):
     msec += dt.microsecond / 1000
     msec <<= 7
     if dt.tzinfo:
-        offset = dt.utcoffset().total_seconds()
+        offset = int(dt.utcoffset().total_seconds())
         msec |= (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
     else:
         global _cached_offset_expires
@@ -333,8 +333,7 @@ def read_time(kind, getc):
         tz = FixedOffsetZone((offset - UTCOFFSET_SHIFT) * UTCOFFSET_DIV)
         _tz_cache[offset] = tz
 
-    print datetime.datetime.fromtimestamp(msec / 1000.0)#.replace(tzinfo=tz)
-    return datetime.datetime.fromtimestamp(msec / 1000.0).replace(tzinfo=tz)
+    return datetime.datetime.utcfromtimestamp(msec / 1000.0).replace(tzinfo=tz)
 
 
 def pack_int(prefix, i):
