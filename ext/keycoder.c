@@ -167,7 +167,7 @@ static PyObject *tuplize(PyObject *self, PyObject *arg)
 }
 
 
-static int c_pack_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
+static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
 {
     if(kind) {
         if(! writer_putc(wtr, kind)) {
@@ -266,7 +266,7 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
     struct writer wtr;
     if(writer_init(&wtr, 9)) {
         if(writer_puts(&wtr, prefix, prefix_len)) {
-            if(c_pack_int(&wtr, v, 0)) {
+            if(write_int(&wtr, v, 0)) {
                 return writer_fini(&wtr);
             }
         }
@@ -313,6 +313,12 @@ static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
 }
 
 
+static int write_time(struct writer *wtr, PyObject *dt)
+{
+    assert(0);
+}
+
+
 static int c_encode_value(struct writer *wtr, PyObject *arg)
 {
     int ret = 0;
@@ -323,9 +329,9 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
     } else if(type == &PyInt_Type) {
         long v = PyInt_AS_LONG(arg);
         if(v < 0) {
-            ret = c_pack_int(wtr, -v, KIND_NEG_INTEGER);
+            ret = write_int(wtr, -v, KIND_NEG_INTEGER);
         } else {
-            ret = c_pack_int(wtr, v, KIND_INTEGER);
+            ret = write_int(wtr, v, KIND_INTEGER);
         }
     } else if(type == &PyString_Type) {
         ret = write_str(wtr, (uint8_t *)PyString_AS_STRING(arg),
@@ -345,11 +351,13 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
         int64_t i64 = PyLong_AsLongLong(arg);
         if(! PyErr_Occurred()) {
             if(i64 < 0) {
-                ret = c_pack_int(wtr, -i64, KIND_NEG_INTEGER);
+                ret = write_int(wtr, -i64, KIND_NEG_INTEGER);
             } else {
-                ret = c_pack_int(wtr, i64, KIND_INTEGER);
+                ret = write_int(wtr, i64, KIND_INTEGER);
             }
         }
+    } else if(PyDateTime_CheckExact(arg)) {
+        ret = write_time(wtr, arg);
     } else if(type == UUID_Type) {
         PyObject *ss = PyObject_CallMethod(arg, "get_bytes", NULL);
         if(ss) {
@@ -359,8 +367,8 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
             Py_DECREF(ss);
         }
     } else {
-        PyErr_Format(PyExc_TypeError, "packs(): got unsupported %.200s",
-            arg->ob_type->tp_name);
+        const char *name = arg->ob_type->tp_name;
+        PyErr_Format(PyExc_TypeError, "got unsupported type %.200s", name);
     }
 
     return ret;
@@ -576,6 +584,12 @@ static PyObject *read_str(struct reader *rdr)
 }
 
 
+static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
+{
+    assert(0);
+}
+
+
 static PyObject *unpack(struct reader *rdr)
 {
     PyObject *tup = PyTuple_New(TUPLE_START_SIZE);
@@ -620,8 +634,12 @@ static PyObject *unpack(struct reader *rdr)
             tmp = read_str(rdr);
             if(tmp) {
                 arg = PyUnicode_DecodeUTF8(PyString_AS_STRING(tmp),
-                    PyString_GET_SIZE(tmp), "strict");
+                                           PyString_GET_SIZE(tmp), "strict");
             }
+            break;
+        case KIND_NEG_TIME:
+        case KIND_TIME:
+            tmp = read_time(rdr, (enum ElementKind) ch);
             break;
         case KIND_UUID:
             tmp = read_str(rdr);
@@ -825,6 +843,8 @@ static PyMethodDef KeyCoderMethods[] = {
 PyMODINIT_FUNC
 init_keycoder(void)
 {
+    PyDateTime_IMPORT;
+
     PyObject *mod = PyImport_ImportModule("uuid");
     if(! mod) {
         return;

@@ -29,6 +29,8 @@
 
 #include <stdint.h>
 #include "Python.h"
+#include "datetime.h"
+
 
 // Python 2.5
 #ifndef Py_TYPE
@@ -48,7 +50,8 @@ enum ElementKind
     KIND_BLOB = 40,
     KIND_TEXT = 50,
     KIND_UUID = 90,
-    KIND_KEY = 95,
+    KIND_NEG_TIME = 91,
+    KIND_TIME = 92,
     KIND_SEP = 102
 };
 
