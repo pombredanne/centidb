@@ -51,6 +51,93 @@ _cached_offset_expires = 0
 _tz_cache = {}
 
 
+class Key(object):
+    """Represents a database key composed of zero or more elements. An element
+    may be a string, Unicode, integer, boolean, or UUID value.
+    """
+
+    __slots__ = ['args', 'prefix', 'packed', 'batch']
+    def __init__(self, *args):
+        self.prefix = ''
+        if len(args) == 1 and type(args[0]) is tuple:
+            args = args[0]
+        self.args = args or None
+        self.packed = packs('', args) if args else ''
+        self.batch = False
+
+    @classmethod
+    def from_packed(cls, prefix, packed, batch=False):
+        self = cls()
+        self.prefix = prefix
+        self.packed = packed
+        self.batch = False
+        return self
+
+    def __add__(self, extra):
+        new = Key()
+        new.prefix = self.prefix
+        new.packed = self.packed + packs('', extra)
+        new.batch = False
+        return new
+
+    __iadd__ = __add__
+
+    def _with_prefix(self, prefix):
+        if self.prefix != prefix:
+            self.packed = prefix + self.packed[len(self.prefix):]
+            self.prefix = prefix
+        return self.packed
+
+    def __iter__(self):
+        if self.args is None:
+            self.args = unpack(self.prefix, self.packed)
+        return iter(self.args)
+
+    def __getitem__(self, i):
+        try:
+            return self.args[i]
+        except TypeError:
+            self.args = unpack(self.prefix, self.packed)
+            return self.args[i]
+
+    def __hash__(self):
+        if self.args is None:
+            self.args = unpack(self.prefix, self.packed)
+        return hash(self.args)
+
+    def __len__(self):
+        if self.args is None:
+            self.args = unpack(self.prefix, self.packed)
+        return len(self.args)
+
+    def __le__(self, other):
+        return self.packed <= keyize(other)._with_prefix(self.prefix)
+
+    def __ge__(self, other):
+        return self.packed >= keyize(other)._with_prefix(self.prefix)
+
+    def __lt__(self, other):
+        return self.packed < keyize(other)._with_prefix(self.prefix)
+
+    def __gt__(self, other):
+        return self.packed > keyize(other)._with_prefix(self.prefix)
+
+    def __eq__(self, other):
+        return self.packed == keyize(other)._with_prefix(self.prefix)
+
+    def __ne__(self, other):
+        return self.packed != keyize(other)._with_prefix(self.prefix)
+
+    def __cmp__(self, other):
+        return cmp(self.packed, keyize(other)._with_prefix(self.prefix))
+
+    def __repr__(self):
+        if self.args is None:
+            self.args = unpack(self.prefix, self.packed)
+        return '<centidb.Key %r>' % (self.args,)
+
+
+
 class FixedOffsetZone(datetime.tzinfo):
     ZERO = datetime.timedelta(0)
 
@@ -350,9 +437,11 @@ def unpack_int(s):
     return read_int(itertools.imap(ord, s).next)
 
 
-def tuplize(o):
-    return o if type(o) is tuple else (o,)
+def keyize(o):
+    return o if type(o) is Key else Key(o)
 
+
+GOOD_TYPES = (tuple, Key)
 
 def packs(prefix, tups):
     """Encode a list of tuples of primitive values to a bytestring that
@@ -399,7 +488,8 @@ def packs(prefix, tups):
     for i, tup in enumerate(tups):
         if i:
             w(KIND_SEP)
-        tup = tuplize(tup)
+        if type(tup) not in GOOD_TYPES:
+            tup = (tup,)
         for j, arg in enumerate(tup):
             type_ = type(arg)
             if type_ is int or type_ is long:

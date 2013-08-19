@@ -31,7 +31,8 @@ import warnings
 from centidb import encoders
 from centidb import keycoder
 from centidb.encoders import Encoder
-from centidb.keycoder import tuplize
+from centidb.keycoder import Key
+from centidb.keycoder import keyize
 
 __all__ = 'Store Encoder Collection Record Index next_greater open'.split()
 
@@ -137,13 +138,12 @@ class Index(object):
         #: The index function.
         self.func = func
         self.prefix = keycoder.pack_int(self.store.prefix, info['idx'])
-        self._decode = functools.partial(keycoder.unpacks, self.prefix)
 
     def _iter(self, txn, key, lo, hi, reverse, max, include):
         if lo is None:
             lo = self.prefix
         else:
-            lo = keycoder.packs(self.prefix, lo)
+            lo = keyize(lo)._with_prefix(self.prefix)
 
         if hi is None:
             hi = next_greater(self.prefix)
@@ -153,16 +153,16 @@ class Index(object):
             # This is a broken mess. When doing reverse queries we must account
             # for the key tuple of the index key. next_greater() may fail if
             # the last byte of the index tuple is FF. Needs a better solution.
-            hi = next_greater(keycoder.packs(self.prefix, hi)) # TODO WTF
+            hi = next_greater(keyize(hi)._with_prefix(self.prefix)) # TODO WTF
             assert hi
 
         if key is not None:
             if reverse:
-                hi = next_greater(keycoder.packs(self.prefix, key)) # TODO
+                hi = next_greater(key._with_prefix(self.prefix)) # TODO
                 assert hi
                 include = False
             else:
-                lo = keycoder.packs(self.prefix, key)
+                lo = keyize(key)._with_prefix(self.prefix)
 
         if reverse:
             it = (txn or self.engine).iter(hi, True)
@@ -174,10 +174,9 @@ class Index(object):
         if max is not None:
             it = itertools.islice(it, max)
         for key, _ in it:
-            key = self._decode(key)
-            if not key:
+            if not key.startswith(self.prefix):
                 break
-            yield key
+            yield Key.from_packed(self.prefix, key)
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False,
               txn=None):
@@ -241,7 +240,7 @@ class Index(object):
     def has(self, x, txn=None):
         """Return True if an entry with the exact tuple `x` exists in the
         index."""
-        x = tuplize(x)
+        x = keyize(x)
         tup, _ = next(self.pairs(x, txn=txn), (None, None))
         return tup == x
 
@@ -303,6 +302,7 @@ class Record(object):
     def __repr__(self):
         s = ','.join(map(repr, self.key or ()))
         return '<Record %s:(%s) %r>' % (self.coll.info['name'], s, self.data)
+
 
 class Collection(object):
     """Provides access to a record collection contained within a
@@ -515,7 +515,7 @@ class Collection(object):
     #                     startpred=lokey, endpred=
     def _iter(self, txn, key, lo, hi, prefix, reverse, max_, include, max_phys):
         if key is not None:
-            key = tuplize(key)
+            key = keyize(key)
             if reverse:
                 hi = key
                 include = True
@@ -523,22 +523,22 @@ class Collection(object):
                 lo = key
 
         if prefix:
-            prefix_s = keycoder.packs(self.prefix, prefix)
+            prefix_s = keyize(prefix)._with_prefix(self.prefix)
         else:
             prefix_s = self.prefix
 
         if lo is None:
             lokey = prefix_s
         else:
-            lo = tuplize(lo)
-            lokey = keycoder.packs(self.prefix, lo)
+            lo = keyize(lo)
+            lokey = lo._with_prefix(self.prefix)
 
         if hi is None:
             hikey = next_greater(prefix_s)
             include = False
         else:
-            hi = tuplize(hi)
-            hikey = keycoder.packs(self.prefix, hi)
+            hi = keyize(hi)
+            hikey = hi._with_prefix(self.prefix)
 
         if reverse:
             startkey = hikey
@@ -570,8 +570,11 @@ class Collection(object):
         idx_keys = []
         for idx in self.indices.itervalues():
             lst = idx.func(obj)
-            for idx_key in lst if type(lst) is list else [lst]:
-                idx_keys.append(keycoder.packs(idx.prefix, [idx_key, key]))
+            if lst:
+                if type(lst) is not list:
+                    lst = [lst]
+                for idx_key in lst:
+                    idx_keys.append(keycoder.packs(self.prefix, [idx_key, key]))
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
@@ -622,7 +625,7 @@ class Collection(object):
         a :py:class:`Record` instance for use when later re-saving the record,
         otherwise only the record's value is returned. If `rec` is ``True``,
         return the record without unpacking it."""
-        key = tuplize(key)
+        key = keyize(key)
         it = self._iter(txn, None, key, key, None, False, None, True, None)
         tup = next(it, None)
         if tup:
@@ -723,7 +726,7 @@ class Collection(object):
             if preserve and batch:
                 self._write_batch(txn, items, packer)
             else:
-                txn.delete(keycoder.packs(self.prefix, key))
+                txn.delete(key._with_prefix(self.prefix))
                 items.append((key, data))
                 if max_bytes:
                     _, encoded = self._prepare_batch(items, packer)
@@ -787,8 +790,8 @@ class Collection(object):
         if rec.key and not self.info['derived_keys']:
             return rec.key
         elif self.txn_key_func:
-            return tuplize(self.txn_key_func(txn or self.engine, rec.data))
-        return tuplize(self.key_func(rec.data))
+            return keyize(self.txn_key_func(txn or self.engine, rec.data))
+        return keyize(self.key_func(rec.data))
 
     def put(self, rec, txn=None, packer=None, key=None, blind=False):
         """Create or overwrite a record.
@@ -837,7 +840,7 @@ class Collection(object):
                 self._split_batch(rec, txn)
             elif rec.key != obj_key:
                 # New version has changed key, delete old.
-                txn.delete(keycoder.packs(self.prefix, rec.key))
+                txn.delete(rec.key._with_prefix(self.prefix))
             if index_keys != rec.index_keys:
                 for index_key in rec.index_keys or ():
                     txn.delete(index_key)
@@ -850,7 +853,7 @@ class Collection(object):
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer)
-        txn.put(keycoder.packs(self.prefix, obj_key),
+        txn.put(keyize(obj_key)._with_prefix(self.prefix),
                 packer_prefix + packer.pack(self.encoder.pack(rec.data)))
         for index_key in index_keys:
             txn.put(index_key, '')
@@ -896,6 +899,7 @@ class Store(object):
     def __init__(self, engine, prefix=''):
         self.engine = engine
         self.prefix = prefix
+        self._counter_key_cache = {}
         self._encoder_prefix = dict((e, keycoder.pack_int('', 1 + i))
                                     for i, e in enumerate(encoders._ENCODERS))
         self._prefix_encoder = dict((keycoder.pack_int('', 1 + i), e)
@@ -994,7 +998,12 @@ class Store(object):
                 Transaction to use, or ``None`` to indicate the default
                 behaviour of the storage engine.
         """
-        key = (KIND_COUNTER, name, None)
+        try:
+            key = self._counter_key_cache[name]
+        except KeyError:
+            key = Key(KIND_COUNTER, name, None)
+            self._counter_key_cache[name] = key
+
         value, = self._meta.get(key, default=(init,), txn=txn)
         if n:
             self._meta.put(value + n, key=key, txn=txn)
