@@ -4,6 +4,12 @@
 Performance
 ###########
 
+.. warning::
+
+    The master repository branch is a moving target. Please use
+    PERF_BASELINE_FROM_DOCS Git tag to reproduce any results here. The host
+    machine used for testing is a Core i7 975 @ 3.6ghz on Linux 3.10.
+
 ``examples/benchy.py`` drives the library in some basic configurations, showing
 relative performance using the various engines available using a single thread.
 
