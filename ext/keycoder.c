@@ -334,14 +334,14 @@ static int timedelta_get_ms(PyObject *td, long *ms)
 }
 
 
-static int get_utcoffset_secs(PyObject *dt)
+static int get_utcoffset_secs(PyObject *dt, int64_t ts)
 {
     PyObject *td = PyObject_CallFunctionObjArgs(datetime_utcoffset, dt, NULL);
     if(! td) {
         return -1;
     } else if(td == Py_None) {
         Py_DECREF(td);
-        time_t now = time(NULL);
+        time_t now = (time_t) ts;
         struct tm tm;
         localtime_r(&now, &tm);
         time_t local = mktime(&tm);
@@ -374,7 +374,7 @@ static int write_time(struct writer *wtr, PyObject *dt)
 
     int64_t ts = (int64_t) timegm(&tm);
 
-    int offset_secs = get_utcoffset_secs(dt);
+    int offset_secs = get_utcoffset_secs(dt, ts);
     if(offset_secs == -1) {
         return -1;
     }

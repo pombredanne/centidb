@@ -292,7 +292,7 @@ def read_str(getc, it=None):
 def write_time(dt, w):
     """Encode a datetime.datetime to `w`.
     """
-    msec = int(time.mktime(dt.timetuple())) * 1000
+    msec = int(calendar.timegm(dt.timetuple())) * 1000
     msec += dt.microsecond / 1000
     msec <<= 7
     if dt.tzinfo:
