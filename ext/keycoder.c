@@ -16,14 +16,21 @@
 
 #include "centidb.h"
 
-#include <assert.h>
-#include <string.h>
-#include <sys/types.h>
 #include <arpa/inet.h>
+#include <assert.h>
+#include <stdarg.h>
+#include <string.h>
 #include <structmember.h>
+#include <sys/types.h>
+#include <time.h>
 
 
+// Reference to uuid.UUID().
 static PyTypeObject *UUID_Type;
+// Reference to datetime.datetime.utcoffset().
+static PyObject *datetime_utcoffset;
+// Reference to datetime.timedelta.total_seconds().
+static PyObject *timedelta_total_seconds;
 
 
 static int reader_init(struct reader *rdr, uint8_t *p, Py_ssize_t size)
@@ -313,9 +320,77 @@ static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
 }
 
 
+static int timedelta_get_ms(PyObject *td, long *ms)
+{
+    if(! PyDelta_CheckExact(td)) {
+        return -1;
+    }
+    PyDateTime_Delta *delta = (void *)td;
+    long ms_ = delta->days * (60 * 60 * 24 * 1000);
+    ms_ += delta->seconds * 1000;
+    ms_ += delta->microseconds / 1000;
+    *ms = ms_;
+    return 0;
+}
+
+
+static int get_utcoffset_secs(PyObject *dt)
+{
+    PyObject *td = PyObject_CallFunctionObjArgs(datetime_utcoffset, dt, NULL);
+    if(! td) {
+        return -1;
+    } else if(td == Py_None) {
+        Py_DECREF(td);
+        time_t now = time(NULL);
+        struct tm tm;
+        localtime_r(&now, &tm);
+        time_t local = mktime(&tm);
+        time_t utc = timegm(&tm);
+        return (int) (utc - local);
+    } else {
+        PyObject *py_secs;
+        py_secs = PyObject_CallFunctionObjArgs(timedelta_total_seconds, td, NULL);
+        Py_DECREF(td);
+        if(! py_secs) {
+            return -1;
+        }
+        long offset = PyInt_AsLong(py_secs);
+        Py_DECREF(py_secs);
+        return (int) (offset / (15 * 60));
+    }
+}
+
+
 static int write_time(struct writer *wtr, PyObject *dt)
 {
-    assert(0);
+    struct tm tm = {
+        .tm_sec = PyDateTime_DATE_GET_SECOND(dt),
+        .tm_min = PyDateTime_DATE_GET_MINUTE(dt),
+        .tm_hour = PyDateTime_DATE_GET_HOUR(dt),
+        .tm_mday = PyDateTime_GET_DAY(dt),
+        .tm_mon = PyDateTime_GET_MONTH(dt) - 1,
+        .tm_year = PyDateTime_GET_YEAR(dt) - 1900
+    };
+
+    int64_t ts = (int64_t) timegm(&tm);
+
+    int offset_secs = get_utcoffset_secs(dt);
+    if(offset_secs == -1) {
+        return -1;
+    }
+
+    int offset_bits = UTCOFFSET_SHIFT + (offset_secs / UTCOFFSET_DIV);
+    assert(offset_bits <= 0x7f && offset_bits >= 0);
+    ts *= 1000;
+    ts += PyDateTime_DATE_GET_MICROSECOND(dt) / 1000;
+    ts <<= 7;
+    ts |= offset_bits;
+
+    if(ts < 0) {
+        return write_int(wtr, (uint64_t) -ts, KIND_NEG_TIME);
+    } else {
+        return write_int(wtr, (uint64_t) ts, KIND_TIME);
+    }
 }
 
 
@@ -840,31 +915,52 @@ static PyMethodDef KeyCoderMethods[] = {
 };
 
 
+static PyObject *
+import_object(const char *module, ...)
+{
+    va_list ap;
+    va_start(ap, module);
+
+    PyObject *obj = PyImport_ImportModule(module);
+    if(! obj) {
+        return NULL;
+    }
+
+    va_start(ap, module);
+    const char *name;
+    while((name = va_arg(ap, const char *)) != NULL) {
+        PyObject *obj2 = PyObject_GetAttrString(obj, name);
+        Py_DECREF(obj);
+        if(! obj2) {
+            va_end(ap);
+            return NULL;
+        }
+        obj = obj2;
+    }
+    return obj;
+}
+
+
 PyMODINIT_FUNC
 init_keycoder(void)
 {
     PyDateTime_IMPORT;
 
-    PyObject *mod = PyImport_ImportModule("uuid");
+    UUID_Type = (PyTypeObject *) import_object("uuid", "UUID", NULL);
+    assert(PyType_CheckExact((PyObject *) UUID_Type));
+
+    datetime_utcoffset = import_object("datetime",
+        "datetime", "utcoffset", NULL);
+    timedelta_total_seconds = import_object("datetime",
+        "timedelta", "total_seconds", NULL);
+    assert(datetime_utcoffset && timedelta_total_seconds);
+
+    PyObject *mod = Py_InitModule("centidb._keycoder", KeyCoderMethods);
     if(! mod) {
         return;
     }
 
     PyObject *dct = PyModule_GetDict(mod);
-    if(! dct) {
-        Py_DECREF(mod);
-        return;
-    }
-    UUID_Type = (PyTypeObject *) PyDict_GetItemString(dct, "UUID");
-    assert(PyType_CheckExact((PyObject *) UUID_Type));
-
-
-    mod = Py_InitModule("centidb._keycoder", KeyCoderMethods);
-    if(! mod) {
-        return;
-    }
-
-    dct = PyModule_GetDict(mod);
     if(! dct) {
         return;
     }

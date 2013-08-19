@@ -86,4 +86,8 @@ struct KeyCoderModule
 };
 
 
+#define UTCOFFSET_SHIFT 64
+#define UTCOFFSET_DIV (15 * 60)
+
+
 #endif /* !CENTIDB_H */
