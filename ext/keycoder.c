@@ -54,12 +54,11 @@ static int reader_getc(struct reader *rdr, uint8_t *ch)
 
 static int reader_ensure(struct reader *rdr, Py_ssize_t n)
 {
-    int ret = 1;
-    if((rdr->e - rdr->p) < n) {
+    int ret = (rdr->e - rdr->p) >= n;
+    if(! ret) {
         PyErr_Format(PyExc_ValueError,
             "expected %lld bytes but only %lld remain.",
             (long long) n, (long long) (rdr->e - rdr->p));
-        ret = 0;
     }
     return ret;
 }
