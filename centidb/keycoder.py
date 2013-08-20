@@ -420,7 +420,7 @@ def read_time(kind, getc):
         tz = FixedOffsetZone((offset - UTCOFFSET_SHIFT) * UTCOFFSET_DIV)
         _tz_cache[offset] = tz
 
-    return datetime.datetime.utcfromtimestamp(msec / 1000.0).replace(tzinfo=tz)
+    return datetime.datetime.fromtimestamp(msec / 1000.0, tz)
 
 
 def pack_int(prefix, i):

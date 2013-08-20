@@ -660,7 +660,36 @@ static PyObject *read_str(struct reader *rdr)
 
 static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
 {
-    assert(0);
+    uint64_t v;
+    if(! read_plain_int(rdr, &v)) {
+        return NULL;
+    }
+
+    int offset_secs = (((int) v & 0x7f) - UTCOFFSET_SHIFT) * UTCOFFSET_DIV;
+    PyObject *fixed_offset = get_fixed_offset(offset_secs);
+    if(! fixed_offset) {
+        return NULL;
+    }
+
+    v >>= 7;
+    double secs = (double) (v / 1000) + (((double) (v % 1000)) / 1000.0);
+    if(kind == KIND_NEG_TIME) {
+        secs = -secs;
+    }
+
+    PyObject *py_secs = PyFloat_FromDouble(secs);
+    if(! py_secs) {
+        Py_DECREF(fixed_offset);
+        return NULL;
+    }
+
+    PyObject *args = PyTuple_New(2);
+    PyTuple_SET_ITEM(args, 0, py_secs);
+    PyTuple_SET_ITEM(args, 1, fixed_offset);
+    PyObject *dt = PyDateTime_FromTimestamp(args);
+    Py_DECREF(args);
+    DEBUG("this far %p", dt);
+    return dt;
 }
 
 
@@ -709,7 +738,7 @@ static PyObject *unpack(struct reader *rdr)
             break;
         case KIND_NEG_TIME:
         case KIND_TIME:
-            tmp = read_time(rdr, (enum ElementKind) ch);
+            arg = read_time(rdr, (enum ElementKind) ch);
             break;
         case KIND_UUID:
             tmp = read_str(rdr);
@@ -963,5 +992,10 @@ init_keycoder(void)
     PyObject *capi = PyCapsule_New(&C_API, "centidb._keycoder._C_API", NULL);
     if(capi) {
         PyDict_SetItemString(dct, "_C_API", capi);
+    }
+
+    PyTypeObject *fixed_offset = init_fixed_offset_type();
+    if(fixed_offset) {
+        PyDict_SetItemString(dct, "FixedOffset", (PyObject *) fixed_offset);
     }
 }
