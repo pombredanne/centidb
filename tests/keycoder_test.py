@@ -259,6 +259,12 @@ class TimeTest:
         dt = datetime.now(tz)
         return dt.replace(microsecond=(dt.microsecond / 1000) * 1000)
 
+    def test_naive(self):
+        dt = self._now_truncate()
+        s = keycoder.packs('', dt)
+        dt2, = keycoder.unpack('', s)
+        eq(dt.utctimetuple(), dt2.utctimetuple())
+
     def test_utc(self):
         tz = dateutil.tz.gettz('Etc/UTC')
         dt = self._now_truncate(tz)
