@@ -59,8 +59,7 @@ enum ElementKind
 struct reader
 {
     uint8_t *p;
-    Py_ssize_t size;
-    Py_ssize_t pos;
+    uint8_t *e;
 };
 
 

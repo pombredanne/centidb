@@ -36,38 +36,38 @@ static PyObject *timedelta_total_seconds;
 static int reader_init(struct reader *rdr, uint8_t *p, Py_ssize_t size)
 {
     rdr->p = p;
-    rdr->size = size;
-    rdr->pos = 0;
+    rdr->e = p + size;
     return 1;
 }
 
 
 static int reader_getc(struct reader *rdr, uint8_t *ch)
 {
-    if(rdr->pos < rdr->size) {
-        *ch = rdr->p[rdr->pos++];
-        return 1;
+    int ret = 0;
+    if(rdr->p < rdr->e) {
+        *ch = *(rdr->p++);
+        ret = 1;
     }
-    return 0;
+    return ret;
 }
 
 
 static int reader_ensure(struct reader *rdr, Py_ssize_t n)
 {
-    if((rdr->size - rdr->pos) < n) {
+    int ret = 1;
+    if((rdr->e - rdr->p) < n) {
         PyErr_Format(PyExc_ValueError,
-            "expected %lld bytes at position %lld, but only %lld remain.",
-            (long long) n, (long long) rdr->pos,
-            (long long) (rdr->size - rdr->pos));
-        return 0;
+            "expected %lld bytes but only %lld remain.",
+            (long long) n, (long long) (rdr->e - rdr->p));
+        ret = 0;
     }
-    return 1;
+    return ret;
 }
 
 
 static uint64_t reader_getchar(struct reader *rdr)
 {
-    return rdr->p[rdr->pos++];
+    return *(rdr->p++);
 }
 
 
@@ -673,15 +673,11 @@ static PyObject *unpack(struct reader *rdr)
     }
 
     Py_ssize_t tpos = 0;
-    uint8_t ch;
     uint64_t u64;
-
     int go = 1;
-    while(go && (rdr->pos < rdr->size)) {
-        if(! reader_getc(rdr, &ch)) {
-            break;
-        }
 
+    while(go && (rdr->p < rdr->e)) {
+        uint8_t ch = (uint8_t) reader_getchar(rdr);
         PyObject *arg = NULL;
         PyObject *tmp = NULL;
 
@@ -777,7 +773,7 @@ static PyObject *py_unpack(PyObject *self, PyObject *args)
     if(! reader_init(&rdr, s, s_len)) {
         return NULL;
     }
-    rdr.pos += prefix_len;
+    rdr.p += prefix_len;
     return unpack(&rdr);
 }
 
@@ -807,14 +803,14 @@ static PyObject *unpacks(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    rdr.pos += prefix_len;
+    rdr.p += prefix_len;
     PyObject *tups = PyList_New(LIST_START_SIZE);
     if(! tups) {
         return NULL;
     }
 
     Py_ssize_t lpos = 0;
-    while(rdr.pos < rdr.size) {
+    while(rdr.p < rdr.e) {
         PyObject *tup = unpack(&rdr);
         if(! tup) {
             Py_DECREF(tups);
@@ -879,7 +875,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
         PyList_SET_ITEM(out, 1 + i, tmp);
     }
 
-    PyObject *tmpi = PyInt_FromLong(rdr.pos);
+    PyObject *tmpi = PyInt_FromLong(rdr.p - s);
     tmp = PyTuple_New(2);
     if(! (tmp && tmpi)) {
         Py_CLEAR(tmp);
