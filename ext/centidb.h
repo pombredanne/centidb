@@ -88,5 +88,8 @@ struct KeyCoderModule
 #define UTCOFFSET_SHIFT 64
 #define UTCOFFSET_DIV (15 * 60)
 
+PyTypeObject *init_fixed_offset_type(void);
+PyObject *get_fixed_offset(int offset_secs);
+
 
 #endif /* !CENTIDB_H */

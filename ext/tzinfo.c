@@ -21,6 +21,8 @@
 // Array of pointer to instance of tzinfo implementing our fixed offset types.
 // Only one needs to be created per offset.
 static PyObject *tzinfos[128];
+// timedelta(0, 0, 0)
+static PyObject *zero_delta;
 
 typedef struct {
     PyObject_HEAD
@@ -51,7 +53,8 @@ fixedoffset_utcoffset(FixedOffset *self, PyObject *args)
 static PyObject *
 fixedoffset_dst(FixedOffset *self, PyObject *args)
 {
-    Py_RETURN_NONE;
+    Py_INCREF(zero_delta);
+    return zero_delta;
 }
 
 
@@ -71,6 +74,13 @@ fixedoffset_tzname(FixedOffset *self, PyObject *args)
 }
 
 
+static PyObject *
+fixedoffset_repr(FixedOffset *self)
+{
+    return fixedoffset_tzname(self, NULL);
+}
+
+
 static PyMethodDef offset_methods[] = {
     {"utcoffset",   (PyCFunction)fixedoffset_utcoffset, METH_VARARGS,   ""},
     {"dst",         (PyCFunction)fixedoffset_dst,       METH_VARARGS,   ""},
@@ -83,6 +93,7 @@ static PyTypeObject FixedOffsetType = {
     .tp_name = "centidb._keycoder.FixedOffset",
     .tp_basicsize = sizeof(FixedOffset),
     .tp_init = (initproc) fixedoffset_init,
+    .tp_repr = (reprfunc) fixedoffset_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "_centidb.FixedOffset",
     .tp_methods = offset_methods
@@ -90,9 +101,15 @@ static PyTypeObject FixedOffsetType = {
 
 
 PyTypeObject *
-init_tzinfo_type(void)
+init_fixed_offset_type(void)
 {
     PyDateTime_IMPORT;
+
+    zero_delta = PyDelta_FromDSU(0, 0, 0);
+    if(! zero_delta) {
+        return NULL;
+    }
+
     FixedOffsetType.tp_base = PyDateTimeAPI->TZInfoType;
     if(PyType_Ready(&FixedOffsetType)) {
         return NULL;
