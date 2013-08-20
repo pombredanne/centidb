@@ -46,8 +46,6 @@ INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 UTCOFFSET_SHIFT = 64 # 16 hours * 4 (15 minute increments)
 UTCOFFSET_DIV = 15 * 60 # 15 minutes
 
-_cached_offset = 0
-_cached_offset_expires = 0
 _tz_cache = {}
 
 
@@ -384,21 +382,11 @@ def write_time(dt, w):
     msec <<= 7
     if dt.tzinfo:
         offset = int(dt.utcoffset().total_seconds())
-        msec |= (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
     else:
-        global _cached_offset_expires
-        global _cached_offset
-        if time.time() > _cached_offset_expires:
-            utcnow = datetime.datetime.utcnow()
-            offset = int(round((datetime.datetime.now() -
-                                utcnow).total_seconds()))
-            _cached_offset = (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
-            expires = (utcnow.replace(minute=0, second=0) +
-                       datetime.timedelta(hours=1))
-            # Implicitly converts to int (== 0 microseconds)
-            _cached_offset_expires = calendar.timegm(expires.utctimetuple())
-        msec |= _cached_offset
+        offset = (calendar.timegm(dt.timetuple()) -
+                  calendar.timegm(dt.utctimetuple()))
 
+    msec |= (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
     if msec < 0:
         w(KIND_NEG_TIME)
         write_int(-msec, w)
