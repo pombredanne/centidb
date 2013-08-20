@@ -67,10 +67,14 @@ fixedoffset_tzname(FixedOffset *self, PyObject *args)
         sign = '-';
         offset = -offset;
     }
-
-    long hours = offset / 60;
+    long hours = offset / 3600;
     long minutes = offset % 60;
-    return PyString_FromFormat("<%c%02ld:%02ld>", sign, hours, minutes);
+
+    // PyString_FromFormat doesn't support width/padding.
+    char tmp[64];
+    snprintf(tmp, sizeof tmp, "<%c%02ld:%02ld>", sign, hours, minutes);
+    tmp[sizeof tmp - 1] = '\0';
+    return PyString_FromString(tmp);
 }
 
 
