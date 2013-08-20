@@ -20,7 +20,7 @@
 
 // Array of pointer to instance of tzinfo implementing our fixed offset types.
 // Only one needs to be created per offset.
-static PyObject *tzinfos[128];
+static PyObject *instances[128];
 // timedelta(0, 0, 0)
 static PyObject *zero_delta;
 
@@ -126,14 +126,14 @@ PyObject *
 get_fixed_offset(int offset_secs)
 {
     int idx = UTCOFFSET_SHIFT + (offset_secs / UTCOFFSET_DIV);
-    PyObject *info = tzinfos[idx];
+    PyObject *info = instances[idx];
     if(! info) {
         info = PyObject_CallFunction((PyObject *) &FixedOffsetType, "i",
                                      offset_secs);
         if(! info) {
             return NULL;
         }
-        tzinfos[idx] = info;
+        instances[idx] = info;
     }
     Py_INCREF(info);
     return info;
