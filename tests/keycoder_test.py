@@ -119,10 +119,23 @@ class KeysTest:
         eq(lst, self._dec(self._enc(lst)))
 
 
+
 @register()
 class StringEncodingTest:
     def do_test(self, k):
-        eq(k, keycoder.unpack('', keycoder.packs('', k)))
+        packed = keycoder.packs('', k)
+        unpacked = keycoder.unpack('', packed)
+        try:
+            eq(k, keycoder.unpack('', keycoder.packs('', k)))
+        except:
+            print 'failing enc was: %r' % (packed,)
+            raise
+
+    def test_various_shapes_and_sizes(self):
+        for o in xrange(256):
+            for i in xrange(256):
+                s = chr(255 - o) * i
+                self.do_test((s,))
 
     def test_simple(self):
         self.do_test(('dave',))
