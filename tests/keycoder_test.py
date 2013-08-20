@@ -204,6 +204,42 @@ class Mod7BugTest:
         eq(keycoder.unpacks('', p), t)
 
 
+@register(python=True)
+class NativeTimeTest:
+    def test_utc(self):
+        tz = dateutil.tz.gettz('Etc/UTC')
+        dt = datetime.now(tz)
+        sn = _keycoder.packs('', dt)
+        sp = keycoder.packs('', dt)
+        eq(sn, sp)
+
+        dn = _keycoder.unpacks('', sn)
+        dp = keycoder.unpacks('', sp)
+        eq(dn, dp)
+
+    def test_neg(self):
+        tz = dateutil.tz.gettz('Etc/GMT-1')
+        dt = datetime.now(tz)
+        sn = _keycoder.packs('', dt)
+        sp = keycoder.packs('', dt)
+        eq(sn, sp)
+
+        dn = _keycoder.unpacks('', sn)
+        dp = keycoder.unpacks('', sp)
+        eq(dn, dp)
+
+    def test_pos(self):
+        tz = dateutil.tz.gettz('Etc/GMT+1')
+        dt = datetime.now(tz)
+        sn = _keycoder.packs('', dt)
+        sp = keycoder.packs('', dt)
+        eq(sn, sp)
+
+        dn = _keycoder.unpacks('', sn)
+        dp = keycoder.unpacks('', sp)
+        eq(dn, dp)
+
+
 @register()
 class TimeTest:
     def _now_truncate(self, tz=None):
