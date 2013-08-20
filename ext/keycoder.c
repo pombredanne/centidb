@@ -355,7 +355,7 @@ static int get_utcoffset_secs(PyObject *dt, int64_t ts)
         }
         long offset = PyInt_AsLong(py_secs);
         Py_DECREF(py_secs);
-        return (int) (offset / (15 * 60));
+        return (int) offset;
     }
 }
 
@@ -378,6 +378,7 @@ static int write_time(struct writer *wtr, PyObject *dt)
         return -1;
     }
 
+    ts -= offset_secs;
     int offset_bits = UTCOFFSET_SHIFT + (offset_secs / UTCOFFSET_DIV);
     assert(offset_bits <= 0x7f && offset_bits >= 0);
     ts *= 1000;
@@ -688,7 +689,6 @@ static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
     PyTuple_SET_ITEM(args, 1, fixed_offset);
     PyObject *dt = PyDateTime_FromTimestamp(args);
     Py_DECREF(args);
-    DEBUG("this far %p", dt);
     return dt;
 }
 
