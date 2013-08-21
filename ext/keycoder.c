@@ -336,6 +336,7 @@ static int get_utcoffset_secs(PyObject *dt, int64_t ts)
         PyDateTime_Delta *delta = (void *)td;
         int offset = delta->days * (60 * 60 * 24);
         offset += delta->seconds;
+        Py_DECREF(td);
         return offset;
     }
 }
