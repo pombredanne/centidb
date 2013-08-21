@@ -497,7 +497,7 @@ def packs(prefix, tups):
                 w(KIND_NULL)
             elif type_ is uuid.UUID:
                 w(KIND_UUID)
-                write_str(arg.get_bytes(), w)
+                ba.extend(arg.get_bytes())
             elif type_ is bool:
                 w(KIND_BOOL)
                 write_int(arg, w)
@@ -549,7 +549,8 @@ def unpacks(prefix, s, first=False):
         elif c == KIND_BOOL:
             arg = bool(read_int(getc))
         elif c == KIND_UUID:
-            arg = uuid.UUID(read_str(getc, it))
+            s = ''.join(chr(getc()) for _ in xrange(16))
+            arg = uuid.UUID(None, s)
         elif c == KIND_SEP:
             tups.append(tuple(tup))
             if first:

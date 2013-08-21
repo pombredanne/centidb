@@ -27,6 +27,8 @@
 
 // Reference to uuid.UUID().
 static PyTypeObject *UUID_Type;
+// Reference to uuid.UUID.get_bytes().
+static PyObject *uuid_get_bytes;
 // Reference to datetime.datetime.utcoffset().
 static PyObject *datetime_utcoffset;
 
@@ -416,13 +418,17 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
     } else if(PyDateTime_CheckExact(arg)) {
         ret = write_time(wtr, arg);
     } else if(type == UUID_Type) {
-        PyObject *ss = PyObject_CallMethod(arg, "get_bytes", NULL);
-        if(ss) {
-            assert(Py_TYPE(ss) == &PyString_Type);
-            ret = write_str(wtr, (uint8_t *)PyString_AS_STRING(ss),
-                                 PyString_GET_SIZE(ss), KIND_UUID);
-            Py_DECREF(ss);
+        PyObject *ss = PyObject_CallFunctionObjArgs(uuid_get_bytes, arg, NULL);
+        if(! ss) {
+            return -1;
         }
+        assert(Py_TYPE(ss) == &PyString_Type);
+        ret = writer_putc(wtr, KIND_UUID);
+        if(ret) {
+            ret = writer_puts(wtr, PyString_AS_STRING(ss),
+                                   PyString_GET_SIZE(ss));
+        }
+        Py_DECREF(ss);
     } else {
         const char *name = arg->ob_type->tp_name;
         PyErr_Format(PyExc_TypeError, "got unsupported type %.200s", name);
@@ -675,6 +681,24 @@ static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
 }
 
 
+static PyObject *read_uuid(struct reader *rdr)
+{
+    if(! reader_ensure(rdr, 16)) {
+        return NULL;
+    }
+    PyObject *s = PyString_FromStringAndSize((const char *)rdr->p, 16);
+    if(! s) {
+        return NULL;
+    }
+
+    PyObject *arg = PyObject_CallFunctionObjArgs(
+        (PyObject *)UUID_Type, Py_None, s, NULL);
+    Py_DECREF(s);
+    rdr->p += 16;
+    return arg;
+}
+
+
 static PyObject *unpack(struct reader *rdr)
 {
     PyObject *tup = PyTuple_New(TUPLE_START_SIZE);
@@ -723,11 +747,7 @@ static PyObject *unpack(struct reader *rdr)
             arg = read_time(rdr, (enum ElementKind) ch);
             break;
         case KIND_UUID:
-            tmp = read_str(rdr);
-            if(tmp) {
-                arg = PyObject_CallFunctionObjArgs(
-                    (PyObject *)UUID_Type, Py_None, tmp, NULL);
-            }
+            arg = read_uuid(rdr);
             break;
         case KIND_SEP:
             go = 0;
@@ -957,7 +977,8 @@ init_keycoder(void)
 
     datetime_utcoffset = import_object("datetime",
         "datetime", "utcoffset", NULL);
-    assert(datetime_utcoffset);
+    uuid_get_bytes = import_object("uuid", "UUID", "get_bytes", NULL);
+    assert(datetime_utcoffset && uuid_get_bytes);
 
     PyObject *mod = Py_InitModule("centidb._keycoder", KeyCoderMethods);
     if(! mod) {
