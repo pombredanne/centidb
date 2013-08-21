@@ -34,7 +34,7 @@ from centidb.encoders import Encoder
 from centidb.keycoder import Key
 from centidb.keycoder import keyize
 
-__all__ = 'Store Encoder Collection Record Index next_greater open'.split()
+__all__ = ['Store', 'Encoder', 'Collection', 'Record', 'Index', 'open']
 
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)

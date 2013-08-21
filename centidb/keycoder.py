@@ -29,7 +29,7 @@ import time
 import uuid
 
 
-__all__ = '''invert unpacks packs unpack_int pack_int'''.split()
+__all__ = ['invert', 'unpacks', 'packs', 'unpack_int', 'pack_int']
 
 KIND_NULL = 15
 KIND_NEG_INTEGER = 20
