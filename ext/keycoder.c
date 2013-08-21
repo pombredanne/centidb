@@ -29,8 +29,6 @@
 static PyTypeObject *UUID_Type;
 // Reference to datetime.datetime.utcoffset().
 static PyObject *datetime_utcoffset;
-// Reference to datetime.timedelta.total_seconds().
-static PyObject *timedelta_total_seconds;
 
 
 static int reader_init(struct reader *rdr, uint8_t *p, Py_ssize_t size)
@@ -319,20 +317,6 @@ static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
 }
 
 
-static int timedelta_get_ms(PyObject *td, long *ms)
-{
-    if(! PyDelta_CheckExact(td)) {
-        return -1;
-    }
-    PyDateTime_Delta *delta = (void *)td;
-    long ms_ = delta->days * (60 * 60 * 24 * 1000);
-    ms_ += delta->seconds * 1000;
-    ms_ += delta->microseconds / 1000;
-    *ms = ms_;
-    return 0;
-}
-
-
 static int get_utcoffset_secs(PyObject *dt, int64_t ts)
 {
     PyObject *td = PyObject_CallFunctionObjArgs(datetime_utcoffset, dt, NULL);
@@ -346,16 +330,13 @@ static int get_utcoffset_secs(PyObject *dt, int64_t ts)
         time_t local = mktime(&tm);
         time_t utc = timegm(&tm);
         return (int) (utc - local);
+    } else if(! PyDelta_CheckExact(td)) {
+        return -1;
     } else {
-        PyObject *py_secs;
-        py_secs = PyObject_CallFunctionObjArgs(timedelta_total_seconds, td, NULL);
-        Py_DECREF(td);
-        if(! py_secs) {
-            return -1;
-        }
-        long offset = PyInt_AsLong(py_secs);
-        Py_DECREF(py_secs);
-        return (int) offset;
+        PyDateTime_Delta *delta = (void *)td;
+        int offset = delta->days * (60 * 60 * 24);
+        offset += delta->seconds;
+        return offset;
     }
 }
 
@@ -975,9 +956,7 @@ init_keycoder(void)
 
     datetime_utcoffset = import_object("datetime",
         "datetime", "utcoffset", NULL);
-    timedelta_total_seconds = import_object("datetime",
-        "timedelta", "total_seconds", NULL);
-    assert(datetime_utcoffset && timedelta_total_seconds);
+    assert(datetime_utcoffset);
 
     PyObject *mod = Py_InitModule("centidb._keycoder", KeyCoderMethods);
     if(! mod) {
