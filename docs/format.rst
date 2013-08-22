@@ -1,4 +1,5 @@
 
+
 Storage Format
 ##############
 
@@ -6,8 +7,67 @@ This documents any centidb-specific representations data uses inside the
 storage engine.
 
 
+Key encoding
+++++++++++++
+
+.. warning::
+
+    This section is incomplete.
+
+The goal of the key encoding is straightforward: given a Python tuple
+containing a sequence of primitive values, produce a sequence of bytes that
+sorts as closely as possible to how :py:meth:`list.sort` would sort a list of
+the equivalent tuples.
+
+All functions provided by the library depend on useful side-effects provided by
+the key encoding. The encoding is designed so that most of the library's
+complexity is constrained to a single module. Further effort has been made to
+ensure the encoding is as space-efficient as possible, since even a single byte
+saving can produce a 1GiB reduction in the size of a large enough database.
+
+It would be possible to encode all integers so they sort correctly in binary
+form simply by storing their big-endian representation. However for this to
+work, all integers must be padded to the maximum supported size. In the case of
+a system supporting 64-bit integers, this means wasting a full 8 bytes even for
+the number *1*. A 4-tuple key like ``(user_id 613, source_id 15122, timestamp
+5124324, event_id 13)``, would require 32+4 bytes, however through careful
+encoding the same key can be represented in only 14 bytes.
+
+For a billion-keyed database, this represents a savings of almost 21GiB.
+
+
+Strings
+-------
+
+Bytestrings are re-encoded to include an inline marker used to delimit the end
+of the string. This is necessary since we need to detect the start of the next
+encoded tuple element, and NUL can't be used since the string may legally
+contain NULs. The marker is inserted so that every byte that is not the final
+byte has its 8th bit set, with the final byte having it cleared. The input is
+treated as a stream of bits, with groups of 7 packed alongside the marker into
+every byte. This ensures a constant ``ceil(len(s) * 1.142)`` space overhead
+regardless of input.
+
+When the length of the input string is not evenly divisible by 7, the trailer
+is encoded in the upper bits of the final byte, with excess lower bits
+discarded. As a special case, the empty string is encoded as a single ``0x00``
+byte. This cannot conflict with any 1-byte string, since a 1-byte string's
+lowest bit would overflow into a trailer byte — 1-byte strings always encode to
+2 bytes.
+
+An alternative approach relying on escaping would result in a 2x blowup given a
+string containing only the escape character, and it would be impossible to
+predict database size given a large number of fixed-width bytestring keys.
+Prefixing strings with their length would cause strings to sort by length
+rather than lexicographically.
+
+
+
+Record format
++++++++++++++
+
 Individual records
-++++++++++++++++++
+------------------
 
 A non-batch record is indicated when key decoding yields a single tuple.
 
@@ -18,7 +78,7 @@ the output of :py:meth:`Encoder.pack` from the collection's associated encoder.
 
 
 Batch records
-+++++++++++++
+-------------
 
 A batch record is indicated when key decoding yields multiple tuples.
 
