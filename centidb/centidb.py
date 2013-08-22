@@ -975,7 +975,7 @@ class Store(object):
             return self._prefix_encoder[prefix]
         except KeyError:
             it = self._meta.items(prefix=KIND_ENCODER)
-            dct = dct((v, n) for (k, n, a), v in it if a == 'idx')
+            dct = dict((v, n) for (k, n, a), v in it if a == 'idx')
             idx = keycoder.unpack_int(prefix)
             raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
 
