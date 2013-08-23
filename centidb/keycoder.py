@@ -269,7 +269,7 @@ def read_int(inp, pos, length):
     `getc` repeatedly, which should yield integer bytes from the input stream.
     """
     o = inp[pos]
-    if (pos + (o - 240)) > length:
+    if length <= (pos + (o - 240)):
         raise ValueError('not enough bytes')
 
     if o <= 240:
@@ -427,7 +427,8 @@ def pack_int(prefix, i):
 
 def unpack_int(s):
     """Invoke :py:func:`read_int`, wrapping `s` in a temporary iterator."""
-    return read_int(itertools.imap(ord, s).next)
+    ba = bytearray(s)
+    return read_int(ba, 0, len(ba))
 
 
 def keyize(o):
@@ -556,7 +557,7 @@ def unpacks(prefix, s, first=False):
             arg, pos = read_str(inp, pos, length)
             arg = arg.decode('utf-8')
         elif c == KIND_TIME or c == KIND_NEG_TIME:
-            arg, pos = read_time(inp, pos, length)
+            arg, pos = read_time(c, inp, pos, length)
         elif c == KIND_BOOL:
             arg = bool(inp[pos])
             pos += 1
