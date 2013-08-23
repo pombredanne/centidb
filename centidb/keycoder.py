@@ -264,57 +264,60 @@ def write_int(v, w):
                          % (v.bit_length(), v))
 
 
-def read_int(getc):
+def read_int(inp, pos, length):
     """Decode and return an integer encoded by :py:func:`write_int`. Invokes
     `getc` repeatedly, which should yield integer bytes from the input stream.
     """
-    o = getc()
+    o = inp[pos]
+    if (pos + (o - 240)) > length:
+        raise ValueError('not enough bytes')
+
     if o <= 240:
-        return o
+        return o, pos+1
     elif o <= 248:
-        o2 = getc()
-        return 240 + (256 * (o - 241) + o2)
+        o2 = inp[pos+1]
+        return 240 + (256 * (o - 241) + o2), pos+2
     elif o == 249:
-        return 2288 + (256*getc()) + getc()
+        return 2288 + (256*inp[pos+1]) + inp[pos+2], pos+3
     elif o == 250:
-        return ((getc() << 16) |
-                (getc() << 8) |
-                (getc()))
+        return ((inp[pos+1] << 16) |
+                (inp[pos+2] << 8) |
+                (inp[pos+3])), pos+4
     elif o == 251:
-        return ((getc() << 24) |
-                (getc() << 16) |
-                (getc() << 8) |
-                (getc()))
+        return ((inp[pos+1] << 24) |
+                (inp[pos+2] << 16) |
+                (inp[pos+3] << 8) |
+                (inp[pos+4])), pos+5
     elif o == 252:
-        return ((getc() << 32) |
-                (getc() << 24) |
-                (getc() << 16) |
-                (getc() << 8) |
-                (getc()))
+        return ((inp[pos+1] << 32) |
+                (inp[pos+2] << 24) |
+                (inp[pos+3] << 16) |
+                (inp[pos+4] << 8) |
+                (inp[pos+5])), pos+6
     elif o == 253:
-        return ((getc() << 40) |
-                (getc() << 32) |
-                (getc() << 24) |
-                (getc() << 16) |
-                (getc() << 8) |
-                (getc()))
+        return ((inp[pos+1] << 40) |
+                (inp[pos+2] << 32) |
+                (inp[pos+3] << 24) |
+                (inp[pos+4] << 16) |
+                (inp[pos+5] << 8) |
+                (inp[pos+6])), pos+7
     elif o == 254:
-        return ((getc() << 48) |
-                (getc() << 40) |
-                (getc() << 32) |
-                (getc() << 24) |
-                (getc() << 16) |
-                (getc() << 8) |
-                (getc()))
+        return ((inp[pos+1] << 48) |
+                (inp[pos+2] << 40) |
+                (inp[pos+3] << 32) |
+                (inp[pos+4] << 24) |
+                (inp[pos+5] << 16) |
+                (inp[pos+6] << 8) |
+                (inp[pos+7])), pos+8
     elif o == 255:
-        return ((getc() << 56) |
-                (getc() << 48) |
-                (getc() << 40) |
-                (getc() << 32) |
-                (getc() << 24) |
-                (getc() << 16) |
-                (getc() << 8) |
-                (getc()))
+        return ((inp[pos+1] << 56) |
+                (inp[pos+2] << 48) |
+                (inp[pos+3] << 40) |
+                (inp[pos+4] << 32) |
+                (inp[pos+5] << 24) |
+                (inp[pos+6] << 16) |
+                (inp[pos+7] << 8) |
+                (inp[pos+8])), pos+9
 
 
 def write_str(s, w):
@@ -337,28 +340,27 @@ def write_str(s, w):
             shift = 1
             trailer = 0
 
-    if shift > 1:
-        w(trailer)
-        if trailer != 0:
-            w(0)
-    else:
-        w(0)
+    if len(s) % 7:
+        w(0x80 | trailer)
 
 
-def read_str(getc, it=None):
+def read_str(inp, pos, length):
     """Decode and return a bytestring encoded by :py:func:`read_str`. Invokes
     `getc` repeatedly, which should yield byte ordinals from the input
     stream."""
-    if not it:
-        it = iter(getc, '')
-    lb = getc()
-    if not lb:
-        return ''
+    if pos >= length:
+        return '', pos
+    lb = inp[pos]
+    if lb < 0x80:
+        return '', pos
+    pos += 1
     out = bytearray()
     shift = 1
-    for cb in it:
-        if cb == 0:
+    while pos < length:
+        cb = inp[pos]
+        if cb < 0x80:
             break
+        pos += 1
         ch = (lb << shift) & 0xff
         ch |= (cb & 0x7f) >> (7 - shift)
         out.append(ch)
@@ -367,11 +369,14 @@ def read_str(getc, it=None):
             lb = cb
         else:
             shift = 1
-            lb = getc()
-            if not lb:
+            if pos >= length:
                 break
+            lb = inp[pos]
+            if lb < 0x80:
+                break
+            pos += 1
 
-    return str(out)
+    return str(out), pos
 
 
 def write_time(dt, w):
@@ -395,8 +400,8 @@ def write_time(dt, w):
         write_int(msec, w)
 
 
-def read_time(kind, getc):
-    msec = read_int(getc)
+def read_time(kind, inp, pos, length):
+    msec, pos = read_int(inp, pos, length)
     offset = msec & 0x7f
     msec >>= 7
     if kind == KIND_NEG_TIME:
@@ -408,7 +413,7 @@ def read_time(kind, getc):
         tz = FixedOffsetZone((offset - UTCOFFSET_SHIFT) * UTCOFFSET_DIV)
         _tz_cache[offset] = tz
 
-    return datetime.datetime.fromtimestamp(msec / 1000.0, tz)
+    return datetime.datetime.fromtimestamp(msec / 1000.0, tz), pos
 
 
 def pack_int(prefix, i):
@@ -528,29 +533,38 @@ def unpacks(prefix, s, first=False):
     if not s.startswith(prefix):
         return
 
-    it = itertools.imap(ord, s[len(prefix):])
-    getc = it.next
+    plength = len(prefix)
+    inp = bytearray(s[plength:])
+    length = len(inp)
+    pos = 0
 
     tups = []
     tup = []
-    for c in it:
+    while pos < length:
+        c = inp[pos]
+        pos += 1
         if c == KIND_NULL:
             arg = None
         elif c == KIND_INTEGER:
-            arg = read_int(getc)
+            arg, pos = read_int(inp, pos, length)
         elif c == KIND_NEG_INTEGER:
-            arg = -read_int(getc)
+            arg, pos = read_int(inp, pos, length)
+            arg = -arg
         elif c == KIND_BLOB:
-            arg = read_str(getc, it)
+            arg, pos = read_str(inp, pos, length)
         elif c == KIND_TEXT:
-            arg = read_str(getc, it).decode('utf-8')
+            arg, pos = read_str(inp, pos, length)
+            arg = arg.decode('utf-8')
         elif c == KIND_TIME or c == KIND_NEG_TIME:
-            arg = read_time(c, getc)
+            arg, pos = read_time(inp, pos, length)
         elif c == KIND_BOOL:
-            arg = bool(read_int(getc))
+            arg = bool(inp[pos])
+            pos += 1
         elif c == KIND_UUID:
-            s = ''.join(chr(getc()) for _ in xrange(16))
-            arg = uuid.UUID(None, s)
+            if (pos + 16) >= length:
+                raise ValueError('short UUID read')
+            arg = uuid.UUID(None, s[plength + pos:plength + pos + 16])
+            pos += 16
         elif c == KIND_SEP:
             tups.append(tuple(tup))
             if first:
