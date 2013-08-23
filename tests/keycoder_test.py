@@ -124,8 +124,8 @@ class KeysTest:
 class StringEncodingTest:
     def do_test(self, k):
         packed = keycoder.packs('', k)
-        unpacked = keycoder.unpack('', packed)
         try:
+            unpacked = keycoder.unpack('', packed)
             eq(k, keycoder.unpack('', keycoder.packs('', k)))
         except:
             print 'failing enc was: %r' % (packed,)
@@ -133,7 +133,7 @@ class StringEncodingTest:
 
     def test_various_shapes_and_sizes(self):
         for o in xrange(256):
-            for i in xrange(256):
+            for i in xrange(64):
                 s = chr(255 - o) * i
                 self.do_test((s,))
 
@@ -168,9 +168,9 @@ class EncodeIntTest:
 
     def testInts(self):
         for i in self.INTS:
-            io = cStringIO.StringIO(keycoder.pack_int(i))
-            j = keycoder.unpack_int(lambda: io.read(1), io.read)
-            assert j == i, (i, j, io.getvalue())
+            s = keycoder.pack_int('', i)
+            j = keycoder.unpack_int(s)
+            assert j == i, (i, j, s)
 
 
 @register()
