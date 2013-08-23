@@ -308,12 +308,7 @@ static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
     }
 
     if(shift > 1) {
-        ret = writer_putc(wtr, trailer);
-        if(trailer != 0) {
-            ret = writer_putc(wtr, 0);
-        }
-    } else {
-        ret = writer_putc(wtr, 0);
+        ret = writer_putc(wtr, 0x80 | trailer);
     }
     return ret;
 }
@@ -611,8 +606,13 @@ static PyObject *read_int(struct reader *rdr, int negate)
 static PyObject *read_str(struct reader *rdr)
 {
     struct writer wtr;
+
     if(! writer_init(&wtr, 20)) {
         return NULL;
+    }
+    // 0-byte string at end of key.
+    if(! (rdr->p - rdr->e)) {
+        return writer_fini(&wtr);
     }
 
     uint8_t lb = 0;
@@ -629,6 +629,10 @@ static PyObject *read_str(struct reader *rdr)
     }
 
     while(ret && reader_getc(rdr, &cb) && (cb != 0)) {
+        if(cb < 0x80) {
+            rdr->p--;
+            break;
+        }
         uint8_t ch = lb << shift;
         ch |= (cb & 0x7f) >> (7 - shift);
         ret = writer_putc(&wtr, ch);
@@ -638,7 +642,8 @@ static PyObject *read_str(struct reader *rdr)
         } else {
             shift = 1;
             ret = reader_getc(rdr, &lb);
-            if(ret && !lb) {
+            if(ret && lb < 0x80) {
+                rdr->p--;
                 break;
             }
         }
