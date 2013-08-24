@@ -624,7 +624,8 @@ static PyObject *read_str(struct reader *rdr)
     if(! ret) {
         return 0;
     }
-    if(! lb) {
+    if(lb < 0x80) {
+        rdr->p--;
         return writer_fini(&wtr);
     }
 
