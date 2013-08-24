@@ -383,7 +383,7 @@ class CollBasicTest:
     def setUp(self):
         self.e = centidb.engines.ListEngine()
         self.store = centidb.Store(self.e)
-        self.coll = centidb.Collection(self.store, 'coll1')
+        self.coll = self.store.add_collection('coll1')
 
     def _record(self, *args):
         return centidb.Record(self.coll, *args)
@@ -428,7 +428,7 @@ class IndexTest:
     def setUp(self):
         self.e = centidb.engines.ListEngine()
         self.store = centidb.Store(self.e)
-        self.coll = centidb.Collection(self.store, 'stuff')
+        self.coll = self.store.add_collection('stuff')
         self.i = self.coll.add_index('idx', lambda obj: (69, obj))
 
         self.key = self.coll.put('dave').key
