@@ -542,11 +542,12 @@ class BatchTest:
     def setUp(self):
         self.e = centidb.engines.ListEngine()
         self.store = centidb.Store(self.e)
-        self.coll = centidb.Collection(self.store, 'people')
+        self.coll = self.store.add_collection('people')
 
     def testBatch(self):
         old_len = len(self.e.items)
-        self.coll.putitems(self.ITEMS)
+        for key, value in self.ITEMS:
+            self.coll.put(value, key=key)
         assert len(self.e.items) == (old_len + len(self.ITEMS))
         self.coll.batch(max_recs=len(self.ITEMS))
         assert len(self.e.items) == (old_len + 1)
