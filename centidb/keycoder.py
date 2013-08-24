@@ -269,15 +269,20 @@ def read_int(inp, pos, length):
     `getc` repeatedly, which should yield integer bytes from the input stream.
     """
     o = inp[pos]
-    if length <= (pos + (o - 240)):
-        raise ValueError('not enough bytes')
-
     if o <= 240:
         return o, pos+1
-    elif o <= 248:
+
+    have = length - pos
+    if o <= 248:
+        if have < 2:
+            raise ValueError('not enough bytes: need 2')
         o2 = inp[pos+1]
         return 240 + (256 * (o - 241) + o2), pos+2
-    elif o == 249:
+
+    if have < (o - 249):
+        raise ValueError('not enough bytes: need %d' % (o - 249))
+
+    if o == 249:
         return 2288 + (256*inp[pos+1]) + inp[pos+2], pos+3
     elif o == 250:
         return ((inp[pos+1] << 16) |
