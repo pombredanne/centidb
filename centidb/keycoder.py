@@ -173,7 +173,7 @@ def invert(s):
     return s.translate(INVERT_TBL)
 
 
-def write_int(v, w):
+def write_int(v, w, xor):
     """Given a positive integer of 64-bits or less, encode it in a
     variable-length form that preserves the original integer order. Invokes
     `w()` repeatedly with byte ordinals corresponding to the encoded
@@ -204,71 +204,71 @@ def write_int(v, w):
         +-------------+------------------------+
     """
     if v <= 240:
-        w(v)
+        w(xor ^ v)
     elif v <= 2287:
         v -= 240
-        w(241 + (v >> 8))
-        w(v & 0xff)
+        w(xor ^ (241 + (v >> 8)))
+        w(xor ^ (v & 0xff))
     elif v <= 67823:
         v -= 2288
-        w(0xf9)
-        w((v >> 8))
-        w((v & 0xff))
+        w(xor ^ (0xf9))
+        w(xor ^ ((v >> 8)))
+        w(xor ^ ((v & 0xff)))
     elif v <= 0xffffff:
-        w(0xfa)
-        w((v >> 16))
-        w((v >> 8) & 0xff)
-        w((v & 0xff))
+        w(xor ^ 0xfa)
+        w(xor ^ (v >> 16))
+        w(xor ^ ((v >> 8) & 0xff))
+        w(xor ^ ((v & 0xff)))
     elif v <= 0xffffffff:
-        w(0xfb)
-        w((v >> 24))
-        w((v >> 16) & 0xff)
-        w((v >> 8) & 0xff)
-        w((v & 0xff))
+        w(xor ^ 0xfb)
+        w(xor ^ (v >> 24))
+        w(xor ^ ((v >> 16) & 0xff))
+        w(xor ^ ((v >> 8) & 0xff))
+        w(xor ^ ((v & 0xff)))
     elif v <= 0xffffffffff:
-        w(0xfc)
-        w((v >> 32))
-        w((v >> 24) & 0xff)
-        w((v >> 16) & 0xff)
-        w((v >> 8) & 0xff)
-        w((v & 0xff))
+        w(xor ^ 0xfc)
+        w(xor ^ ((v >> 32)))
+        w(xor ^ ((v >> 24) & 0xff))
+        w(xor ^ ((v >> 16) & 0xff))
+        w(xor ^ ((v >> 8) & 0xff))
+        w(xor ^ ((v & 0xff)))
     elif v <= 0xffffffffffff:
-        w(0xfd)
-        w((v >> 40))
-        w((v >> 32) & 0xff)
-        w((v >> 24) & 0xff)
-        w((v >> 16) & 0xff)
-        w((v >> 8) & 0xff)
-        w((v & 0xff))
+        w(xor ^ 0xfd)
+        w(xor ^ ((v >> 40)))
+        w(xor ^ ((v >> 32) & 0xff))
+        w(xor ^ ((v >> 24) & 0xff))
+        w(xor ^ ((v >> 16) & 0xff))
+        w(xor ^ ((v >> 8) & 0xff))
+        w(xor ^ ((v & 0xff)))
     elif v <= 0xffffffffffffff:
-        w(0xfe)
-        w((v >> 48))
-        w((v >> 40) & 0xff)
-        w((v >> 32) & 0xff)
-        w((v >> 24) & 0xff)
-        w((v >> 16) & 0xff)
-        w((v >> 8) & 0xff)
-        w((v & 0xff))
+        w(xor ^ 0xfe)
+        w(xor ^ ((v >> 48)))
+        w(xor ^ ((v >> 40) & 0xff))
+        w(xor ^ ((v >> 32) & 0xff))
+        w(xor ^ ((v >> 24) & 0xff))
+        w(xor ^ ((v >> 16) & 0xff))
+        w(xor ^ ((v >> 8) & 0xff))
+        w(xor ^ ((v & 0xff)))
     elif v <= 0xffffffffffffffff:
-        w(0xff)
-        w((v >> 56))
-        w((v >> 48) & 0xff)
-        w((v >> 40) & 0xff)
-        w((v >> 32) & 0xff)
-        w((v >> 24) & 0xff)
-        w((v >> 16) & 0xff)
-        w((v >> 8) & 0xff)
-        w((v & 0xff))
+        w(xor ^ 0xff)
+        w(xor ^ (v >> 56))
+        w(xor ^ ((v >> 48) & 0xff))
+        w(xor ^ ((v >> 40) & 0xff))
+        w(xor ^ ((v >> 32) & 0xff))
+        w(xor ^ ((v >> 24) & 0xff))
+        w(xor ^ ((v >> 16) & 0xff))
+        w(xor ^ ((v >> 8) & 0xff))
+        w(xor ^ ((v & 0xff)))
     else:
         raise ValueError('Cannot encode integers >= 64 bits, got %d bits (%#x)'
                          % (v.bit_length(), v))
 
 
-def read_int(inp, pos, length):
+def read_int(inp, pos, length, xor):
     """Decode and return an integer encoded by :py:func:`write_int`. Invokes
     `getc` repeatedly, which should yield integer bytes from the input stream.
     """
-    o = inp[pos]
+    o = xor ^ inp[pos]
     if o <= 240:
         return o, pos+1
 
@@ -276,53 +276,53 @@ def read_int(inp, pos, length):
     if o <= 248:
         if have < 2:
             raise ValueError('not enough bytes: need 2')
-        o2 = inp[pos+1]
+        o2 = xor ^ inp[pos+1]
         return 240 + (256 * (o - 241) + o2), pos+2
 
     if have < (o - 249):
         raise ValueError('not enough bytes: need %d' % (o - 249))
 
     if o == 249:
-        return 2288 + (256*inp[pos+1]) + inp[pos+2], pos+3
+        return 2288 + (256*(xor^inp[pos+1])) + (xor^inp[pos+2]), pos+3
     elif o == 250:
-        return ((inp[pos+1] << 16) |
-                (inp[pos+2] << 8) |
-                (inp[pos+3])), pos+4
+        return ((xor^(inp[pos+1] << 16)) |
+                (xor^(inp[pos+2] << 8)) |
+                (xor^(inp[pos+3]))), pos+4
     elif o == 251:
-        return ((inp[pos+1] << 24) |
-                (inp[pos+2] << 16) |
-                (inp[pos+3] << 8) |
-                (inp[pos+4])), pos+5
+        return ((xor^(inp[pos+1] << 24)) |
+                (xor^(inp[pos+2] << 16)) |
+                (xor^(inp[pos+3] << 8)) |
+                (xor^(inp[pos+4]))), pos+5
     elif o == 252:
-        return ((inp[pos+1] << 32) |
-                (inp[pos+2] << 24) |
-                (inp[pos+3] << 16) |
-                (inp[pos+4] << 8) |
-                (inp[pos+5])), pos+6
+        return ((xor^(inp[pos+1] << 32)) |
+                (xor^(inp[pos+2] << 24)) |
+                (xor^(inp[pos+3] << 16)) |
+                (xor^(inp[pos+4] << 8)) |
+                (xor^(inp[pos+5]))), pos+6
     elif o == 253:
-        return ((inp[pos+1] << 40) |
-                (inp[pos+2] << 32) |
-                (inp[pos+3] << 24) |
-                (inp[pos+4] << 16) |
-                (inp[pos+5] << 8) |
-                (inp[pos+6])), pos+7
+        return ((xor^(inp[pos+1] << 40)) |
+                (xor^(inp[pos+2] << 32)) |
+                (xor^(inp[pos+3] << 24)) |
+                (xor^(inp[pos+4] << 16)) |
+                (xor^(inp[pos+5] << 8)) |
+                (xor^(inp[pos+6]))), pos+7
     elif o == 254:
-        return ((inp[pos+1] << 48) |
-                (inp[pos+2] << 40) |
-                (inp[pos+3] << 32) |
-                (inp[pos+4] << 24) |
-                (inp[pos+5] << 16) |
-                (inp[pos+6] << 8) |
-                (inp[pos+7])), pos+8
+        return ((xor^(inp[pos+1] << 48)) |
+                (xor^(inp[pos+2] << 40)) |
+                (xor^(inp[pos+3] << 32)) |
+                (xor^(inp[pos+4] << 24)) |
+                (xor^(inp[pos+5] << 16)) |
+                (xor^(inp[pos+6] << 8)) |
+                (xor^(inp[pos+7]))), pos+8
     elif o == 255:
-        return ((inp[pos+1] << 56) |
-                (inp[pos+2] << 48) |
-                (inp[pos+3] << 40) |
-                (inp[pos+4] << 32) |
-                (inp[pos+5] << 24) |
-                (inp[pos+6] << 16) |
-                (inp[pos+7] << 8) |
-                (inp[pos+8])), pos+9
+        return ((xor^(inp[pos+1] << 56)) |
+                (xor^(inp[pos+2] << 48)) |
+                (xor^(inp[pos+3] << 40)) |
+                (xor^(inp[pos+4] << 32)) |
+                (xor^(inp[pos+5] << 24)) |
+                (xor^(inp[pos+6] << 16)) |
+                (xor^(inp[pos+7] << 8)) |
+                (xor^(inp[pos+8]))), pos+9
 
 
 def write_str(s, w):
@@ -399,10 +399,10 @@ def write_time(dt, w):
     msec |= (offset / UTCOFFSET_DIV) + UTCOFFSET_SHIFT
     if msec < 0:
         w(KIND_NEG_TIME)
-        write_int(-msec, w)
+        write_int(-msec, w, 0xff)
     else:
         w(KIND_TIME)
-        write_int(msec, w)
+        write_int(msec, w, 0)
 
 
 def read_time(kind, inp, pos, length):
@@ -426,7 +426,7 @@ def pack_int(prefix, i):
     :py:class:`bytearray` initialized to contain `prefix`, returning the result
     as a bytestring."""
     ba = bytearray(prefix)
-    write_int(i, ba.append)
+    write_int(i, ba.append, 0)
     return str(ba)
 
 
@@ -495,10 +495,10 @@ def packs(prefix, tups):
             if type_ is int or type_ is long:
                 if arg < 0:
                     w(KIND_NEG_INTEGER)
-                    write_int(-arg, w)
+                    write_int(-arg, w, 0xff)
                 else:
                     w(KIND_INTEGER)
-                    write_int(arg, w)
+                    write_int(arg, w, 0)
             elif type_ is str:
                 w(KIND_BLOB)
                 write_str(arg, w)
@@ -512,7 +512,7 @@ def packs(prefix, tups):
                 ba.extend(arg.get_bytes())
             elif type_ is bool:
                 w(KIND_BOOL)
-                write_int(arg, w)
+                write_int(arg, w, 0)
             elif type_ is datetime.datetime:
                 write_time(arg, w)
             else:
@@ -553,9 +553,9 @@ def unpacks(prefix, s, first=False):
         if c == KIND_NULL:
             arg = None
         elif c == KIND_INTEGER:
-            arg, pos = read_int(inp, pos, length)
+            arg, pos = read_int(inp, pos, length, 0)
         elif c == KIND_NEG_INTEGER:
-            arg, pos = read_int(inp, pos, length)
+            arg, pos = read_int(inp, pos, length, 0xff)
             arg = -arg
         elif c == KIND_BLOB:
             arg, pos = read_str(inp, pos, length)
