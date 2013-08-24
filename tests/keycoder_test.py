@@ -170,7 +170,6 @@ class EncodeIntTest:
         for i in self.INTS:
             s = keycoder.pack_int('', i)
             j = keycoder.unpack_int(s)
-            print dict(int=i, packed=s, unpacked=j)
             assert j == i, (i, j, s)
 
 
