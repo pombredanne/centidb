@@ -170,7 +170,21 @@ class EncodeIntTest:
         for i in self.INTS:
             s = keycoder.pack_int('', i)
             j = keycoder.unpack_int(s)
+            print dict(int=i, packed=s, unpacked=j)
             assert j == i, (i, j, s)
+
+
+@register(python=True)
+class SameIntEncodingTest:
+    def test1(self):
+        for i in EncodeIntTest.INTS:
+            native = _keycoder.packs('', i)
+            python = keycoder.packs('', i)
+            try:
+                eq(native, python)
+            except:
+                print 'failing int was ' + str(i)
+                raise
 
 
 @register()
