@@ -203,7 +203,7 @@ def write_int(v, w):
         + 9 bytes     | <= 0xffffffffffffffff  |
         +-------------+------------------------+
     """
-    if v < 240:
+    if v <= 240:
         w(v)
     elif v <= 2287:
         v -= 240
