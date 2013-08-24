@@ -302,22 +302,27 @@ class TimeTest:
 
 @register()
 class SortTest:
+    """Ensure a bunch of edge cases sort correctly.
+    """
     SEQS = [
         [('',), ('a',)],
         [('', 1), ('a',)],
         [('a', 1), ('a', 2)],
         [(-1,), (0,)],
         [(-2,), (-1,)],
-        [(-4,), (-3,), (-2,), (-1,), (0,), (1,)]
+        [(-2,), (-1,), (0,), (1,), (2,)]
     ]
 
     def test1(self):
         for seq in self.SEQS:
             packed = map(lambda s: keycoder.packs('', s), seq)
             rnge = range(len(packed))
-            print packed
             done = sorted(rnge, key=packed.__getitem__)
-            eq(done, rnge)
+            try:
+                eq(done, rnge)
+            except:
+                print 'failed:', seq
+                raise
 
 
 if __name__ == '__main__':
