@@ -433,7 +433,8 @@ def pack_int(prefix, i):
 def unpack_int(s):
     """Invoke :py:func:`read_int`, wrapping `s` in a temporary iterator."""
     ba = bytearray(s)
-    return read_int(ba, 0, len(ba))
+    v, pos = read_int(ba, 0, len(ba))
+    return v
 
 
 def keyize(o):
