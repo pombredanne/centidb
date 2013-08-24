@@ -36,31 +36,58 @@ encoding the same key can be represented in only 14 bytes.
 For a billion-keyed database, this represents a savings of almost 21GiB.
 
 
+Element kinds
+-------------
+
+The main limitation of element kind bytes is that their 8th bit must be clear,
+to allow their secondary use as the string encoding delimiter.
+
++---------------------+---------+---------------------------------------------+
+| Kind                | Ordinal | Comment                                     |
++---------------------+---------+---------------------------------------------+
+| ``NULL``            | 0x0f    | Encodes Python ``None``.                    |
++---------------------+---------+---------------------------------------------+
+| ``NEG_INTEGER``     | 0x14    | Varint-encoded -1..-0xFFFFFFFFFFFFFFFF      |
++---------------------+---------+---------------------------------------------+
+| ``INTEGER``         | 0x15    | Varint-encoded 0..-0xFFFFFFFFFFFFFFFF       |
++---------------------+---------+---------------------------------------------+
+| ``BOOL``            | 0x1e    | Varint-encoded 0..1 (Python ``bool``)       |
++---------------------+---------+---------------------------------------------+
+| ``BLOB``            | 0x28    | String-encoded 8-bit data                   |
++---------------------+---------+---------------------------------------------+
+| ``TEXT``            | 0x32    | String-encoded UTF-8 encoded string.        |
++---------------------+---------+---------------------------------------------+
+| ``UUID``            | 0x5a    | 16 raw MSB UUID bytes.                      |
++---------------------+---------+---------------------------------------------+
+| ``NEG_TIME``        | 0x5b    | Time-encoded prehistory..1970-01-01         |
++---------------------+---------+---------------------------------------------+
+| ``TIME``            | 0x5c    | Time-encoded 1970-0101..end of universe.    |
++---------------------+---------+---------------------------------------------+
+| ``SEP``             | 0x66    | Start of tuple indicator (for indices)      |
++---------------------+---------+---------------------------------------------+
+
+
+
 Strings
 -------
 
 Bytestrings are re-encoded to include an inline marker used to delimit the end
 of the string. This is necessary since we need to detect the start of the next
 encoded tuple element, and NUL can't be used since the string may legally
-contain NULs. The marker is inserted so that every byte that is not the final
-byte has its 8th bit set, with the final byte having it cleared. The input is
-treated as a stream of bits, with groups of 7 packed alongside the marker into
-every byte. This ensures a constant ``ceil(len(s) * 1.142)`` space overhead
-regardless of input.
+contain NULs. The marker is inserted so that every byte has its 8th bit set,
+with the byte representing the start of the next tuple element having it
+cleared. The input is treated as a stream of bits, with groups of 7 packed
+alongside the marker into each byte. This ensures a constant ``ceil(len(s) *
+1.142)`` space overhead regardless of input.
 
 When the length of the input string is not evenly divisible by 7, the trailer
-is encoded in the upper bits of the final byte, with excess lower bits
-discarded. As a special case, the empty string is encoded as a single ``0x00``
-byte. This cannot conflict with any 1-byte string, since a 1-byte string's
-lowest bit would overflow into a trailer byte — 1-byte strings always encode to
-2 bytes.
+is encoded in bits 6..0 of the final byte, with excess lower bits discarded.
 
 An alternative approach relying on escaping would result in a 2x blowup given a
 string containing only the escape character, and it would be impossible to
 predict database size given a large number of fixed-width bytestring keys.
 Prefixing strings with their length would cause strings to sort by length
 rather than lexicographically.
-
 
 +---------------+---------------+
 | Input Length  | Output Length |
