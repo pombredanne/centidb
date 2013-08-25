@@ -16,24 +16,14 @@ Key encoding
 
 The goal of the key encoding is straightforward: given a Python tuple
 containing a sequence of primitive values, produce a sequence of bytes that
-sorts as closely as possible to how :py:meth:`list.sort` would sort a list of
-the equivalent tuples.
+closely mimics how :py:meth:`list.sort` would sort a list of the equivalent
+tuples.
 
-All functions provided by the library depend on useful side-effects provided by
-the key encoding. The encoding is designed so that most of the library's
-complexity is constrained to a single module. Further effort has been made to
-ensure the encoding is as space-efficient as possible, since even a single byte
-saving can produce a 1GiB reduction in the size of a large enough database.
-
-It would be possible to encode all integers so they sort correctly in binary
-form simply by storing their big-endian representation. However for this to
-work, all integers must be padded to the maximum supported size. In the case of
-a system supporting 64-bit integers, this means wasting a full 8 bytes even for
-the number *1*. A 4-tuple key like ``(user_id 613, source_id 15122, timestamp
-5124324, event_id 13)``, would require 32+4 bytes, however through careful
-encoding the same key can be represented in only 14 bytes.
-
-For a billion-keyed database, this represents a savings of almost 21GiB.
+Many functions provided by the library depend on useful side-effects of the key
+encoding. The encoding is designed so that most of the library's complexity is
+constrained to a single module. Further effort has been made to ensure the
+encoding is as space-efficient as possible, since even a single byte saving can
+produce a 1GiB reduction in the size of a large enough database.
 
 
 Element kinds
@@ -67,9 +57,28 @@ to allow their secondary use as the string encoding delimiter.
 +---------------------+---------+---------------------------------------------+
 
 
+Null
+----
 
-Strings
--------
+The Python value ``None`` encodes to the single byte ``0x0f``.
+
+
+Integers
+--------
+
+It would be possible to encode integers so they sort correctly by storing their
+big-endian representation. However for this to work, all integers must be
+padded to the maximum supported size, i.e. 8 bytes for 64-bit integers. This
+means wasting a full 8 bytes even for the number *1*. A 4-tuple key like
+``(user_id 613, source_id 15122, timestamp 5124324, event_id 13)``, would
+require 32+4 bytes, however through careful encoding the same key can be
+represented in only 14 bytes.
+
+For a billion-keyed database, this represents a savings of almost 21GiB.
+
+
+Bytestrings
+-----------
 
 Bytestrings are re-encoded to include an inline marker used to delimit the end
 of the string. This is necessary since we need to detect the start of the next
@@ -113,6 +122,41 @@ rather than lexicographically.
 | 9             | 11 etc.       |
 +---------------+---------------+
 
+
+Unicode strings
+---------------
+
+Unicode strings are indicated by ``0x32`` followed by UTF-8 string data encoded
+using the bytestring encoding above.
+
+
+UUIDs
+-----
+
+UUIDs are indicated by ``0x5a`` followed by exactly 16 bytes representing the
+UUID as a 128-bit big endian integer.
+
+
+Time
+----
+
+Python :py:class:`datetime.datetime` instances are indicated by ``0x5b`` for
+times prior to 1970-01-1, or ``0x5c`` for times after 1970-01-01.
+
+The remaining bytes are varint-encoded milliseconds since 1970-01-01 00:00:00
+excluding leap seconds, left shifted by 7 bits, with the UTC offset of the
+original datetime encoded in the lower 7 bits. The offset is encoded as the
+number of 15 minute increments from UTC, with the constant 64 added to the
+result, to ensure the final value is an integer 0..128.
+
+For BST (GMT+1), the time offset would be (GMT+00:60 / 15 + 64) = 68.
+
+
+Tuple separator
+---------------
+
+The byte ``0x66`` indicates the start of a new tuple, for keys that encode
+multiple tuples.
 
 
 Record format
