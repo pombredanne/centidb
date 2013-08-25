@@ -173,6 +173,21 @@ class EncodeIntTest:
             assert j == i, (i, j, s)
 
 
+@register()
+class IntKeyTest:
+    INTS = [-1, -239, -240, -241, -2285, -2286, -2287, 0, 1, 0xfffff]
+
+    def test1(self):
+        for i in self.INTS:
+            s = keycoder.packs('', i)
+            try:
+                j, = keycoder.unpack('', s)
+                eq(j, i)
+            except:
+                print [i, s]
+                raise
+
+
 @register(python=True)
 class SameIntEncodingTest:
     def test1(self):

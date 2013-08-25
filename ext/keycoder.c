@@ -64,7 +64,7 @@ static int reader_ensure(struct reader *rdr, Py_ssize_t n)
 }
 
 
-static uint64_t reader_getchar(struct reader *rdr)
+static uint8_t reader_getchar(struct reader *rdr)
 {
     return *(rdr->p++);
 }
@@ -173,7 +173,8 @@ static PyObject *tuplize(PyObject *self, PyObject *arg)
 }
 
 
-static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
+static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
+                     uint8_t xor)
 {
     if(kind) {
         if(! writer_putc(wtr, kind)) {
@@ -183,76 +184,76 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind)
 
     int ok = 1;
     if(v <= 240ULL) {
-        ok = writer_putc(wtr, v);
+        ok = writer_putc(wtr, xor ^ v);
     } else if(v <= 2287ULL) {
         if((ok = writer_ensure(wtr, 2))) {
             v -= 240ULL;
-            writer_putchar(wtr, 241 + (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v & 0xff));
+            writer_putchar(wtr, xor ^ (241 + (uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
     } else if(v <= 67823) {
         if((ok = writer_ensure(wtr, 3))) {
             v -= 2288ULL;
-            writer_putchar(wtr, 0xf9);
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v & 0xff));
+            writer_putchar(wtr, xor ^ 0xf9);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
     } else if(v <= 0xffffffULL) {
         if((ok = writer_ensure(wtr, 4))) {
-            writer_putchar(wtr, 0xfa);
-            writer_putchar(wtr, (uint8_t) (v >> 16));
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v));
+            writer_putchar(wtr, xor ^ 0xfa);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         }
     } else if(v <= 0xffffffffULL) {
         if((ok = writer_ensure(wtr, 5))) {
-            writer_putchar(wtr, 0xfb);
-            writer_putchar(wtr, (uint8_t) (v >> 24));
-            writer_putchar(wtr, (uint8_t) (v >> 16));
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v));
+            writer_putchar(wtr, xor ^ 0xfb);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         }
     } else if(v <= 0xffffffffffULL) {
         if((ok = writer_ensure(wtr, 6))) {
-            writer_putchar(wtr, 0xfc);
-            writer_putchar(wtr, (uint8_t) (v >> 32));
-            writer_putchar(wtr, (uint8_t) (v >> 24));
-            writer_putchar(wtr, (uint8_t) (v >> 16));
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v));
+            writer_putchar(wtr, xor ^ 0xfc);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         }
     } else if(v <= 0xffffffffffffULL) {
         if((ok = writer_ensure(wtr, 7))) {
-            writer_putchar(wtr, 0xfd);
-            writer_putchar(wtr, (uint8_t) (v >> 40));
-            writer_putchar(wtr, (uint8_t) (v >> 32));
-            writer_putchar(wtr, (uint8_t) (v >> 24));
-            writer_putchar(wtr, (uint8_t) (v >> 16));
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v));
+            writer_putchar(wtr, xor ^ 0xfd);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         }
     } else if(v <= 0xffffffffffffffULL) {
         if((ok = writer_ensure(wtr, 8))) {
-            writer_putchar(wtr, 0xfe);
-            writer_putchar(wtr, (uint8_t) (v >> 48));
-            writer_putchar(wtr, (uint8_t) (v >> 40));
-            writer_putchar(wtr, (uint8_t) (v >> 32));
-            writer_putchar(wtr, (uint8_t) (v >> 24));
-            writer_putchar(wtr, (uint8_t) (v >> 16));
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v));
+            writer_putchar(wtr, xor ^ 0xfe);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 48)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         }
     } else {
         if((ok = writer_ensure(wtr, 9))) {
-            writer_putchar(wtr, 0xff);
-            writer_putchar(wtr, (uint8_t) (v >> 56));
-            writer_putchar(wtr, (uint8_t) (v >> 48));
-            writer_putchar(wtr, (uint8_t) (v >> 40));
-            writer_putchar(wtr, (uint8_t) (v >> 32));
-            writer_putchar(wtr, (uint8_t) (v >> 24));
-            writer_putchar(wtr, (uint8_t) (v >> 16));
-            writer_putchar(wtr, (uint8_t) (v >> 8));
-            writer_putchar(wtr, (uint8_t) (v));
+            writer_putchar(wtr, xor ^ 0xff);
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 56)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 48)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         }
     }
     return ok;
@@ -272,7 +273,7 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
     struct writer wtr;
     if(writer_init(&wtr, 9)) {
         if(writer_puts(&wtr, prefix, prefix_len)) {
-            if(write_int(&wtr, v, 0)) {
+            if(write_int(&wtr, v, 0, 0)) {
                 return writer_fini(&wtr);
             }
         }
@@ -366,9 +367,9 @@ static int write_time(struct writer *wtr, PyObject *dt)
     ts |= offset_bits;
 
     if(ts < 0) {
-        return write_int(wtr, (uint64_t) -ts, KIND_NEG_TIME);
+        return write_int(wtr, (uint64_t) -ts, KIND_NEG_TIME, 0xff);
     } else {
-        return write_int(wtr, (uint64_t) ts, KIND_TIME);
+        return write_int(wtr, (uint64_t) ts, KIND_TIME, 0);
     }
 }
 
@@ -383,9 +384,9 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
     } else if(type == &PyInt_Type) {
         long v = PyInt_AS_LONG(arg);
         if(v < 0) {
-            ret = write_int(wtr, -v, KIND_NEG_INTEGER);
+            ret = write_int(wtr, -v, KIND_NEG_INTEGER, 0xff);
         } else {
-            ret = write_int(wtr, v, KIND_INTEGER);
+            ret = write_int(wtr, v, KIND_INTEGER, 0);
         }
     } else if(type == &PyString_Type) {
         ret = write_str(wtr, (uint8_t *)PyString_AS_STRING(arg),
@@ -405,9 +406,9 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
         int64_t i64 = PyLong_AsLongLong(arg);
         if(! PyErr_Occurred()) {
             if(i64 < 0) {
-                ret = write_int(wtr, -i64, KIND_NEG_INTEGER);
+                ret = write_int(wtr, -i64, KIND_NEG_INTEGER, 0xff);
             } else {
-                ret = write_int(wtr, i64, KIND_INTEGER);
+                ret = write_int(wtr, i64, KIND_INTEGER, 0);
             }
         }
     } else if(PyDateTime_CheckExact(arg)) {
@@ -506,7 +507,7 @@ static PyObject *packs(PyObject *self, PyObject *args)
 }
 
 
-static int read_plain_int(struct reader *rdr, uint64_t *u64)
+static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
 {
     uint8_t ch = 0;
     if(! reader_getc(rdr, &ch)) {
@@ -516,70 +517,71 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64)
     uint64_t v;
     int ok = 1;
 
+    ch ^= xor;
     if(ch <= 240) {
-        *u64 = ch;
+        v = ch;
     } else if(ch <= 248) {
         if((ok = reader_ensure(rdr, 1))) {
             v  = 240;
             v += 256 * (ch - 241);
-            v += reader_getchar(rdr);
+            v += xor ^ reader_getchar(rdr);
         }
     } else if(ch == 249) {
         if((ok = reader_ensure(rdr, 2))) {
             v  = 2288;
-            v += 256 * reader_getchar(rdr);
-            v += reader_getchar(rdr);
+            v += 256 * (xor ^ reader_getchar(rdr));
+            v += xor ^ reader_getchar(rdr);
         }
     } else if(ch == 250) {
         if((ok = reader_ensure(rdr, 3))) {
-            v  = reader_getchar(rdr) << 16;
-            v |= reader_getchar(rdr) << 8;
-            v |= reader_getchar(rdr);
+            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
     } else if(ch == 251) {
         if((ok = reader_ensure(rdr, 4))) {
-            v  = reader_getchar(rdr) << 24;
-            v |= reader_getchar(rdr) << 16;
-            v |= reader_getchar(rdr) << 8;
-            v |= reader_getchar(rdr);
+            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
     } else if(ch == 252) {
         if((ok = reader_ensure(rdr, 5))) {
-            v  = reader_getchar(rdr) << 32;
-            v |= reader_getchar(rdr) << 24;
-            v |= reader_getchar(rdr) << 16;
-            v |= reader_getchar(rdr) << 8;
-            v |= reader_getchar(rdr);
+            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
     } else if(ch == 253) {
         if((ok = reader_ensure(rdr, 6))) {
-            v  = reader_getchar(rdr) << 40;
-            v |= reader_getchar(rdr) << 32;
-            v |= reader_getchar(rdr) << 24;
-            v |= reader_getchar(rdr) << 16;
-            v |= reader_getchar(rdr) << 8;
-            v |= reader_getchar(rdr);
+            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
     } else if(ch == 254) {
         if((ok = reader_ensure(rdr, 7))) {
-            v  = reader_getchar(rdr) << 48;
-            v |= reader_getchar(rdr) << 40;
-            v |= reader_getchar(rdr) << 32;
-            v |= reader_getchar(rdr) << 24;
-            v |= reader_getchar(rdr) << 16;
-            v |= reader_getchar(rdr) << 8;
-            v |= reader_getchar(rdr);
+            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 48;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
     } else if(ch == 255) {
         if((ok = reader_ensure(rdr, 8))) {
-            v  = reader_getchar(rdr) << 56;
-            v |= reader_getchar(rdr) << 48;
-            v |= reader_getchar(rdr) << 40;
-            v |= reader_getchar(rdr) << 32;
-            v |= reader_getchar(rdr) << 24;
-            v |= reader_getchar(rdr) << 16;
-            v |= reader_getchar(rdr) << 8;
-            v |= reader_getchar(rdr);
+            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 56;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 48;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
     }
     *u64 = v;
@@ -587,10 +589,10 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64)
 }
 
 
-static PyObject *read_int(struct reader *rdr, int negate)
+static PyObject *read_int(struct reader *rdr, int negate, uint8_t xor)
 {
     uint64_t u64;
-    if(! read_plain_int(rdr, &u64)) {
+    if(! read_plain_int(rdr, &u64, xor)) {
         return NULL;
     }
     PyObject *v = PyLong_FromUnsignedLongLong(u64);
@@ -656,7 +658,8 @@ static PyObject *read_str(struct reader *rdr)
 static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
 {
     uint64_t v;
-    if(! read_plain_int(rdr, &v)) {
+    uint8_t xor = (kind == KIND_NEG_TIME) ? 0xff : 0;
+    if(! read_plain_int(rdr, &v, xor)) {
         return NULL;
     }
 
@@ -727,13 +730,13 @@ static PyObject *unpack(struct reader *rdr)
             Py_INCREF(arg);
             break;
         case KIND_INTEGER:
-            arg = read_int(rdr, 0);
+            arg = read_int(rdr, 0, 0);
             break;
         case KIND_NEG_INTEGER:
-            arg = read_int(rdr, 1);
+            arg = read_int(rdr, 1, 0xff);
             break;
         case KIND_BOOL:
-            if(read_plain_int(rdr, &u64)) {
+            if(read_plain_int(rdr, &u64, 0)) {
                 arg = u64 ? Py_True : Py_False;
                 Py_INCREF(arg);
             }
@@ -883,7 +886,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
     reader_init(&rdr, s, s_len);
 
     uint64_t count;
-    if(! read_plain_int(&rdr, &count)) {
+    if(! read_plain_int(&rdr, &count, 0)) {
         return NULL;
     }
 
@@ -899,7 +902,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
 
     for(uint64_t i = 0; i < count; i++) {
         uint64_t offset;
-        if(! read_plain_int(&rdr, &offset)) {
+        if(! read_plain_int(&rdr, &offset, 0)) {
             return NULL;
         }
         pos += offset;
