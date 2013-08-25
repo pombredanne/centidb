@@ -406,7 +406,8 @@ def write_time(dt, w):
 
 
 def read_time(kind, inp, pos, length):
-    msec, pos = read_int(inp, pos, length)
+    xor = 0xff if kind == KIND_NEG_TIME else 0
+    msec, pos = read_int(inp, pos, length, xor)
     offset = msec & 0x7f
     msec >>= 7
     if kind == KIND_NEG_TIME:
@@ -433,7 +434,7 @@ def pack_int(prefix, i):
 def unpack_int(s):
     """Invoke :py:func:`read_int`, wrapping `s` in a temporary iterator."""
     ba = bytearray(s)
-    v, pos = read_int(ba, 0, len(ba))
+    v, pos = read_int(ba, 0, len(ba), 0)
     return v
 
 
