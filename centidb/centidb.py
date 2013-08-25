@@ -480,7 +480,7 @@ class Collection(object):
 
             lenk = len(keys)
             if lenk == 1:
-                yield False, prefix + keys[0], self._decompress(value)
+                yield False, Key(*(prefix + keys[0])), self._decompress(value)
             else: # Batch record.
                 offsets, dstart = decode_offsets(value)
                 data = self._decompress(buffer(value, dstart))
@@ -496,7 +496,7 @@ class Collection(object):
                     key = keys[-1 - i]
                     offs = offsets[i]
                     size = offsets[i+1] - offs
-                    yield True, prefix + key, buffer(data, offs, size)
+                    yield True, Key(*(prefix + key)), buffer(data, offs, size)
                     i += step
 
     # -----------------------------------------------------------
