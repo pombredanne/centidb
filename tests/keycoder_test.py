@@ -258,6 +258,12 @@ class NativeTimeTest:
         dp = keycoder.unpacks('', sp)
         eq(dn, dp)
 
+    def test_naive(self):
+        dt = datetime.now()
+        sn = _keycoder.packs('', dt)
+        sp = keycoder.packs('', dt)
+        eq(sn, sp)
+
     def test_neg(self):
         tz = dateutil.tz.gettz('Etc/GMT-1')
         dt = datetime.now(tz)
