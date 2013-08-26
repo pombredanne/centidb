@@ -795,12 +795,8 @@ static PyObject *unpack(struct reader *rdr)
  */
 static int position_on_element(struct reader *rdr, int idx)
 {
-    if(! idx) {
-        return 0;
-    }
-
     uint8_t ch;
-    while(rdr->p < rdr->e) {
+    while(idx && rdr->p < rdr->e) {
         uint8_t xor = 0;
         switch(*rdr->p++) {
         case KIND_BOOL:
@@ -827,11 +823,15 @@ static int position_on_element(struct reader *rdr, int idx)
             break;
         case KIND_SEP:
             rdr->p = rdr->e;
-            break;
+            continue;
         }
+        idx--;
     }
-    PyErr_SetString(PyExc_IndexError, "key index out of range");
-    return -1;
+    if(rdr->p >= rdr->e) {
+        PyErr_SetString(PyExc_IndexError, "key index out of range");
+        return -1;
+    }
+    return 0;
 }
 
 
