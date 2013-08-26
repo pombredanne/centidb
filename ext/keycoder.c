@@ -788,6 +788,69 @@ static PyObject *unpack(struct reader *rdr)
 }
 
 
+/**
+ * Given a reader initialized to point at the start of a tuple, seek to the
+ * idx'th element in the tuple. Return 0 on success or -1 and set an exception
+ * on error.
+ */
+static int position_on_element(struct reader *rdr, int idx)
+{
+    if(! idx) {
+        return 0;
+    }
+
+    uint8_t ch;
+    while(rdr->p < rdr->e) {
+        uint8_t xor = 0;
+        switch(*rdr->p++) {
+        case KIND_NULL:
+            break;
+        case KIND_NEG_TIME:
+        case KIND_NEG_INTEGER:
+            xor = 0xff;
+        case KIND_TIME:
+        case KIND_INTEGER:
+            ch = xor ^ *rdr->p++;
+            if(ch <= 248 && ch > 240) {
+                rdr->p++;
+            } else if(ch == 249) {
+                rdr->p += 2;
+            } else if(ch == 250) {
+                rdr->p += 3;
+            } else if(ch == 251) {
+                rdr->p += 4;
+            } else if(ch == 252) {
+                rdr->p += 5;
+            } else if(ch == 253) {
+                rdr->p += 6;
+            } else if(ch == 254) {
+                rdr->p += 7;
+            } else if(ch == 255) {
+                rdr->p += 8;
+            }
+            break;
+        case KIND_BOOL:
+            rdr->p++;
+            break;
+        case KIND_TEXT:
+        case KIND_BLOB:
+            while(0x80 & *rdr->p) {
+                rdr->p++;
+            }
+            break;
+        case KIND_UUID:
+            rdr->p += 16;
+            break;
+        case KIND_SEP:
+            rdr->p = rdr->e;
+            break;
+        }
+    }
+    PyErr_SetString(PyExc_IndexError, "key index out of range");
+    return -1;
+}
+
+
 static PyObject *py_unpack(PyObject *self, PyObject *args)
 {
     uint8_t *prefix;
