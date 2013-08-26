@@ -803,6 +803,7 @@ static int position_on_element(struct reader *rdr, int idx)
     while(rdr->p < rdr->e) {
         uint8_t xor = 0;
         switch(*rdr->p++) {
+        case KIND_BOOL:
         case KIND_NULL:
             break;
         case KIND_NEG_TIME:
@@ -813,30 +814,13 @@ static int position_on_element(struct reader *rdr, int idx)
             ch = xor ^ *rdr->p++;
             if(ch <= 248 && ch > 240) {
                 rdr->p++;
-            } else if(ch == 249) {
-                rdr->p += 2;
-            } else if(ch == 250) {
-                rdr->p += 3;
-            } else if(ch == 251) {
-                rdr->p += 4;
-            } else if(ch == 252) {
-                rdr->p += 5;
-            } else if(ch == 253) {
-                rdr->p += 6;
-            } else if(ch == 254) {
-                rdr->p += 7;
-            } else if(ch == 255) {
-                rdr->p += 8;
+            } else if(ch >= 249) {
+                rdr->p += 8 - (255-ch);
             }
-            break;
-        case KIND_BOOL:
-            rdr->p++;
             break;
         case KIND_TEXT:
         case KIND_BLOB:
-            while(0x80 & *rdr->p) {
-                rdr->p++;
-            }
+            for(; 0x80 & *rdr->p; rdr->p++);
             break;
         case KIND_UUID:
             rdr->p += 16;
