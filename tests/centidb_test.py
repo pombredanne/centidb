@@ -586,6 +586,18 @@ class CountTest:
         assert txn.put_count == 1
 
 
+@register()
+class ReopenBugTest:
+    def test1(self):
+        engine = centidb.engines.ListEngine()
+        st1 = centidb.Store(engine)
+        st1.add_collection('dave')
+        pprint(vars(engine))
+
+        st2 = centidb.Store(engine)
+        print st2['dave']
+
+
 def x():
     db = plyvel.DB('test.ldb', create_if_missing=True)
     store = storelib.Store(db)
