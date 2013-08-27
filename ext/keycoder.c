@@ -605,6 +605,10 @@ static PyObject *read_int(struct reader *rdr, int negate, uint8_t xor)
 }
 
 
+/**
+ * Decode the string pointed to by `rdr` and return it, or NULL on error and
+ * set an exception.
+ */
 static PyObject *read_str(struct reader *rdr)
 {
     struct writer wtr;
@@ -708,6 +712,56 @@ static PyObject *read_uuid(struct reader *rdr)
 }
 
 
+/**
+ * Decode the next tuple element pointed to by `rdr`, returning NULL and
+ * setting an exception on failure.
+ */
+static PyObject *read_element(struct reader *rdr)
+{
+    PyObject *tmp;
+    PyObject *arg;
+    uint64_t u64;
+
+    uint8_t ch = reader_getchar(rdr);
+    switch(ch) {
+    case KIND_NULL:
+        Py_RETURN_NONE;
+    case KIND_INTEGER:
+        return read_int(rdr, 0, 0);
+    case KIND_NEG_INTEGER:
+        return read_int(rdr, 1, 0xff);
+    case KIND_BOOL:
+        if(read_plain_int(rdr, &u64, 0)) {
+            arg = u64 ? Py_True : Py_False;
+            Py_INCREF(arg);
+        }
+        return arg;
+    case KIND_BLOB:
+        return read_str(rdr);
+    case KIND_TEXT:
+        tmp = read_str(rdr);
+        if(tmp) {
+            arg = PyUnicode_DecodeUTF8(PyString_AS_STRING(tmp),
+                                       PyString_GET_SIZE(tmp), "strict");
+            Py_DECREF(tmp);
+            return arg;
+        }
+    case KIND_NEG_TIME:
+    case KIND_TIME:
+        return read_time(rdr, (enum ElementKind) ch);
+    case KIND_UUID:
+        return read_uuid(rdr);
+    default:
+        PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
+        return NULL;
+    }
+}
+
+
+/**
+ * Construct and return a tuple of encoded elements pointed to by `rdr`, until
+ * KIND_SEP or the empty string is reached.
+ */
 static PyObject *unpack(struct reader *rdr)
 {
     PyObject *tup = PyTuple_New(TUPLE_START_SIZE);
@@ -716,68 +770,19 @@ static PyObject *unpack(struct reader *rdr)
     }
 
     Py_ssize_t tpos = 0;
-    uint64_t u64;
-    int go = 1;
-
-    while(go && (rdr->p < rdr->e)) {
-        uint8_t ch = (uint8_t) reader_getchar(rdr);
-        PyObject *arg = NULL;
-        PyObject *tmp = NULL;
-
-        switch(ch) {
-        case KIND_NULL:
-            arg = Py_None;
-            Py_INCREF(arg);
-            break;
-        case KIND_INTEGER:
-            arg = read_int(rdr, 0, 0);
-            break;
-        case KIND_NEG_INTEGER:
-            arg = read_int(rdr, 1, 0xff);
-            break;
-        case KIND_BOOL:
-            if(read_plain_int(rdr, &u64, 0)) {
-                arg = u64 ? Py_True : Py_False;
-                Py_INCREF(arg);
-            }
-            break;
-        case KIND_BLOB:
-            arg = read_str(rdr);
-            break;
-        case KIND_TEXT:
-            tmp = read_str(rdr);
-            if(tmp) {
-                arg = PyUnicode_DecodeUTF8(PyString_AS_STRING(tmp),
-                                           PyString_GET_SIZE(tmp), "strict");
-            }
-            break;
-        case KIND_NEG_TIME:
-        case KIND_TIME:
-            arg = read_time(rdr, (enum ElementKind) ch);
-            break;
-        case KIND_UUID:
-            arg = read_uuid(rdr);
-            break;
-        case KIND_SEP:
-            go = 0;
-            break;
-        default:
-            PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
-            Py_DECREF(tup);
-            return NULL;
-        }
-
-        if(! go) {
+    while(rdr->p < rdr->e) {
+        if(*rdr->p == KIND_SEP) {
+            rdr->p++;
             break;
         }
-
-        Py_CLEAR(tmp);
+        PyObject *arg = read_element(rdr);
         if(! arg) {
             Py_DECREF(tup);
             return NULL;
         }
         if(tpos == PyTuple_GET_SIZE(tup)) {
             if(-1 == _PyTuple_Resize(&tup, PyTuple_GET_SIZE(tup) + 2)) {
+                Py_DECREF(arg);
                 return NULL;
             }
         }
@@ -793,7 +798,7 @@ static PyObject *unpack(struct reader *rdr)
  * idx'th element in the tuple. Return 0 on success or -1 and set an exception
  * on error.
  */
-static int position_on_element(struct reader *rdr, int idx)
+static int key_seek(struct reader *rdr, int idx)
 {
     uint8_t ch;
     while(idx && rdr->p < rdr->e) {
@@ -816,7 +821,7 @@ static int position_on_element(struct reader *rdr, int idx)
             break;
         case KIND_TEXT:
         case KIND_BLOB:
-            for(; 0x80 & *rdr->p; rdr->p++);
+            for(; (rdr->p < rdr->e) && (0x80 & *rdr->p); rdr->p++);
             break;
         case KIND_UUID:
             rdr->p += 16;
@@ -827,11 +832,30 @@ static int position_on_element(struct reader *rdr, int idx)
         }
         idx--;
     }
-    if(rdr->p >= rdr->e) {
-        PyErr_SetString(PyExc_IndexError, "key index out of range");
+    if(idx || rdr->p == rdr->e) {
         return -1;
     }
     return 0;
+}
+
+
+static int key_getitem(struct reader *rdr, int idx)
+{
+    if(key_seek(rdr, idx)) {
+        PyErr_SetString(PyExc_IndexError, "key index out of range");
+        return -1;
+    }
+}
+
+
+static Py_ssize_t key_length(struct reader *rdr)
+{
+    Py_ssize_t len = 0;
+    while(! key_seek(rdr, 1)) {
+        len++;
+    }
+    PyErr_Clear();
+    return len;
 }
 
 
