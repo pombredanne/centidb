@@ -206,34 +206,34 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
         }
     } else if((ok = writer_ensure(wtr, 9))) {
         // Progressively increment type byte from 24bit case.
-        uint8_t *type = writer_ptr(wtr);
-        uint8_t poop = 0;
+        uint8_t *typeptr = writer_ptr(wtr);
+        uint8_t type = 0xfa;
         writer_putchar(wtr, 0);
 
         if(v > 0xffffffffffffffULL) {
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 56)));
-            poop++;
+            type++;
         }
         if(v > 0xffffffffffffULL) {
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 48)));
-            poop++;
+            type++;
         }
         if(v > 0xffffffffffULL) {
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
-            poop++;
+            type++;
         }
         if(v > 0xffffffffULL) {
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
-            poop++;
+            type++;
         }
         if(v > 0xffffffULL) {
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
-            poop++;
+            type++;
         }
         writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
         writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
         writer_putchar(wtr, xor ^ ((uint8_t) (v)));
-        *type = xor ^ (0xfa + poop);
+        *typeptr = xor ^ type;
     }
     return ok;
 }
