@@ -714,7 +714,7 @@ static PyObject *read_element(struct reader *rdr)
         PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
         break;
     }
-    return NULL;
+    return arg;
 }
 
 
