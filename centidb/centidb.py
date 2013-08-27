@@ -224,8 +224,8 @@ class Index(object):
         """Yield all values referred to by the index, in tuple order. If `rec`
         is ``True``, :py:class:`Record` instances are yielded instead of record
         values."""
-        return itertools.imap(ITEMGETTER_1,
-            self.items(args, lo, hi, reverse, max, include, txn, rec))
+        it = self.items(args, lo, hi, reverse, max, include, txn, rec)
+        return itertools.imap(ITEMGETTER_1, it)
 
     def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
              txn=None, rec=None, default=None):
@@ -591,28 +591,25 @@ class Collection(object):
                              self._index_keys(key, obj))
             yield key, obj
 
-    def keys(self, key=None, lo=None, hi=None, reverse=None, max=None,
-            include=False, txn=None, rec=None):
+    def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+             max=None, include=False, txn=None, rec=None):
         """Yield key tuples in key order."""
-        return itertools.imap(ITEMGETTER_0,
-            self.items(key, lo, hi, reverse, max, include, txn, rec, True))
+        return itertools.imap(ITEMGETTER_0, self.items(
+            key, lo, hi, prefix, reverse, max, include, txn, rec, True))
 
-    def values(self, key=None, lo=None, hi=None, reverse=None, max=None,
-            include=False, txn=None, rec=None, raw=False):
+    def values(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+               max=None, include=False, txn=None, rec=None, raw=False):
         """Yield record values in key order. If `rec` is ``True``,
         :py:class:`Record` instances are yielded instead of record values."""
-        return itertools.imap(ITEMGETTER_1,
-            self.items(key, lo, hi, reverse, max, include, txn, rec, raw))
+        return itertools.imap(ITEMGETTER_1, self.items(
+            key, lo, hi, prefix, reverse, max, include, txn, rec, raw))
 
-    def gets(self, keys, default=None, rec=False, txn=None):
-        """Yield `get(k)` for each `k` in the iterable `keys`."""
-        return (self.get(x, default, rec, txn) for k in keys)
-
-    def find(self, key=None, lo=None, hi=None, reverse=None, include=False,
-             txn=None, rec=None, raw=None, default=None):
+    def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+             include=False, txn=None, rec=None, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
-        it = self.values(key, lo, hi, reverse, None, include, txn, rec, raw)
+        it = self.values(key, lo, hi, prefix, reverse, None, include,
+                         txn, rec, raw)
         v = next(it, default)
         if v is default and rec and default is not None:
             v = Record(self.coll, default)
