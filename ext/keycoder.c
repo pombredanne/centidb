@@ -493,7 +493,7 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
         return 0;
     }
 
-    uint64_t v;
+    uint64_t v = 0;
     int ok = 1;
 
     ch ^= xor;
