@@ -1,0 +1,35 @@
+<!doctype html>
+<title>StinkyBoard!</title>
+
+
+<h3>New Post</h3>
+
+<form action=newpost method=post>
+<table>
+<th>Name:
+<td><input name=name>
+
+<tr>
+<th>Text:
+<td><input name=text>
+</table>
+
+<input type=submit>
+</form>
+
+<h3>Posts</h3>
+
+{% for (id,), post in posts %}
+    <h5>Comment #{{ id }} from {{ post.name }}</h5>
+    <blockquote>{{ post.text }}</blockquote>
+{% else %}
+    <em>(no posts)</em>
+{% endfor %}
+
+{% if older %}
+<a href="{{ older }}">Older</a>
+{% endif %}
+
+{% if newer %}
+<a href="{{ newer }}">Newer</a>
+{% endif %}
