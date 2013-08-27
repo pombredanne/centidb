@@ -248,7 +248,7 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
     Py_ssize_t prefix_len;
     uint64_t v;
 
-    if(! PyArg_ParseTuple(args, "s#l", (char **) &prefix, &prefix_len, &v)) {
+    if(! PyArg_ParseTuple(args, "s#K", (char **) &prefix, &prefix_len, &v)) {
         return NULL;
     }
 
