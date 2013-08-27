@@ -14,6 +14,9 @@
  * under the License.
  */
 
+#define _BSD_SOURCE // timegm()
+#define _POSIX_C_SOURCE 200809L
+
 #include "centidb.h"
 
 #include <arpa/inet.h>
