@@ -701,8 +701,8 @@ static PyObject *read_element(struct reader *rdr)
         return read_uuid(rdr);
     default:
         PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
-        return NULL;
     }
+    return NULL;
 }
 
 
