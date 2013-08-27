@@ -122,6 +122,12 @@ static int writer_ensure(struct writer *wtr, Py_ssize_t size)
 }
 
 
+static uint8_t *writer_ptr(struct writer *wtr)
+{
+    return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
+}
+
+
 static void writer_putchar(struct writer *wtr, uint8_t ch)
 {
     PyString_AS_STRING(wtr->s)[wtr->pos++] = ch;
@@ -198,63 +204,36 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
             writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
-    } else if(v <= 0xffffffULL) {
-        if((ok = writer_ensure(wtr, 4))) {
-            writer_putchar(wtr, xor ^ 0xfa);
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
-        }
-    } else if(v <= 0xffffffffULL) {
-        if((ok = writer_ensure(wtr, 5))) {
-            writer_putchar(wtr, xor ^ 0xfb);
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
-        }
-    } else if(v <= 0xffffffffffULL) {
-        if((ok = writer_ensure(wtr, 6))) {
-            writer_putchar(wtr, xor ^ 0xfc);
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
-        }
-    } else if(v <= 0xffffffffffffULL) {
-        if((ok = writer_ensure(wtr, 7))) {
-            writer_putchar(wtr, xor ^ 0xfd);
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
-        }
-    } else if(v <= 0xffffffffffffffULL) {
-        if((ok = writer_ensure(wtr, 8))) {
-            writer_putchar(wtr, xor ^ 0xfe);
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 48)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
-        }
-    } else {
-        if((ok = writer_ensure(wtr, 9))) {
-            writer_putchar(wtr, xor ^ 0xff);
+    } else if((ok = writer_ensure(wtr, 9))) {
+        // Progressively increment type byte from 24bit case.
+        uint8_t *type = writer_ptr(wtr);
+        uint8_t poop = 0;
+        writer_putchar(wtr, 0);
+
+        if(v > 0xffffffffffffffULL) {
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 56)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 48)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
-            writer_putchar(wtr, xor ^ ((uint8_t) (v)));
+            poop++;
         }
+        if(v > 0xffffffffffffULL) {
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 48)));
+            poop++;
+        }
+        if(v > 0xffffffffffULL) {
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 40)));
+            poop++;
+        }
+        if(v > 0xffffffffULL) {
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 32)));
+            poop++;
+        }
+        if(v > 0xffffffULL) {
+            writer_putchar(wtr, xor ^ ((uint8_t) (v >> 24)));
+            poop++;
+        }
+        writer_putchar(wtr, xor ^ ((uint8_t) (v >> 16)));
+        writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
+        writer_putchar(wtr, xor ^ ((uint8_t) (v)));
+        *type = xor ^ (0xfa + poop);
     }
     return ok;
 }
