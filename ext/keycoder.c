@@ -670,40 +670,49 @@ static PyObject *read_uuid(struct reader *rdr)
 static PyObject *read_element(struct reader *rdr)
 {
     PyObject *tmp;
-    PyObject *arg;
+    PyObject *arg = NULL;
     uint64_t u64;
 
     uint8_t ch = reader_getchar(rdr);
     switch(ch) {
     case KIND_NULL:
-        Py_RETURN_NONE;
+        arg = Py_None;
+        Py_INCREF(arg);
+        break;
+
     case KIND_INTEGER:
-        return read_int(rdr, 0, 0);
+        arg = read_int(rdr, 0, 0);
+        break;
     case KIND_NEG_INTEGER:
-        return read_int(rdr, 1, 0xff);
+        arg = read_int(rdr, 1, 0xff);
+        break;
     case KIND_BOOL:
         if(read_plain_int(rdr, &u64, 0)) {
             arg = u64 ? Py_True : Py_False;
             Py_INCREF(arg);
         }
-        return arg;
+        break;
     case KIND_BLOB:
-        return read_str(rdr);
+        arg = read_str(rdr);
+        break;
     case KIND_TEXT:
         tmp = read_str(rdr);
         if(tmp) {
             arg = PyUnicode_DecodeUTF8(PyString_AS_STRING(tmp),
                                        PyString_GET_SIZE(tmp), "strict");
             Py_DECREF(tmp);
-            return arg;
         }
+        break;
     case KIND_NEG_TIME:
     case KIND_TIME:
-        return read_time(rdr, (enum ElementKind) ch);
+        arg = read_time(rdr, (enum ElementKind) ch);
+        break;
     case KIND_UUID:
-        return read_uuid(rdr);
+        arg = read_uuid(rdr);
+        break;
     default:
         PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
+        break;
     }
     return NULL;
 }
