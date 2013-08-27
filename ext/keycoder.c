@@ -532,57 +532,26 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
             v += 256 * (xor ^ reader_getchar(rdr));
             v += xor ^ reader_getchar(rdr);
         }
-    } else if(ch == 250) {
-        if((ok = reader_ensure(rdr, 3))) {
-            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
+    } else if((ok = reader_ensure(rdr, 8 - (255-ch)))) {
+        v = 0;
+        if(ch >= 255) {
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 56;
         }
-    } else if(ch == 251) {
-        if((ok = reader_ensure(rdr, 4))) {
-            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
-        }
-    } else if(ch == 252) {
-        if((ok = reader_ensure(rdr, 5))) {
-            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
-        }
-    } else if(ch == 253) {
-        if((ok = reader_ensure(rdr, 6))) {
-            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
-        }
-    } else if(ch == 254) {
-        if((ok = reader_ensure(rdr, 7))) {
-            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 48;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
-        }
-    } else if(ch == 255) {
-        if((ok = reader_ensure(rdr, 8))) {
-            v  = ((uint64_t) (xor ^ reader_getchar(rdr))) << 56;
+        if(ch >= 254) {
             v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 48;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
-            v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
         }
+        if(ch >= 253) {
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 40;
+        }
+        if(ch >= 252) {
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 32;
+        }
+        if(ch >= 251) {
+            v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 24;
+        }
+        v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 16;
+        v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 8;
+        v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
     }
     *u64 = v;
     return ok;
