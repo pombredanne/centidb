@@ -1,9 +1,9 @@
 
+import sys
 import time
 
+import bottle
 import centidb
-import flask
-
 import wheezy.template.engine
 import wheezy.template.ext.core
 import wheezy.template.loader
@@ -17,17 +17,15 @@ templates = wheezy.template.engine.Engine(
 store = centidb.open('LmdbEngine', path='store.lmdb', map_size=512e6)
 store.add_collection('posts')
 
-app = flask.Flask(__name__)
-
 
 def getint(name, default=None):
     try:
-        return int(flask.request.args.get(name))
+        return int(bottle.request.params.get(name))
     except (ValueError, TypeError):
         return default
 
 
-@app.route('/')
+@bottle.route('/')
 def index():
     t0 = time.time()
     lo = getint('lo')
@@ -54,17 +52,16 @@ def index():
     })
 
 
-@app.route('/newpost', methods=['POST'])
+@bottle.post('/newpost')
 def newpost():
-    post = dict(flask.request.form.iteritems())
+    post = dict(bottle.request.forms.iteritems())
     post['created'] = time.time()
     rec = store['posts'].put(post)
-    return flask.redirect('.')
+    return bottle.redirect('.')
 
-import sys
 
 if 'debug' in sys.argv:
     app.run(host='0.0.0.0', port=8000, debug=True)
 else:
     import bjoern
-    bjoern.run(app, '0.0.0.0', 8000)
+    bjoern.run(bottle.default_app(), '0.0.0.0', 8000, reuseport=True)
