@@ -385,9 +385,6 @@ class CollBasicTest:
         self.store = centidb.Store(self.e)
         self.coll = self.store.add_collection('coll1')
 
-    def _record(self, *args):
-        return centidb.Record(self.coll, *args)
-
     def testGetNoExist(self):
         eq(None, self.coll.get('missing'))
 
@@ -396,10 +393,6 @@ class CollBasicTest:
 
     def testGetNoExistDefault(self):
         eq('dave', self.coll.get('missing', default='dave'))
-
-    def testGetNoExistDefaultRec(self):
-        eq(self._record("dave"),
-           self.coll.get('missing', default='dave', rec=True))
 
     def testGetExist(self):
         rec = self.coll.put('')
@@ -506,31 +499,6 @@ class Bag(object):
         vars(self).update(kwargs)
 
 
-@register(python=False)
-class IndexKeyBuilderTest:
-    def _keys(self, func):
-        idx = Bag(prefix='\x10', func=func)
-        ikb = _centidb.IndexKeyBuilder([idx])
-        return ikb.build((1,), {})
-
-    def testSingleValue(self):
-        eq(['\x10\x15\x01\x66\x15\x01'], self._keys(lambda obj: 1))
-
-    def testListSingleValue(self):
-        eq(self._keys(lambda obj: ['foo']), ['\x10(foo\x00f\x15\x01'])
-
-    def testListTuple(self):
-        eq(self._keys(lambda obj: ['foo', 'bar']),
-                      ['\x10(foo\x00f\x15\x01', '\x10(bar\x00f\x15\x01'])
-
-
-@register()
-class RecordTest:
-    def test_basic(self):
-        self.assertRaises(TypeError, centidb.Record)
-        centidb.Record('ok', 'ok')
-
-
 @register()
 class BatchTest:
     ITEMS = [
@@ -592,8 +560,6 @@ class ReopenBugTest:
         engine = centidb.engines.ListEngine()
         st1 = centidb.Store(engine)
         st1.add_collection('dave')
-        pprint(vars(engine))
-
         st2 = centidb.Store(engine)
         print st2['dave']
 
