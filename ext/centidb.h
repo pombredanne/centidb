@@ -73,8 +73,6 @@ struct writer
 // Reference available from CObject centidb._keycoder._C_API.
 struct KeyCoderModule
 {
-    int (*reader_init)(struct reader *rdr, uint8_t *p, Py_ssize_t size);
-
     int (*writer_init)(struct writer *wtr, Py_ssize_t initial);
     int (*writer_putc)(struct writer *wtr, uint8_t o);
     int (*writer_puts)(struct writer *wtr, const char *restrict s, Py_ssize_t size);

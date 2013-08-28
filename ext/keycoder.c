@@ -36,14 +36,10 @@ static PyObject *uuid_get_bytes;
 static PyObject *datetime_utcoffset;
 
 
-static int reader_init(struct reader *rdr, uint8_t *p, Py_ssize_t size)
-{
-    rdr->p = p;
-    rdr->e = p + size;
-    return 1;
-}
-
-
+/**
+ * Read a byte into `*ch` from `rdr`, returning 1 on success or 0 if no bytes
+ * remain.
+ */
 static int reader_getc(struct reader *rdr, uint8_t *ch)
 {
     int ret = 0;
@@ -54,7 +50,10 @@ static int reader_getc(struct reader *rdr, uint8_t *ch)
     return ret;
 }
 
-
+/**
+ * Return 1 if `rdr` has at least `n` bytes left, otherwise set an exception
+ * and return 0.
+ */
 static int reader_ensure(struct reader *rdr, Py_ssize_t n)
 {
     int ret = (rdr->e - rdr->p) >= n;
@@ -66,13 +65,17 @@ static int reader_ensure(struct reader *rdr, Py_ssize_t n)
     return ret;
 }
 
-
+/**
+ * Unconditionally return a byte from `rdr` and advance its read position.
+ */
 static uint8_t reader_getchar(struct reader *rdr)
 {
     return *(rdr->p++);
 }
 
-
+/**
+ * Initialize a struct writer, used to ease direct construction of a PyString.
+ */
 static int writer_init(struct writer *wtr, Py_ssize_t initial)
 {
     wtr->pos = 0;
@@ -96,7 +99,10 @@ static int writer_grow(struct writer *wtr)
 }
 
 
-/* Append a single ordinal `o` to the buffer, growing it as necessary. */
+/*
+ * Append a byte `o` to `wtr`, growing it as necessary. Return 1 on success or
+ * set an exception and return 0 on error.
+ */
 static int writer_putc(struct writer *wtr, uint8_t o)
 {
     if(! wtr->s) {
@@ -124,21 +130,27 @@ static int writer_ensure(struct writer *wtr, Py_ssize_t size)
     return 1;
 }
 
-
+/**
+ * Return a pointer to the current write position. The pointer is valid as long
+ * as writer_grow() is never indirectly called.
+ */
 static uint8_t *writer_ptr(struct writer *wtr)
 {
     return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
 }
 
-
+/**
+ * Unconditionally write a byte to `wtr` and increment its write position.
+ */
 static void writer_putchar(struct writer *wtr, uint8_t ch)
 {
     PyString_AS_STRING(wtr->s)[wtr->pos++] = ch;
 }
 
-
-/* Append a bytestring `b` to the buffer, growing it as necessary. */
-static int writer_puts(struct writer *wtr, const char *restrict s, Py_ssize_t size)
+/**
+ * Append a bytestring `s` to the buffer, growing it as necessary.
+ */
+static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
 {
     assert(wtr->s);
     if(! writer_ensure(wtr, size)) {
@@ -181,14 +193,16 @@ static PyObject *tuplize(PyObject *self, PyObject *arg)
     return arg;
 }
 
-
+/**
+ * Encode the unsigned 64-bit integer `v` into `wtr`, optionally prefixing the
+ * output with `kind` if nonzero, and XORing all output bytes with `xor` (to
+ * achieve correct negative index order.
+ */
 static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
                      uint8_t xor)
 {
-    if(kind) {
-        if(! writer_putc(wtr, kind)) {
-            return 0;
-        }
+    if(kind && !writer_putc(wtr, kind)) {
+        return 0;
     }
 
     int ok = 1;
@@ -839,11 +853,7 @@ static PyObject *py_unpack(PyObject *self, PyObject *args)
         Py_RETURN_NONE;
     }
 
-    struct reader rdr;
-    if(! reader_init(&rdr, s, s_len)) {
-        return NULL;
-    }
-    rdr.p += prefix_len;
+    struct reader rdr = {s+prefix_len, s+s_len};
     return unpack(&rdr);
 }
 
@@ -868,12 +878,7 @@ static PyObject *unpacks(PyObject *self, PyObject *args)
         Py_RETURN_NONE;
     }
 
-    struct reader rdr;
-    if(! reader_init(&rdr, s, s_len)) {
-        return NULL;
-    }
-
-    rdr.p += prefix_len;
+    struct reader rdr = {s+prefix_len, s+s_len};
     PyObject *tups = PyList_New(LIST_START_SIZE);
     if(! tups) {
         return NULL;
@@ -913,8 +918,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    struct reader rdr;
-    reader_init(&rdr, s, s_len);
+    struct reader rdr = {s, s+s_len};
 
     uint64_t count;
     if(! read_plain_int(&rdr, &count, 0)) {
@@ -959,7 +963,6 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
 
 
 static struct KeyCoderModule C_API = {
-    .reader_init = reader_init,
     .writer_init = writer_init,
     .writer_putc = writer_putc,
     .writer_puts = writer_puts,
