@@ -144,7 +144,7 @@ class Index(object):
         if lo is None:
             lo = self.prefix
         else:
-            lo = keyize(lo)._with_prefix(self.prefix)
+            lo = keyize(lo).to_raw(self.prefix)
 
         if hi is None:
             hi = next_greater(self.prefix)
@@ -154,16 +154,16 @@ class Index(object):
             # This is a broken mess. When doing reverse queries we must account
             # for the key tuple of the index key. next_greater() may fail if
             # the last byte of the index tuple is FF. Needs a better solution.
-            hi = next_greater(keyize(hi)._with_prefix(self.prefix)) # TODO WTF
+            hi = next_greater(keyize(hi).to_raw(self.prefix)) # TODO WTF
             assert hi
 
         if key is not None:
             if reverse:
-                hi = next_greater(key._with_prefix(self.prefix)) # TODO
+                hi = next_greater(key.to_raw(self.prefix)) # TODO
                 assert hi
                 include = False
             else:
-                lo = keyize(key)._with_prefix(self.prefix)
+                lo = keyize(key).to_raw(self.prefix)
 
         if reverse:
             it = (txn or self.engine).iter(hi, True)
@@ -442,7 +442,7 @@ class Collection(object):
                 lo = key
 
         if prefix:
-            prefix_s = keyize(prefix)._with_prefix(self.prefix)
+            prefix_s = keyize(prefix).to_raw(self.prefix)
         else:
             prefix_s = self.prefix
 
@@ -450,14 +450,14 @@ class Collection(object):
             lokey = prefix_s
         else:
             lo = keyize(lo)
-            lokey = lo._with_prefix(self.prefix)
+            lokey = lo.to_raw(self.prefix)
 
         if hi is None:
             hikey = next_greater(prefix_s)
             include = False
         else:
             hi = keyize(hi)
-            hikey = hi._with_prefix(self.prefix)
+            hikey = hi.to_raw(self.prefix)
 
         if reverse:
             startkey = hikey
@@ -626,7 +626,7 @@ class Collection(object):
             if preserve and batch:
                 self._write_batch(txn, items, packer)
             else:
-                txn.delete(key._with_prefix(self.prefix))
+                txn.delete(key.to_raw(self.prefix))
                 items.append((key, data))
                 if max_bytes:
                     _, encoded = self._prepare_batch(items, packer)
@@ -736,7 +736,7 @@ class Collection(object):
             for index_key in self._index_keys(key, rec):
                 txn.put(index_key, '')
 
-        txn.put(key._with_prefix(self.prefix),
+        txn.put(key.to_raw(self.prefix),
                 packer_prefix + packer.pack(self.encoder.pack(rec)))
         return key
 

@@ -50,8 +50,31 @@ _tz_cache = {}
 
 
 class Key(object):
-    """Represents a database key composed of zero or more elements. An element
-    may be a string, Unicode, integer, boolean, or UUID value.
+    """Keys are immutable sequences to be used as ordered indexes into a
+    lexicographically ordered collection. They behave exactly like tuples,
+    except they may only contain bytestrings, Unicode strings, signed integers,
+    True, False, datetime, or UUID instances.
+
+    This behaves as far as possible like a tuple, however internally all
+    operations occur in terms of the tuple's packed representation, which is
+    carefully designed for compactness and to ensure its sort order is
+    identical to the original tuple elements.
+
+    Note: since :py:class:`Key`'s internally uses the packed representation,
+    any tuple passed to the constructor will be discarded after destruction.
+
+    The primary purpose of this class is to abstract all operations on the
+    encoded representation, and secondarily to abstract away management of the
+    buffer containing the encoded representation. Keys may either own a private
+    buffer containing the encoded representation, or borrow it from another
+    object. Due to this, Keys are often more efficient to manipulate than
+    regular tuples, for example as dictionary keys or in :py:class:`set`
+    operations.
+
+    Since this class can be constructed directly from the encoded
+    representation, and supports all equality operations just like a tuple, it
+    is possible to work with a Key as if it were a plain tuple without ever
+    needing to decode it.
     """
 
     __slots__ = ['args', 'prefix', 'packed', 'batch']
@@ -64,7 +87,9 @@ class Key(object):
         self.batch = False
 
     @classmethod
-    def from_packed(cls, prefix, packed, batch=False):
+    def from_packed(cls, prefix, packed):
+        """Construct an instance from its encoded representation, skipping the
+        bytestring `prefix` at the start."""
         self = cls()
         self.prefix = prefix
         self.packed = packed
@@ -80,7 +105,7 @@ class Key(object):
 
     __iadd__ = __add__
 
-    def _with_prefix(self, prefix):
+    def to_raw(self, prefix):
         if self.prefix != prefix:
             self.packed = prefix + self.packed[len(self.prefix):]
             self.prefix = prefix
@@ -109,25 +134,25 @@ class Key(object):
         return len(self.args)
 
     def __le__(self, other):
-        return self.packed <= keyize(other)._with_prefix(self.prefix)
+        return self.packed <= keyize(other).to_raw(self.prefix)
 
     def __ge__(self, other):
-        return self.packed >= keyize(other)._with_prefix(self.prefix)
+        return self.packed >= keyize(other).to_raw(self.prefix)
 
     def __lt__(self, other):
-        return self.packed < keyize(other)._with_prefix(self.prefix)
+        return self.packed < keyize(other).to_raw(self.prefix)
 
     def __gt__(self, other):
-        return self.packed > keyize(other)._with_prefix(self.prefix)
+        return self.packed > keyize(other).to_raw(self.prefix)
 
     def __eq__(self, other):
-        return self.packed == keyize(other)._with_prefix(self.prefix)
+        return self.packed == keyize(other).to_raw(self.prefix)
 
     def __ne__(self, other):
-        return self.packed != keyize(other)._with_prefix(self.prefix)
+        return self.packed != keyize(other).to_raw(self.prefix)
 
     def __cmp__(self, other):
-        return cmp(self.packed, keyize(other)._with_prefix(self.prefix))
+        return cmp(self.packed, keyize(other).to_raw(self.prefix))
 
     def __repr__(self):
         if self.args is None:
