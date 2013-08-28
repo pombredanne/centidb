@@ -77,14 +77,13 @@ class Key(object):
     needing to decode it.
     """
 
-    __slots__ = ['args', 'prefix', 'packed', 'batch']
+    __slots__ = ['args', 'prefix', 'packed']
     def __init__(self, *args):
         self.prefix = ''
         if len(args) == 1 and type(args[0]) is tuple:
             args = args[0]
         self.args = args or None
         self.packed = packs('', args) if args else ''
-        self.batch = False
 
     @classmethod
     def from_packed(cls, prefix, packed):
@@ -93,23 +92,27 @@ class Key(object):
         self = cls()
         self.prefix = prefix
         self.packed = packed
-        self.batch = False
         return self
 
     def __add__(self, extra):
         new = Key()
         new.prefix = self.prefix
-        new.packed = self.packed + packs('', extra)
-        new.batch = False
+        new.packed = packs(self.packed, extra)
         return new
 
     __iadd__ = __add__
 
     def to_raw(self, prefix):
+        """Get the bytestring representing this Key, prefixed by `prefix`."""
         if self.prefix != prefix:
             self.packed = prefix + self.packed[len(self.prefix):]
             self.prefix = prefix
         return self.packed
+
+    def to_hex(self, secret=None):
+        """Return :py:func:`to_raw('') <to_raw>` encoded in hex. The `secret`
+        parameter is unused."""
+        return self.to_raw('').encode('hex')
 
     def __iter__(self):
         if self.args is None:
