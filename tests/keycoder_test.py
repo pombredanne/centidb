@@ -149,12 +149,12 @@ class StringEncodingTest:
 
 
 @register()
-class TuplizeTest:
-    def test_already_tuple(self):
-        eq((), keycoder.tuplize(()))
+class KeyTest:
+    def test_already_key(self):
+        eq(Key(), Key(Key()))
 
     def test_not_already_tuple(self):
-        eq(("",), keycoder.tuplize(""))
+        eq(Key(""), Key(""))
 
 
 @register()
@@ -204,7 +204,7 @@ class SameIntEncodingTest:
 @register()
 class TupleTest:
     def assertOrder(self, tups):
-        tups = [keycoder.tuplize(x) for x in tups]
+        tups = map(keycoder.Key, tups)
         encs = map(keycoder.packs, tups)
         encs.sort()
         eq(tups, [keycoder.unpack(x) for x in encs])

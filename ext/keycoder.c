@@ -182,23 +182,6 @@ static PyObject *writer_fini(struct writer *wtr)
     return o;
 }
 
-
-static PyObject *tuplize(PyObject *self, PyObject *arg)
-{
-    if(Py_TYPE(arg) == &PyTuple_Type) {
-        Py_INCREF(arg);
-    } else {
-        PyObject *tup = PyTuple_New(1);
-        if(! tup) {
-            return NULL;
-        }
-        Py_INCREF(arg);
-        PyTuple_SET_ITEM(tup, 0, arg);
-        arg = tup;
-    }
-    return arg;
-}
-
 /**
  * Encode the unsigned 64-bit integer `v` into `wtr`, optionally prefixing the
  * output with `kind` if nonzero, and XORing all output bytes with `xor` (to
@@ -979,7 +962,6 @@ static struct KeyCoderModule C_API = {
 
 
 static PyMethodDef KeyCoderMethods[] = {
-    {"tuplize", tuplize, METH_O, "tuplize"},
     {"unpack", py_unpack, METH_VARARGS, "unpack"},
     {"unpacks", unpacks, METH_VARARGS, "unpacks"},
     {"pack", packs, METH_VARARGS, "pack"},
