@@ -86,9 +86,15 @@ class Key(object):
         self.packed = packs('', args) if args else ''
 
     @classmethod
-    def from_packed(cls, prefix, packed):
-        """Construct an instance from its encoded representation, skipping the
-        bytestring `prefix` at the start."""
+    def from_hex(cls, hex_, secret=None):
+        """Construct a Key from its raw form wrapped in hex. `secret` is
+        currently unused."""
+        return self.from_raw('', hex_.decode('hex'))
+
+    @classmethod
+    def from_raw(cls, prefix, packed):
+        """Construct a Key from its raw form, skipping the bytestring `prefix`
+        at the start."""
         self = cls()
         self.prefix = prefix
         self.packed = packed
@@ -110,8 +116,8 @@ class Key(object):
         return self.packed
 
     def to_hex(self, secret=None):
-        """Return :py:func:`to_raw('') <to_raw>` encoded in hex. The `secret`
-        parameter is unused."""
+        """Return :py:func:`to_raw('') <to_raw>` encoded in hex. `secret` is
+        currently unused."""
         return self.to_raw('').encode('hex')
 
     def __iter__(self):

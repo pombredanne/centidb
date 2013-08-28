@@ -177,7 +177,7 @@ class Index(object):
         for key, _ in it:
             if not key.startswith(self.prefix):
                 break
-            yield Key.from_packed(self.prefix, key)
+            yield Key.from_raw(self.prefix, key)
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False,
               txn=None):
