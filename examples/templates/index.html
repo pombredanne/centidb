@@ -1,3 +1,4 @@
+@require(posts, newer, older, msec)
 <!doctype html>
 <title>StinkyBoard!</title>
 
@@ -19,17 +20,23 @@
 
 <h3>Posts</h3>
 
-{% for (id,), post in posts %}
-    <h5>Comment #{{ id }} from {{ post.name }}</h5>
-    <blockquote>{{ post.text }}</blockquote>
-{% else %}
+@if posts:
+    @for (id,), post in posts:
+        <h5>Comment @str(id) from @post['name']</h5>
+        <blockquote>@post['text']</blockquote>
+@end
+@else:
     <em>(no posts)</em>
-{% endfor %}
+@end
 
-{% if older %}
-<a href="{{ older }}">Older</a>
-{% endif %}
+@if older:
+    <a href="@older">Older</a>
+@end
 
-{% if newer %}
-<a href="{{ newer }}">Newer</a>
-{% endif %}
+@if newer:
+    <a href="@newer">Newer</a>
+@end
+
+<hr>
+
+Served in @str(msec) ms from an 800mhz Raspberry Pi
