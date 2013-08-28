@@ -537,7 +537,7 @@ class Collection(object):
         for _, _, data in it:
             if raw:
                 return data
-            return self.encoder.unpack(value)
+            return self.encoder.unpack(data)
         return default
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
@@ -669,29 +669,26 @@ class Collection(object):
             out.extend(packer.pack(concat))
         return phys, str(out)
 
-    def _split_batch(self, rec, txn):
-        assert rec.key and rec.batch
+    def _split_batch(self, key, txn):
+        """Find the batch `key` belongs to and split it, saving all records
+        individually except for `key`."""
         assert False
-        it = self._iter(txn, rec.key, None, None, None, None, None, None)
+        it = self._iter(txn, key, None, None, None, None, None, None)
         keys, data = next(it, (None, None))
-        assert len(keys) > 1 and rec.key in keys, \
-            'Physical key missing: %r' % (rec.key,)
+        assert len(keys) > 1 and key in keys, \
+            'Physical key missing: %r' % (key,)
 
-        assert 0
+        (txn or self.engine).delete(phys)
         objs = self.encoder.loads_many(self._decompress(data))
         for i, obj in enumerate(objs):
-            if keys[-(1 + i)] != rec.key:
-                self.put(Record(self, obj), txn, key=keys[-(1 + i)])
-        (txn or self.engine).delete(phys)
-        rec.key = None
-        rec.batch = False
+            this_key = keys[-(1 + i)]
+            if this_key != key:
+                self.put(obj, txn, key=this_key)
 
     def _assign_key(self, obj, txn):
         if self.txn_key_func:
-            k = self.txn_key_func(txn or self.engine, rec.data)
-        else:
-            k = self.key_func(rec.data)
-        return keyize(k)
+            return self.txn_key_func(txn, obj)
+        return self.key_func(obj)
 
     def put(self, rec, txn=None, packer=None, key=None, blind=False):
         """Create or overwrite a record.
@@ -724,70 +721,40 @@ class Collection(object):
                 obsolete keys when this is detected, however other index
                 methods will not.
         """
-        if not key:
-            key = self._assign_key(obj, txn)
-        index_keys = self._index_keys(obj_key, rec.data)
         txn = txn or self.engine
-
-        if rec.coll is self and rec.key:
-            if rec.batch:
-                # Old key was part of a batch, explode the batch.
-                self._split_batch(rec, txn)
-            elif rec.key != obj_key:
-                # New version has changed key, delete old.
-                txn.delete(rec.key._with_prefix(self.prefix))
-            if index_keys != rec.index_keys:
-                for index_key in rec.index_keys or ():
-                    txn.delete(index_key)
-        elif self.indices and not (blind or self.info['blind']):
-            # TODO: delete() may be unnecessary when no indices are defined
-            # Old key might already exist, so delete it.
-            self.delete(obj_key)
-
+        if key is None:
+            key = self._assign_key(rec, txn)
+        key = keyize(key)
         packer = packer or encoders.PLAIN_PACKER
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer)
-        txn.put(keyize(obj_key)._with_prefix(self.prefix),
-                packer_prefix + packer.pack(self.encoder.pack(rec.data)))
-        for index_key in index_keys:
-            txn.put(index_key, '')
-        rec.coll = self
-        rec.key = obj_key
-        rec.index_keys = index_keys
-        return rec
+
+        if self.indices:
+            if not (blind or self.info['blind']):
+                self.delete(key)
+            for index_key in self._index_keys(key, rec):
+                txn.put(index_key, '')
+
+        txn.put(key._with_prefix(self.prefix),
+                packer_prefix + packer.pack(self.encoder.pack(rec)))
+        return key
 
     def delete(self, key, txn=None):
-        """Delete any existing record filed 
-
-        `key`:
-            Record key to delete.
+        """Delete any existing record filed under `key`.
         """
-        delete = (txn or self.engine).delete
-        if not self.indices:
-            delete(keycoder.packs(self.prefix, key))
-            return
-
-        old = self.get(key)
-        if old:
-            pass
-        if isinstance(obj, Record):
-            rec = obj
-        else:
-            # TODO NEED FIX
-            rec = self.get(obj)
-        if rec and rec.key: # todo rec.key must be set
-            if rec.batch:
+        it = self._iter(txn, None, key, None, None, None, None, True, None)
+        for batch, key_, data in it:
+            if key != key_:
+                break
+            obj = self.encoder.unpack(data)
+            if self.indices:
+                for key in self._index_keys(key, obj):
+                    (txn or self.engine).delete(key)
+            if batch:
                 self._split_batch(rec, txn)
             else:
-                delete = (txn or self.engine).delete
-                delete(keycoder.packs(self.prefix, rec.key))
-                for index_key in rec.index_keys or ():
-                    delete(index_key)
-            rec.key = None
-            rec.batch = False
-            rec.index_keys = None
-            return rec
+                (txn or self.engine).delete(keycoder.packs(self.prefix, key))
 
 class Store(object):
     """Represents access to the underlying storage engine, and manages
