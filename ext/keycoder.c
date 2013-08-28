@@ -119,7 +119,10 @@ static int writer_putc(struct writer *wtr, uint8_t o)
     return 1;
 }
 
-
+/**
+ * Ensure `wtr` contains at least `size` unused bytes. Return 1 on success or
+ * set an exception and return 0.
+ */
 static int writer_ensure(struct writer *wtr, Py_ssize_t size)
 {
     while((PyString_GET_SIZE(wtr->s) - (wtr->pos + 1)) < size) {
@@ -148,7 +151,8 @@ static void writer_putchar(struct writer *wtr, uint8_t ch)
 }
 
 /**
- * Append a bytestring `s` to the buffer, growing it as necessary.
+ * Append a bytestring `s` to the buffer, growing it as necessary. Return 1 on
+ * success or set an exception and return 0.
  */
 static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
 {
@@ -162,9 +166,11 @@ static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
     return 1;
 }
 
-
-/* Resize the string to its final size, and return it. The StringWriter should
- * be discarded after calling finalize(). */
+/**
+ * Resize the string to its final size. `wtr` should be discarded after calling
+ * finalize(). Return a new reference to the string on success or sets an
+ * exception and returns NULL on failure.
+ */
 static PyObject *writer_fini(struct writer *wtr)
 {
     if(! wtr->s) {
