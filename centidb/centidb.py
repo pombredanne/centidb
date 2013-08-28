@@ -32,7 +32,6 @@ from centidb import encoders
 from centidb import keycoder
 from centidb.encoders import Encoder
 from centidb.keycoder import Key
-from centidb.keycoder import keyize
 
 __all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
 
@@ -144,7 +143,7 @@ class Index(object):
         if lo is None:
             lo = self.prefix
         else:
-            lo = keyize(lo).to_raw(self.prefix)
+            lo = Key(lo).to_raw(self.prefix)
 
         if hi is None:
             hi = next_greater(self.prefix)
@@ -154,7 +153,7 @@ class Index(object):
             # This is a broken mess. When doing reverse queries we must account
             # for the key tuple of the index key. next_greater() may fail if
             # the last byte of the index tuple is FF. Needs a better solution.
-            hi = next_greater(keyize(hi).to_raw(self.prefix)) # TODO WTF
+            hi = next_greater(Key(hi).to_raw(self.prefix)) # TODO WTF
             assert hi
 
         if key is not None:
@@ -163,7 +162,7 @@ class Index(object):
                 assert hi
                 include = False
             else:
-                lo = keyize(key).to_raw(self.prefix)
+                lo = Key(key).to_raw(self.prefix)
 
         if reverse:
             it = (txn or self.engine).iter(hi, True)
@@ -235,7 +234,7 @@ class Index(object):
     def has(self, x, txn=None):
         """Return True if an entry with the exact tuple `x` exists in the
         index."""
-        x = keyize(x)
+        x = Key(x)
         tup, _ = next(self.pairs(x, txn=txn), (None, None))
         return tup == x
 
@@ -434,7 +433,7 @@ class Collection(object):
     #                     startpred=lokey, endpred=
     def _iter(self, txn, key, lo, hi, prefix, reverse, max_, include, max_phys):
         if key is not None:
-            key = keyize(key)
+            key = Key(key)
             if reverse:
                 hi = key
                 include = True
@@ -442,21 +441,21 @@ class Collection(object):
                 lo = key
 
         if prefix:
-            prefix_s = keyize(prefix).to_raw(self.prefix)
+            prefix_s = Key(prefix).to_raw(self.prefix)
         else:
             prefix_s = self.prefix
 
         if lo is None:
             lokey = prefix_s
         else:
-            lo = keyize(lo)
+            lo = Key(lo)
             lokey = lo.to_raw(self.prefix)
 
         if hi is None:
             hikey = next_greater(prefix_s)
             include = False
         else:
-            hi = keyize(hi)
+            hi = Key(hi)
             hikey = hi.to_raw(self.prefix)
 
         if reverse:
@@ -724,7 +723,7 @@ class Collection(object):
         txn = txn or self.engine
         if key is None:
             key = self._assign_key(rec, txn)
-        key = keyize(key)
+        key = Key(key)
         packer = packer or encoders.PLAIN_PACKER
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:

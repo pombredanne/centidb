@@ -76,14 +76,23 @@ class Key(object):
     is possible to work with a Key as if it were a plain tuple without ever
     needing to decode it.
     """
-
     __slots__ = ['args', 'prefix', 'packed']
-    def __init__(self, *args):
+
+    def __new__(cls, *args):
+        if len(args) == 1:
+            type_ = type(args[0])
+            if type_ is Key:
+                return args[0]
+            elif type_ is tuple:
+                args = args[0]
+        self = object.__new__(cls)
         self.prefix = ''
-        if len(args) == 1 and type(args[0]) is tuple:
-            args = args[0]
         self.args = args or None
         self.packed = packs('', args) if args else ''
+        return self
+
+    def __init__(self, *args):
+        pass
 
     @classmethod
     def from_hex(cls, hex_, secret=None):
@@ -143,25 +152,25 @@ class Key(object):
         return len(self.args)
 
     def __le__(self, other):
-        return self.packed <= keyize(other).to_raw(self.prefix)
+        return self.packed <= Key(other).to_raw(self.prefix)
 
     def __ge__(self, other):
-        return self.packed >= keyize(other).to_raw(self.prefix)
+        return self.packed >= Key(other).to_raw(self.prefix)
 
     def __lt__(self, other):
-        return self.packed < keyize(other).to_raw(self.prefix)
+        return self.packed < Key(other).to_raw(self.prefix)
 
     def __gt__(self, other):
-        return self.packed > keyize(other).to_raw(self.prefix)
+        return self.packed > Key(other).to_raw(self.prefix)
 
     def __eq__(self, other):
-        return self.packed == keyize(other).to_raw(self.prefix)
+        return self.packed == Key(other).to_raw(self.prefix)
 
     def __ne__(self, other):
-        return self.packed != keyize(other).to_raw(self.prefix)
+        return self.packed != Key(other).to_raw(self.prefix)
 
     def __cmp__(self, other):
-        return cmp(self.packed, keyize(other).to_raw(self.prefix))
+        return cmp(self.packed, Key(other).to_raw(self.prefix))
 
     def __repr__(self):
         if self.args is None:
@@ -470,10 +479,6 @@ def unpack_int(s):
     ba = bytearray(s)
     v, pos = read_int(ba, 0, len(ba), 0)
     return v
-
-
-def keyize(o):
-    return o if type(o) is Key else Key(o)
 
 
 GOOD_TYPES = (tuple, Key)
