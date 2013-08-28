@@ -34,11 +34,10 @@ from centidb.encoders import Encoder
 from centidb.keycoder import Key
 from centidb.keycoder import keyize
 
-__all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
+__all__ = ['Store', 'Encoder', 'Collection', 'Record', 'Index', 'open']
 
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
-ITEMGETTER_2 = operator.itemgetter(1)
 
 KIND_TABLE = 0
 KIND_INDEX = 1
@@ -209,28 +208,34 @@ class Index(object):
             self.pairs(args, lo, hi, reverse, max, include, txn))
 
     def items(self, args=None, lo=None, hi=None, reverse=None, max=None,
-              include=False, txn=None):
+            include=False, txn=None, rec=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
-        order."""
+        order. If `rec` is ``True``, :py:class:`Record` instances are yielded
+        instead of record values."""
         for _, key in self.pairs(args, lo, hi, reverse, max, include, txn):
-            obj = self.coll.get(key, txn=txn)
+            obj = self.coll.get(key, txn=txn, rec=rec)
             if obj:
                 yield key, obj
             else:
                 warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
     def values(self, args=None, lo=None, hi=None, reverse=None, max=None,
-               include=False, txn=None):
-        """Yield all values referred to by the index, in tuple order."""
+            include=False, txn=None, rec=None):
+        """Yield all values referred to by the index, in tuple order. If `rec`
+        is ``True``, :py:class:`Record` instances are yielded instead of record
+        values."""
         it = self.items(args, lo, hi, reverse, max, include, txn, rec)
         return itertools.imap(ITEMGETTER_1, it)
 
     def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
-             txn=None, default=None):
+             txn=None, rec=None, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
         it = self.values(args, lo, hi, reverse, None, include, txn, rec)
-        return next(it, default)
+        v = next(it, default)
+        if v is default and rec and default is not None:
+            v = Record(self.coll, default)
+        return v
 
     def has(self, x, txn=None):
         """Return True if an entry with the exact tuple `x` exists in the
@@ -239,11 +244,64 @@ class Index(object):
         tup, _ = next(self.pairs(x, txn=txn), (None, None))
         return tup == x
 
-    def get(self, x, txn=None, default=None):
-        """Return the first matching record from the index."""
-        for tup in self.items(prefix=x, include=False, txn=txn):
+    def get(self, x, txn=None, rec=None, default=None):
+        """Return the first matching record referred to by the index, in tuple
+        order. If `rec` is ``True`` a :py:class:`Record` instance is returned
+        of the record value."""
+        for tup in self.items(lo=x, hi=x, include=False, rec=rec, txn=txn):
             return tup[1]
+        if rec and default is not None:
+            return Record(self.coll, default)
         return default
+
+class Record(object):
+    """Wraps a record value with its last saved key, if any.
+
+    :py:class:`Record` instances are usually created by the
+    :py:class:`Collection` and :py:class:`Index`
+    ``get()``/``put()``/``iter*()`` functions. They are primarily used to track
+    index keys that were valid for the record when it was loaded, allowing many
+    operations to be avoided if the user deletes or modifies it within the same
+    transaction. The class is only required when modifying existing records.
+
+    It is possible to avoid using the class when `Collection.derived_keys =
+    True`, however this hurts perfomance as it forces :py:meth:`Collectionput`
+    to first check for any existing record with the same key, and therefore for
+    any existing index keys that must first be deleted.
+
+    *Note:* you may create :py:class:`Record` instances directly, **but you
+    must not modify any attributes except** :py:attr:`Record.data`, or
+    construct it using any arguments except `coll` and `data`, otherwise index
+    corruption will likely occur.
+    """
+    def __init__(self, coll, data, _key=None, _batch=False,
+            _txn_id=None, _index_keys=None):
+        #: :py:class:`Collection` this record belongs to. This is always reset
+        #: after a successful :py:meth:`Collection.put`.
+        self.coll = coll
+        #: The actual record value. This may be user-supplied Python object
+        #: recognized by the collection's value encoder.
+        self.data = data
+        #: Key for this record when it was last saved, or ``None`` if the
+        #: record is deleted or has never been saved.
+        self.key = _key
+        #: True if the record was loaded from a physical key that contained
+        #: other records. Used internally to know when to explode batches
+        #: during saves.
+        self.batch = _batch
+        #: Transaction ID this record was visible in. Used internally to
+        #: ensure records from distinct transactions aren't mixed.
+        self.txn_id = _txn_id
+        self.index_keys = _index_keys
+
+    def __eq__(self, other):
+        return isinstance(other, Record) and \
+            other.coll is self.coll and other.data == self.data and \
+            other.key == self.key
+
+    def __repr__(self):
+        s = ','.join(map(repr, self.key or ()))
+        return '<Record %s:(%s) %r>' % (self.coll.info['name'], s, self.data)
 
 
 class Collection(object):
@@ -297,8 +355,10 @@ class Collection(object):
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
+            info['derived_keys'] = False
             info['blind'] = True
         else:
+            info.setdefault('derived_keys', False)
             info.setdefault('blind', False)
 
         self.key_func = key_func
@@ -326,6 +386,27 @@ class Collection(object):
         and does not need explicitly set in that case.
         """
         self.info['blind'] = bool(blind)
+        self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
+
+    def set_derived_keys(self, derived_keys):
+        """Enable derived keys. If ``True``, indicates the key function derives
+        a record's key from its value, and should be re-invoked for each
+        change. If the key changes, the previous key and index entries are
+        automatically deleted.
+
+            ::
+
+                # Since names are used as keys, if a person record changes
+                # name, its key must also change.
+                coll = Collection(store, 'people',
+                    key_func=lambda person: person['name'],
+                    derived_keys=True)
+
+            If ``False``, record keys are preserved across saves, so long as
+            `get(rec=True)` and `put(<Record instance>)` are used. In either
+            case, `put(..., key=...)` may be used to override default behavior.
+        """
+        self.info['derived_keys'] = bool(derived_keys)
         self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
 
     def add_index(self, name, func):
@@ -497,48 +578,64 @@ class Collection(object):
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
-              max=None, include=False, txn=None, raw=False):
-        """Yield all `(key tuple, value)` tuples in key order."""
+              max=None, include=False, txn=None, rec=None, raw=False):
+        """Yield all `(key tuple, value)` tuples in key order. If `rec` is
+        ``True``, :py:class:`Record` instances are yielded instead of record
+        values."""
+        txn_id = getattr(txn or self.engine, 'txn_id', None)
         it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
-        if raw:
-            return it
-        return ((key, self.encoder.unpack(data)) for _, key, data in it)
+        for batch, key, data in it:
+            obj = data if raw else self.encoder.unpack(data)
+            if rec:
+                obj = Record(self, obj, key, batch, txn_id,
+                             self._index_keys(key, obj))
+            yield key, obj
 
     def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-             max=None, include=False, txn=None):
+             max=None, include=False, txn=None, rec=None):
         """Yield key tuples in key order."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
-        return itertools.imap(ITEMGETTER_1, it)
+        return itertools.imap(ITEMGETTER_0, self.items(
+            key, lo, hi, prefix, reverse, max, include, txn, rec, True))
 
     def values(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-               max=None, include=False, txn=None, raw=False):
-        """Yield record values in key order."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
-        if raw:
-            return itertools.imap(ITEMGETTER_2, it)
-        return (self.encoder.unpack(data) for _, key, data in it)
+               max=None, include=False, txn=None, rec=None, raw=False):
+        """Yield record values in key order. If `rec` is ``True``,
+        :py:class:`Record` instances are yielded instead of record values."""
+        return itertools.imap(ITEMGETTER_1, self.items(
+            key, lo, hi, prefix, reverse, max, include, txn, rec, raw))
 
     def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-             include=False, txn=None, raw=None, default=None):
+             include=False, txn=None, rec=None, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
-        for _, _, data in it:
-            if raw:
-                return data
-            return self.encoder.unpack(data)
-        return default
+        it = self.values(key, lo, hi, prefix, reverse, None, include,
+                         txn, rec, raw)
+        v = next(it, default)
+        if v is default and rec and default is not None:
+            v = Record(self.coll, default)
+        return v
 
-    def get(self, key, default=None, txn=None, raw=False):
+    def get(self, key, default=None, rec=False, txn=None, raw=False):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
-        `default` is provided, return it instead."""
+        `default` is provided, return it instead. If `rec` is ``True``, return
+        a :py:class:`Record` instance for use when later re-saving the record,
+        otherwise only the record's value is returned. If `rec` is ``True``,
+        return the record without unpacking it."""
+        key = keyize(key)
         it = self._iter(txn, None, key, key, None, False, None, True, None)
-        for _, _, data in it:
-            if raw:
-                return data
-            return self.encoder.unpack(value)
-        return default
+        tup = next(it, None)
+        if tup:
+            txn_id = getattr(txn or self.engine, 'txn_id', None)
+            obj = tup[2] if raw else self.encoder.unpack(tup[2])
+            if rec:
+                obj = Record(self, obj, key, tup[0], txn_id,
+                             self._index_keys(key, obj))
+            return obj
+
+        if default is not None:
+            return Record(self, default) if rec else default
+        return
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
               max_bytes=None, max_keylen=None, preserve=True, packer=None,
@@ -686,19 +783,23 @@ class Collection(object):
         rec.key = None
         rec.batch = False
 
-    def _assign_key(self, obj, txn):
-        if self.txn_key_func:
-            k = self.txn_key_func(txn or self.engine, rec.data)
-        else:
-            k = self.key_func(rec.data)
-        return keyize(k)
+    def _reassign_key(self, rec, txn):
+        if rec.key and not self.info['derived_keys']:
+            return rec.key
+        elif self.txn_key_func:
+            return keyize(self.txn_key_func(txn or self.engine, rec.data))
+        return keyize(self.key_func(rec.data))
 
     def put(self, rec, txn=None, packer=None, key=None, blind=False):
         """Create or overwrite a record.
 
             `rec`:
-                The value to put; must be a value recognised by the
-                collection's `encoder`.
+                The value to put; may either be a value recognised by the
+                collection's `encoder` or a :py:class:`Record` instance, such
+                as returned by ``get(..., rec=True)``. It is strongly advised
+                to prefer use of :py:class:`Record` instances during
+                read-modify-write transactions as it allows :py:meth:`put` to
+                avoid many database operations.
 
             `txn`:
                 Transaction to use, or ``None`` to indicate the default
@@ -724,8 +825,9 @@ class Collection(object):
                 obsolete keys when this is detected, however other index
                 methods will not.
         """
-        if not key:
-            key = self._assign_key(obj, txn)
+        if type(rec) is not Record:
+            rec = Record(self, rec)
+        obj_key = key or self._reassign_key(rec, txn)
         index_keys = self._index_keys(obj_key, rec.data)
         txn = txn or self.engine
 
@@ -757,25 +859,18 @@ class Collection(object):
         rec.index_keys = index_keys
         return rec
 
-    def delete(self, key, txn=None):
-        """Delete any existing record filed 
+    def delete(self, obj, txn=None):
+        """Delete a record by key or using a :py:class:`Record` instance. The
+        deleted record is returned if it existed.
 
-        `key`:
-            Record key to delete.
+        `obj`:
+            Record to delete; may be a :py:class:`Record` instance, or a tuple,
+            or a primitive value.
         """
-        delete = (txn or self.engine).delete
-        if not self.indices:
-            delete(keycoder.packs(self.prefix, key))
-            return
-
-        old = self.get(key)
-        if old:
-            pass
         if isinstance(obj, Record):
             rec = obj
         else:
-            # TODO NEED FIX
-            rec = self.get(obj)
+            rec = self.get(obj, rec=True)
         if rec and rec.key: # todo rec.key must be set
             if rec.batch:
                 self._split_batch(rec, txn)
