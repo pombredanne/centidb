@@ -25,12 +25,6 @@ Collection Class
 .. autoclass:: Collection
     :members:
 
-Record Class
-++++++++++++
-
-.. autoclass:: Record
-    :members:
-
 Index Class
 +++++++++++
 
