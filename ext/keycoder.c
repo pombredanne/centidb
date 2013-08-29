@@ -568,7 +568,7 @@ static PyObject *read_str(struct reader *rdr)
         return writer_fini(&wtr);
     }
 
-    while(ret && reader_getc(rdr, &cb) && (cb != 0)) {
+    while(ret && reader_getc(rdr, &cb)) {
         if(cb < 0x80) {
             rdr->p--;
             break;

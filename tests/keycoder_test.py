@@ -151,10 +151,10 @@ class StringEncodingTest:
 @register()
 class KeyTest:
     def test_already_key(self):
-        eq(Key(), Key(Key()))
+        eq(keycoder.Key(), keycoder.Key(keycoder.Key()))
 
     def test_not_already_tuple(self):
-        eq(Key(""), Key(""))
+        eq(keycoder.Key(""), keycoder.Key(""))
 
 
 @register()
