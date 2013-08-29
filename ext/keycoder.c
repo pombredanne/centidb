@@ -223,7 +223,11 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
     return ok;
 }
 
-
+/**
+ * Python-level interface to write_int(). Return the integer encoded to a
+ * string on success, or sets an exception and return NULL and set an exception
+ * on failure.
+ */
 static PyObject *py_pack_int(PyObject *self, PyObject *args)
 {
     char *prefix;
@@ -245,10 +249,14 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
     return NULL;
 }
 
-
+/**
+ * Write `p[0..length]` to `wtr`, optionally prefixed by `kind` if it is
+ * nonzero. Return 1 on success, or set an exception and return 0 on failure.
+ */
 static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
                      enum ElementKind kind)
 {
+    // TODO: call writer_need() once and use writer_putchar().
     if(kind) {
         if(! writer_putc(wtr, kind)) {
             return 0;
@@ -278,7 +286,12 @@ static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
     return ret;
 }
 
-
+/**
+ * Given a datetime.datetime instance `dt`, try to figure out its UTC offset in
+ * seconds. If the datetime is timezone-naive, then assume it is in the
+ * system's timezone. Return 0 on success, or set an exception and return -1 on
+ * failure.
+ */
 static int get_utcoffset_secs(PyObject *dt, int64_t ts)
 {
     PyObject *td = PyObject_CallFunctionObjArgs(datetime_utcoffset, dt, NULL);
@@ -303,7 +316,10 @@ static int get_utcoffset_secs(PyObject *dt, int64_t ts)
     }
 }
 
-
+/**
+ * Encode the datetime.datetime instance `dt` into `wtr`. Return 0 on success
+ * or set an exception and return -1 on failure.
+ */
 static int write_time(struct writer *wtr, PyObject *dt)
 {
     struct tm tm = {
@@ -337,8 +353,12 @@ static int write_time(struct writer *wtr, PyObject *dt)
     }
 }
 
-
-static int c_encode_value(struct writer *wtr, PyObject *arg)
+/**
+ * Given some arbitrary Python object `arg`, figure out what it is, and encode
+ * it to `wtr`. Return 1 on success, or set an exception and return 0 on
+ * failure.
+ */
+static int write_element(struct writer *wtr, PyObject *arg)
 {
     int ret = 0;
     PyTypeObject *type = Py_TYPE(arg);
@@ -397,18 +417,24 @@ static int c_encode_value(struct writer *wtr, PyObject *arg)
     return ret;
 }
 
-
-static int c_encode_key(struct writer *wtr, PyObject *tup)
+/**
+ * Encode all the elements from the Python tuple `tup` into `wtr`, returning 1
+ * on success or set an exception and return 0 on failure.
+ */
+static int write_tuple(struct writer *wtr, PyObject *tup)
 {
     int ret = 1;
     for(Py_ssize_t i = 0; ret && i < PyTuple_GET_SIZE(tup); i++) {
-        ret = c_encode_value(wtr, PyTuple_GET_ITEM(tup, i));
+        ret = write_element(wtr, PyTuple_GET_ITEM(tup, i));
     }
     return ret;
 }
 
-
-static PyObject *packs(PyObject *self, PyObject *args)
+/**
+ * Python-level packs() implementation. Accepts 2 parameters, string prefix and
+ * list/tuple/element to encode.
+ */
+static PyObject *py_packs(PyObject *self, PyObject *args)
 {
     uint8_t *prefix = NULL;
     Py_ssize_t prefix_size;
@@ -433,7 +459,6 @@ static PyObject *packs(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    int ret = 1;
     if(prefix) {
         if(! writer_puts(&wtr, (char *)prefix, prefix_size)) {
             return NULL;
@@ -443,11 +468,12 @@ static PyObject *packs(PyObject *self, PyObject *args)
     PyObject *tups = PyTuple_GET_ITEM(args, 1);
     PyTypeObject *type = Py_TYPE(tups);
 
+    int ret = 1;
     if(type != &PyList_Type) {
         if(type != &PyTuple_Type) {
-            ret = c_encode_value(&wtr, tups);
+            ret = write_element(&wtr, tups);
         } else {
-            ret = c_encode_key(&wtr, tups);
+            ret = write_tuple(&wtr, tups);
         }
     } else {
         for(int i = 0; ret && i < PyList_GET_SIZE(tups); i++) {
@@ -457,9 +483,9 @@ static PyObject *packs(PyObject *self, PyObject *args)
             PyObject *elem = PyList_GET_ITEM(tups, i);
             type = Py_TYPE(elem);
             if(type != &PyTuple_Type) {
-                ret = c_encode_value(&wtr, elem);
+                ret = write_element(&wtr, elem);
             } else {
-                ret = c_encode_key(&wtr, elem);
+                ret = write_tuple(&wtr, elem);
             }
         }
     }
@@ -471,7 +497,10 @@ static PyObject *packs(PyObject *self, PyObject *args)
     return packed;
 }
 
-
+/**
+ * Decode the varint pointed to by `rdr` into `u64`, XORing read bytes with
+ * `xor`. Return 1 on success or set an exception and return 0 on failure.
+ */
 static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
 {
     uint8_t ch = 0;
@@ -522,7 +551,13 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
     return ok;
 }
 
-
+/**
+ * Decode the integer pointed to by `rdr` and return it. If `negate` is 0, the
+ * integer is presumed to be positive, otherwise it will be negated before
+ * being returned. `xor` is the mask to apply to read bytes. For negative
+ * integers it should be 0xff, otherise 0. Return a new reference to the
+ * integer on success, or set an exception and return NULL on failure.
+ */
 static PyObject *read_int(struct reader *rdr, int negate, uint8_t xor)
 {
     uint64_t u64;
@@ -537,7 +572,6 @@ static PyObject *read_int(struct reader *rdr, int negate, uint8_t xor)
     }
     return v;
 }
-
 
 /**
  * Decode the string pointed to by `rdr` and return it, or NULL on error and
@@ -592,7 +626,11 @@ static PyObject *read_str(struct reader *rdr)
     return writer_fini(&wtr);
 }
 
-
+/**
+ * Decode a datetime pointed to by `rdr`. Return a new reference to the
+ * datetime.datetime instance on success, or set an exception and return NULL
+ * on failure.
+ */
 static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
 {
     uint64_t v;
@@ -627,7 +665,10 @@ static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
     return dt;
 }
 
-
+/**
+ * Decode a UUID pointed to by `rdr`. Return a new reference to the UUID
+ * instance on success, or set an exception and return NULL on failure.
+ */
 static PyObject *read_uuid(struct reader *rdr)
 {
     if(! reader_ensure(rdr, 16)) {
@@ -644,7 +685,6 @@ static PyObject *read_uuid(struct reader *rdr)
     rdr->p += 16;
     return arg;
 }
-
 
 /**
  * Decode the next tuple element pointed to by `rdr`, returning NULL and
@@ -700,7 +740,6 @@ static PyObject *read_element(struct reader *rdr)
     return arg;
 }
 
-
 /**
  * Construct and return a tuple of encoded elements pointed to by `rdr`, until
  * KIND_SEP or the empty string is reached.
@@ -734,7 +773,6 @@ static PyObject *unpack(struct reader *rdr)
     PyTuple_GET_SIZE(tup) = tpos;
     return tup;
 }
-
 
 /**
  * Given a reader initialized to point at the start of a tuple, seek to the
@@ -781,16 +819,9 @@ static int key_seek(struct reader *rdr, int idx)
     return 0;
 }
 
-
-static int key_getitem(struct reader *rdr, int idx)
-{
-    if(key_seek(rdr, idx)) {
-        PyErr_SetString(PyExc_IndexError, "key index out of range");
-        return -1;
-    }
-}
-
-
+/**
+ * Return the length of the tuple pointed to by `rdr`.
+ */
 static Py_ssize_t key_length(struct reader *rdr)
 {
     Py_ssize_t len = 0;
@@ -801,7 +832,11 @@ static Py_ssize_t key_length(struct reader *rdr)
     return len;
 }
 
-
+/**
+ * Python-level interface to unpack a tuple. Expects 2 arguments: string prefix
+ * to ignore and encoded tuple. Return the unpacked tuple on success, or set an
+ * exception and return NULL on failure.
+ */
 static PyObject *py_unpack(PyObject *self, PyObject *args)
 {
     uint8_t *prefix;
@@ -826,8 +861,12 @@ static PyObject *py_unpack(PyObject *self, PyObject *args)
     return unpack(&rdr);
 }
 
-
-static PyObject *unpacks(PyObject *self, PyObject *args)
+/**
+ * Python-level interface to unpack a list of tuples. Expects 2 arguments:
+ * string prefix to ignore and encoded tuple. Return the unpacked list on
+ * success, or set an exception and return NULL on failure.
+ */
+static PyObject *py_unpacks(PyObject *self, PyObject *args)
 {
     uint8_t *prefix;
     uint8_t *s;
@@ -877,7 +916,11 @@ static PyObject *unpacks(PyObject *self, PyObject *args)
     return tups;
 }
 
-
+/**
+ * Python-level function to decode an array of varints prefixed with a varint
+ * indicating the array's length. Used to encode the size of each individual
+ * value as part of a batch key.
+ */
 static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
 {
     uint8_t *s;
@@ -930,18 +973,12 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
     return tmp;
 }
 
-
-static PyMethodDef KeyCoderMethods[] = {
-    {"unpack", py_unpack, METH_VARARGS, "unpack"},
-    {"unpacks", unpacks, METH_VARARGS, "unpacks"},
-    {"pack", packs, METH_VARARGS, "pack"},
-    {"packs", packs, METH_VARARGS, "packs"},
-    {"pack_int", py_pack_int, METH_VARARGS, "pack_int"},
-    {"decode_offsets", py_decode_offsets, METH_VARARGS, "decode_offsets"},
-    {NULL, NULL, 0, NULL}
-};
-
-
+/**
+ * Import `module`, then iteratively walk its attributes looking for a specific
+ * object. Given import_object("sys", "stdout", "write", NULL), would return a
+ * new reference to a bound instancemethod for "sys.stdout.write". Return a new
+ * reference on success, or set an exception and return NULL on failure.
+ */
 static PyObject *
 import_object(const char *module, ...)
 {
@@ -967,7 +1004,22 @@ import_object(const char *module, ...)
     return obj;
 }
 
+/**
+ * Table of functions exported in the centidb._keycoder module.
+ */
+static PyMethodDef KeyCoderMethods[] = {
+    {"unpack", py_unpack, METH_VARARGS, "unpack"},
+    {"unpacks", py_unpacks, METH_VARARGS, "unpacks"},
+    {"pack", py_packs, METH_VARARGS, "pack"},
+    {"packs", py_packs, METH_VARARGS, "packs"},
+    {"pack_int", py_pack_int, METH_VARARGS, "pack_int"},
+    {"decode_offsets", py_decode_offsets, METH_VARARGS, "decode_offsets"},
+    {NULL, NULL, 0, NULL}
+};
 
+/**
+ * Do all required to initialize the module.
+ */
 PyMODINIT_FUNC
 init_keycoder(void)
 {
