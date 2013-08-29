@@ -58,10 +58,9 @@ class Key(object):
 
     The key's elements are internally stored using an encoding carefully
     designed to ensure a sort order that closely mirrors a tuple with the same
-    elements, and that the representation is as compact as possible.
-
-    Equality tests are implemented as string compares, and so are often faster
-    than comparing Python tuples.
+    elements, and that the representation is as compact as possible. Equality
+    tests are implemented as string compares, and so are often faster than
+    comparing Python tuples.
     
     Keys may own a private buffer to contain their encoded representation, or
     may borrow it from another object. Since Keys can be constructed directly
