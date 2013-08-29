@@ -464,10 +464,11 @@ static PyObject *packs(PyObject *self, PyObject *args)
         }
     }
 
-    if(ret) {
-        return writer_fini(&wtr);
+    PyObject *packed = writer_fini(&wtr);
+    if(! ret) {
+        Py_CLEAR(packed);
     }
-    return NULL;
+    return packed;
 }
 
 
