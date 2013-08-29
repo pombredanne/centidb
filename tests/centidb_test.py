@@ -14,7 +14,6 @@ import centidb
 import centidb.centidb
 import centidb.engines
 from centidb import keycoder
-from centidb import _centidb
 
 
 def rm_rf(path):

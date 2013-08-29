@@ -99,7 +99,7 @@ static PyTypeObject FixedOffsetType = {
     .tp_init = (initproc) fixedoffset_init,
     .tp_repr = (reprfunc) fixedoffset_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "_centidb.FixedOffset",
+    .tp_doc = "centidb._keycoder.FixedOffset",
     .tp_methods = offset_methods
 };
 

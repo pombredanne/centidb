@@ -70,19 +70,6 @@ struct writer
 };
 
 
-// Reference available from CObject centidb._keycoder._C_API.
-struct KeyCoderModule
-{
-    int (*writer_init)(struct writer *wtr, Py_ssize_t initial);
-    int (*writer_putc)(struct writer *wtr, uint8_t o);
-    int (*writer_puts)(struct writer *wtr, const char *restrict s, Py_ssize_t size);
-    PyObject *(*writer_fini)(struct writer *wtr);
-
-    int (*c_encode_value)(struct writer *wtr, PyObject *arg);
-    int (*c_encode_key)(struct writer *wtr, PyObject *tup);
-};
-
-
 #define UTCOFFSET_SHIFT 64
 #define UTCOFFSET_DIV (15 * 60)
 

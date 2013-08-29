@@ -36,8 +36,6 @@ extra_compile_args = ['-std=c99']
 ext_modules = []
 if use_cpython:
     ext_modules = [
-        Extension("_centidb", sources=['ext/centidb.c'],
-                  extra_compile_args=extra_compile_args),
         Extension("_keycoder", sources=['ext/keycoder.c', 'ext/fixed_offset.c'],
                   extra_compile_args=extra_compile_args)
     ]

@@ -163,8 +163,8 @@ static PyObject *writer_fini(struct writer *wtr)
 
 /**
  * Encode the unsigned 64-bit integer `v` into `wtr`, optionally prefixing the
- * output with `kind` if nonzero, and XORing all output bytes with `xor` (to
- * achieve correct negative index order.
+ * output with `kind` if nonzero, and XORing all output bytes with `xor` (for
+ * negative integers).
  */
 static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
                      uint8_t xor)
@@ -930,16 +930,6 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
 }
 
 
-static struct KeyCoderModule C_API = {
-    .writer_init = writer_init,
-    .writer_putc = writer_putc,
-    .writer_puts = writer_puts,
-    .writer_fini = writer_fini,
-    .c_encode_value = c_encode_value,
-    .c_encode_key = c_encode_key
-};
-
-
 static PyMethodDef KeyCoderMethods[] = {
     {"unpack", py_unpack, METH_VARARGS, "unpack"},
     {"unpacks", unpacks, METH_VARARGS, "unpacks"},
@@ -998,11 +988,6 @@ init_keycoder(void)
     PyObject *dct = PyModule_GetDict(mod);
     if(! dct) {
         return;
-    }
-
-    PyObject *capi = PyCapsule_New(&C_API, "centidb._keycoder._C_API", NULL);
-    if(capi) {
-        PyDict_SetItemString(dct, "_C_API", capi);
     }
 
     PyTypeObject *fixed_offset = init_fixed_offset_type();
