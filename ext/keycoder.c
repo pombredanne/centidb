@@ -89,6 +89,7 @@ static int writer_init(struct writer *wtr, Py_ssize_t initial)
  */
 static int writer_need(struct writer *wtr, Py_ssize_t size)
 {
+    assert(wtr->s != 0);
     Py_ssize_t cursize = PyString_GET_SIZE(wtr->s);
     Py_ssize_t remain = cursize - wtr->pos;
     if(remain < size) {
@@ -110,26 +111,6 @@ static uint8_t *writer_ptr(struct writer *wtr)
     return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
 }
 
-/*
- * Append a byte `o` to `wtr`, growing it as necessary. Return 1 on success or
- * set an exception and return 0 on error.
- */
-static int writer_putc(struct writer *wtr, uint8_t o)
-{
-    if(! wtr->s) {
-        return 0;
-    }
-
-    if((1 + wtr->pos) == PyString_GET_SIZE(wtr->s)) {
-        if(! writer_need(wtr, 1)) {
-            return 0;
-        }
-    }
-
-    *writer_ptr(wtr) = o;
-    return 1;
-}
-
 /**
  * Unconditionally write a byte to `wtr` and increment its write position.
  */
@@ -138,13 +119,25 @@ static void writer_putchar(struct writer *wtr, uint8_t ch)
     PyString_AS_STRING(wtr->s)[wtr->pos++] = ch;
 }
 
+/*
+ * Append a byte `o` to `wtr`, growing it as necessary. Return 1 on success or
+ * set an exception and return 0 on error.
+ */
+static int writer_putc(struct writer *wtr, uint8_t o)
+{
+    int ret = writer_need(wtr, 1);
+    if(ret) {
+        writer_putchar(wtr, o);
+    }
+    return ret;
+}
+
 /**
  * Append a bytestring `s` to the buffer, growing it as necessary. Return 1 on
  * success or set an exception and return 0.
  */
 static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
 {
-    assert(wtr->s);
     int ret = writer_need(wtr, size);
     if(ret) {
         memcpy(PyString_AS_STRING(wtr->s) + wtr->pos, s, size);
