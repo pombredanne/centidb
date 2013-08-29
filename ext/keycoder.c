@@ -21,6 +21,7 @@
 
 #include <arpa/inet.h>
 #include <assert.h>
+#include <math.h>
 #include <stdarg.h>
 #include <string.h>
 #include <structmember.h>
@@ -256,34 +257,36 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
 static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
                      enum ElementKind kind)
 {
-    // TODO: call writer_need() once and use writer_putchar().
+    Py_ssize_t need = length + (kind > 0);
+    need = (Py_ssize_t) ceil(need * 1.1428571428571428);
+    if(! writer_need(wtr, need)) {
+        return 0;
+    }
+
     if(kind) {
-        if(! writer_putc(wtr, kind)) {
-            return 0;
-        }
+        writer_putchar(wtr, kind);
     }
 
     int shift = 1;
     uint8_t trailer = 0;
 
-    int ret = 1;
-    while(ret && length--) {
+    while(length--) {
         uint8_t o = *(p++);
-        ret = writer_putc(wtr, 0x80 | trailer | (o >> shift));
+        writer_putchar(wtr, 0x80 | trailer | (o >> shift));
         if(shift < 7) {
             trailer = (o << (7 - shift));
             shift++;
         } else {
-            ret = writer_putc(wtr, 0x80 | o);
+            writer_putchar(wtr, 0x80 | o);
             shift = 1;
             trailer = 0;
         }
     }
 
     if(shift > 1) {
-        ret = writer_putc(wtr, 0x80 | trailer);
+        writer_putchar(wtr, 0x80 | trailer);
     }
-    return ret;
+    return 1;
 }
 
 /**
