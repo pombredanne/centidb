@@ -83,21 +83,32 @@ static int writer_init(struct writer *wtr, Py_ssize_t initial)
     return wtr->s != NULL;
 }
 
-
-static int writer_grow(struct writer *wtr)
+/**
+ * Ensure `wtr` contains at least `size` unused bytes. Return 1 on success or
+ * set an exception and return 0.
+ */
+static int writer_need(struct writer *wtr, Py_ssize_t size)
 {
     Py_ssize_t cursize = PyString_GET_SIZE(wtr->s);
-    Py_ssize_t newsize = cursize * 2;
-    if(newsize > (cursize + 512)) {
-        newsize = cursize + 512;
-    }
-    if(-1 == _PyString_Resize(&(wtr->s), newsize)) {
-        PyErr_NoMemory();
-        return 0;
+    Py_ssize_t remain = cursize - wtr->pos;
+    if(remain < size) {
+        cursize += 5 + (size - remain);
+        if(-1 == _PyString_Resize(&(wtr->s), cursize)) {
+            PyErr_NoMemory();
+            return 0;
+        }
     }
     return 1;
 }
 
+/**
+ * Return a pointer to the current write position. The pointer is valid as long
+ * as writer_need() is never indirectly called.
+ */
+static uint8_t *writer_ptr(struct writer *wtr)
+{
+    return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
+}
 
 /*
  * Append a byte `o` to `wtr`, growing it as necessary. Return 1 on success or
@@ -110,36 +121,13 @@ static int writer_putc(struct writer *wtr, uint8_t o)
     }
 
     if((1 + wtr->pos) == PyString_GET_SIZE(wtr->s)) {
-        if(! writer_grow(wtr)) {
+        if(! writer_need(wtr, 1)) {
             return 0;
         }
     }
 
-    ((uint8_t *restrict)PyString_AS_STRING(wtr->s))[wtr->pos++] = o;
+    *writer_ptr(wtr) = o;
     return 1;
-}
-
-/**
- * Ensure `wtr` contains at least `size` unused bytes. Return 1 on success or
- * set an exception and return 0.
- */
-static int writer_ensure(struct writer *wtr, Py_ssize_t size)
-{
-    while((PyString_GET_SIZE(wtr->s) - (wtr->pos + 1)) < size) {
-        if(! writer_grow(wtr)) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/**
- * Return a pointer to the current write position. The pointer is valid as long
- * as writer_grow() is never indirectly called.
- */
-static uint8_t *writer_ptr(struct writer *wtr)
-{
-    return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
 }
 
 /**
@@ -157,13 +145,12 @@ static void writer_putchar(struct writer *wtr, uint8_t ch)
 static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
 {
     assert(wtr->s);
-    if(! writer_ensure(wtr, size)) {
-        return 0;
+    int ret = writer_need(wtr, size);
+    if(ret) {
+        memcpy(PyString_AS_STRING(wtr->s) + wtr->pos, s, size);
+        wtr->pos += size;
     }
-
-    memcpy(PyString_AS_STRING(wtr->s) + wtr->pos, s, size);
-    wtr->pos += size;
-    return 1;
+    return ret;
 }
 
 /**
@@ -173,12 +160,11 @@ static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
  */
 static PyObject *writer_fini(struct writer *wtr)
 {
-    if(! wtr->s) {
-        return NULL;
-    }
-    _PyString_Resize(&(wtr->s), wtr->pos);
     PyObject *o = wtr->s;
-    wtr->s = NULL;
+    if(o) {
+        wtr->s = NULL;
+        _PyString_Resize(&o, wtr->pos);
+    }
     return o;
 }
 
@@ -198,19 +184,19 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
     if(v <= 240ULL) {
         ok = writer_putc(wtr, xor ^ v);
     } else if(v <= 2287ULL) {
-        if((ok = writer_ensure(wtr, 2))) {
+        if((ok = writer_need(wtr, 2))) {
             v -= 240ULL;
             writer_putchar(wtr, xor ^ (241 + (uint8_t) (v >> 8)));
             writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
     } else if(v <= 67823) {
-        if((ok = writer_ensure(wtr, 3))) {
+        if((ok = writer_need(wtr, 3))) {
             v -= 2288ULL;
             writer_putchar(wtr, xor ^ 0xf9);
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
             writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
-    } else if((ok = writer_ensure(wtr, 9))) {
+    } else if((ok = writer_need(wtr, 9))) {
         // Progressively increment type byte from 24bit case.
         uint8_t *typeptr = writer_ptr(wtr);
         uint8_t type = 0xfa;
