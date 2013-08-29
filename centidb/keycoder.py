@@ -50,31 +50,23 @@ _tz_cache = {}
 
 
 class Key(object):
-    """Keys are immutable sequences to be used as ordered indexes into a
-    lexicographically ordered collection. They behave exactly like tuples,
-    except they may only contain bytestrings, Unicode strings, signed integers,
-    True, False, datetime, or UUID instances.
+    """Keys are immutable sequences used as indexes into an ordered collection.
+    They behave like tuples, except that elements must be bytestrings, Unicode
+    strings, signed integers, ``True``, ``False``,
+    :py:class:`datetime.datetime` instances, or :py:class:`uuid.UUID`
+    instances.
 
-    This behaves as far as possible like a tuple, however internally all
-    operations occur in terms of the tuple's packed representation, which is
-    carefully designed for compactness and to ensure its sort order is
-    identical to the original tuple elements.
+    The key's elements are internally stored using an encoding carefully
+    designed to ensure a sort order that closely mirrors a tuple with the same
+    elements, and that the representation is as compact as possible.
 
-    Note: since :py:class:`Key`'s internally uses the packed representation,
-    any tuple passed to the constructor will be discarded after destruction.
-
-    The primary purpose of this class is to abstract all operations on the
-    encoded representation, and secondarily to abstract away management of the
-    buffer containing the encoded representation. Keys may either own a private
-    buffer containing the encoded representation, or borrow it from another
-    object. Due to this, Keys are often more efficient to manipulate than
-    regular tuples, for example as dictionary keys or in :py:class:`set`
-    operations.
-
-    Since this class can be constructed directly from the encoded
-    representation, and supports all equality operations just like a tuple, it
-    is possible to work with a Key as if it were a plain tuple without ever
-    needing to decode it.
+    Equality tests are implemented as string compares, and so are often faster
+    than comparing Python tuples.
+    
+    Keys may own a private buffer to contain their encoded representation, or
+    may borrow it from another object. Since Keys can be constructed directly
+    from an encoded representation in a shared buffer, it is possible to work
+    with a Key as if it were a plain tuple without ever copying or decoding it.
     """
     __slots__ = ['args', 'prefix', 'packed']
 
