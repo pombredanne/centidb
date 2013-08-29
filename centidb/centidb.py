@@ -37,7 +37,7 @@ __all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
 
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
-ITEMGETTER_2 = operator.itemgetter(1)
+ITEMGETTER_2 = operator.itemgetter(2)
 
 KIND_TABLE = 0
 KIND_INDEX = 1
