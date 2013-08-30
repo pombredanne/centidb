@@ -85,6 +85,7 @@ enum KeyFlags {
 
 typedef struct {
     PyObject_VAR_HEAD
+    long hash;
     // Size is tracked in Py_SIZE(Key).
     enum KeyFlags flags;
     // If KEY_SHARED, strong reference to source object.
