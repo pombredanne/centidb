@@ -882,12 +882,8 @@ static PyObject *py_unpacks(PyObject *self, PyObject *args)
                                         (char **) &s, &s_len)) {
         return NULL;
     }
-    if(s_len < prefix_len) {
-        PyErr_SetString(PyExc_ValueError,
-            "unpacks() prefix smaller than input.");
-        return NULL;
-    }
-    if(memcmp(prefix, s, prefix_len)) {
+
+    if(s_len < prefix_len || memcmp(prefix, s, prefix_len)) {
         Py_RETURN_NONE;
     }
 
