@@ -243,21 +243,54 @@ key_hash(Key *self)
 static PyObject *
 key_richcompare(Key *self, PyObject *other, int op)
 {
-    if(Py_TYPE(other) != &KeyType) {
-        PyErr_Format(PyExc_TypeError, "Keys can only be compared with Keys.");
-        return NULL;
-    }
-
-    Py_ssize_t s1 = Py_SIZE(self);
-    Py_ssize_t s2 = Py_SIZE(other);
-    Py_ssize_t minsize = (s1 < s2) ? s1 : s2;
-    int cmpres = memcmp(self->p, ((Key *) other)->p, minsize);
-    if(! cmpres) {
-        if(s1 < s2) {
-            cmpres = -1;
-        } else if(s1 > s2) {
-            cmpres = 1;
+    int cmpres;
+    if(Py_TYPE(other) == &KeyType) {
+        Py_ssize_t s1 = Py_SIZE(self);
+        Py_ssize_t s2 = Py_SIZE(other);
+        Py_ssize_t minsize = (s1 < s2) ? s1 : s2;
+        cmpres = memcmp(self->p, ((Key *) other)->p, minsize);
+        if(! cmpres) {
+            if(s1 < s2) {
+                cmpres = -1;
+            } else if(s1 > s2) {
+                cmpres = 1;
+            }
         }
+    } else if(Py_TYPE(other) == &PyTuple_Type) {
+        struct writer wtr;
+        if(! writer_init(&wtr, 64)) {
+            return NULL;
+        }
+
+        Py_ssize_t ti = 0;
+        Py_ssize_t remain = Py_SIZE(self);
+        uint8_t *kp = self->p;
+        while(remain && ti < PyTuple_GET_SIZE(other)) {
+            if(! write_element(&wtr, PyTuple_GET_ITEM(other, ti++))) {
+                writer_abort(&wtr);
+                return NULL;
+            }
+            uint8_t *p = writer_ptr(&wtr) - wtr.pos;
+            Py_ssize_t minsz = (remain < wtr.pos) ? remain : wtr.pos;
+            if((cmpres = memcmp(kp, p, minsz))) {
+                break;
+            }
+            remain -= minsz;
+            wtr.pos = 0;
+        }
+
+        writer_abort(&wtr);
+        if(! cmpres) {
+            if(remain) {
+                cmpres = 1;
+            } else if(ti < PyTuple_GET_SIZE(other)) {
+                cmpres = -1;
+            }
+        }
+    } else {
+        PyErr_Format(PyExc_TypeError, "Keys cannot be compared with '%s' objects.",
+                     other->ob_type->tp_name);
+        return NULL;
     }
 
     int ok = 0;
