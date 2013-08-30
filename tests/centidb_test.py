@@ -432,18 +432,25 @@ class CollBasicTest:
 @register()
 class IndexTest:
     def setUp(self):
-        self.e = centidb.engines.ListEngine()
-        self.store = centidb.Store(self.e)
+        self.store = centidb.open('ListEngine')
+        self.e = self.store.engine
         self.coll = self.store.add_collection('stuff')
         self.i = self.coll.add_index('idx', lambda obj: (69, obj))
 
         self.key = self.coll.put('dave')
         self.key2 = self.coll.put('dave2')
+
         self.expect = [(69, 'dave'), self.key]
         self.expect2 = [(69, 'dave2'), self.key2]
         self.first = [self.expect]
         self.second = [self.expect2]
         self.both = [self.expect, self.expect2]
+
+        # Insert junk in a higher collection to test iter stop conds.
+        self.coll2 = self.store.add_collection('stuff2')
+        self.i2 = self.coll2.add_index('idx', lambda obj: (69, obj))
+        self.coll2.put('XXXX')
+        self.coll2.put('YYYY')
 
     # iterpairs
     def testIterPairs(self):
