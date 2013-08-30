@@ -250,6 +250,101 @@ key_iter(Key *self)
     return (PyObject *) iter;
 }
 
+/**
+ * Return the length of the tuple pointed to by `rdr`.
+ */
+static Py_ssize_t
+key_length(Key *self)
+{
+    struct reader rdr = {self->p, self->p + Py_SIZE(self)};
+    int eof = rdr.p == rdr.e;
+    Py_ssize_t len = 0;
+
+    while(! eof) {
+        if(skip_element(&rdr, &eof)) {
+            return -1;
+        }
+        len++;
+    }
+    return len;
+}
+
+/**
+ * Concatenate a Key with another or a tuple.
+ */
+static PyObject *
+key_concat(Key *self, PyObject *other)
+{
+    Key *out = NULL;
+    struct writer wtr;
+
+    if(Py_TYPE(other) == &KeyType) {
+        Py_ssize_t combined = Py_SIZE(self) + Py_SIZE(other);
+        if(writer_init(&wtr, combined)) {
+            uint8_t *p = writer_ptr(&wtr);
+            memcpy(p, self->p, Py_SIZE(self));
+            memcpy(p + Py_SIZE(self), ((Key *)other)->p, Py_SIZE(other));
+            out = make_private_key(p, combined);
+            writer_abort(&wtr);
+        }
+    } else if(PyTuple_CheckExact(other)) {
+        if(writer_init(&wtr, Py_SIZE(self) * 2)) {
+            memcpy(writer_ptr(&wtr), self->p, Py_SIZE(self));
+            wtr.pos += Py_SIZE(self);
+
+            Py_ssize_t len = PyTuple_GET_SIZE(other);
+            Py_ssize_t i;
+            for(i = 0; i < len; i++) {
+                if(! write_element(&wtr, PyTuple_GET_ITEM(other, i))) {
+                    break;
+                }
+            }
+            if(i == len) { // success
+                uint8_t *ptr = writer_ptr(&wtr) - wtr.pos;
+                out = make_private_key(ptr, wtr.pos);
+            }
+            writer_abort(&wtr);
+        }
+    } else {
+        PyErr_Format(PyExc_TypeError, "Key.add only accepts tuples or Keys.");
+    }
+    return (PyObject *) out;
+}
+
+
+static PyObject *
+key_item(Key *self, Py_ssize_t i)
+{
+    struct reader rdr = {self->p, self->p + Py_SIZE(self)};
+    int eof = rdr.p == rdr.e;
+
+    if(i < 0) {
+        // TODO: can this be made more efficient?
+        Py_ssize_t len = key_length(self);
+        i = len - i;
+        eof |= i < 0;
+    }
+    while(i-- && !eof) {
+        if(skip_element(&rdr, &eof)) {
+            return NULL;
+        }
+    }
+    if(eof) {
+        PyErr_SetString(PyExc_IndexError, "Key index out of range");
+        return NULL;
+    }
+    return read_element(&rdr);
+}
+
+
+static PyNumberMethods key_number_methods = {
+};
+
+static PySequenceMethods key_seq_methods = {
+    .sq_length = (lenfunc) key_length,
+    .sq_concat = (binaryfunc) key_concat,
+    .sq_item = (ssizeargfunc) key_item,
+};
 
 static PyMethodDef key_methods[] = {
     {"from_hex",    (PyCFunction)key_from_hex, METH_VARARGS|METH_CLASS, ""},
@@ -270,7 +365,9 @@ static PyTypeObject KeyType = {
     .tp_repr = (reprfunc) key_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "centidb._keycoder.Key",
-    .tp_methods = key_methods
+    .tp_methods = key_methods,
+    .tp_as_number = &key_number_methods,
+    .tp_as_sequence = &key_seq_methods
 };
 
 
@@ -345,7 +442,6 @@ static PyTypeObject KeyIterType = {
     .tp_iter = (getiterfunc) keyiter_iter,
     .tp_iternext = (iternextfunc) keyiter_next,
     .tp_dealloc = (destructor) keyiter_dealloc,
-    .tp_repr = (reprfunc) key_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "centidb._keycoder.KeyIterator",
     .tp_methods = keyiter_methods

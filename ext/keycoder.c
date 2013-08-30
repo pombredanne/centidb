@@ -792,57 +792,47 @@ static PyObject *unpack(struct reader *rdr)
  * idx'th element in the tuple. Return 0 on success or -1 and set an exception
  * on error.
  */
-static int key_seek(struct reader *rdr, int idx)
+int
+skip_element(struct reader *rdr, int *eof)
 {
-    uint8_t ch;
-    while(idx && rdr->p < rdr->e) {
-        uint8_t xor = 0;
-        switch(*rdr->p++) {
-        case KIND_BOOL:
-        case KIND_NULL:
-            break;
-        case KIND_NEG_TIME:
-        case KIND_NEG_INTEGER:
-            xor = 0xff;
-        case KIND_TIME:
-        case KIND_INTEGER:
-            ch = xor ^ *rdr->p++;
-            if(ch <= 248 && ch > 240) {
-                rdr->p++;
-            } else if(ch >= 249) {
-                rdr->p += 8 - (255-ch);
-            }
-            break;
-        case KIND_TEXT:
-        case KIND_BLOB:
-            for(; (rdr->p < rdr->e) && (0x80 & *rdr->p); rdr->p++);
-            break;
-        case KIND_UUID:
-            rdr->p += 16;
-            break;
-        case KIND_SEP:
-            rdr->p = rdr->e;
-            continue;
-        }
-        idx--;
-    }
-    if(idx || rdr->p == rdr->e) {
-        return -1;
-    }
-    return 0;
-}
+    uint8_t xor = 0;
+    int ret = 0;
 
-/**
- * Return the length of the tuple pointed to by `rdr`.
- */
-static Py_ssize_t key_length(struct reader *rdr)
-{
-    Py_ssize_t len = 0;
-    while(! key_seek(rdr, 1)) {
-        len++;
+    uint8_t ch = *rdr->p++;
+    switch(ch) {
+    case KIND_BOOL:
+    case KIND_NULL:
+        break;
+    case KIND_NEG_TIME:
+    case KIND_NEG_INTEGER:
+        xor = 0xff;
+    case KIND_TIME:
+    case KIND_INTEGER:
+        ch = xor ^ *rdr->p++;
+        if(ch <= 248 && ch > 240) {
+            rdr->p++;
+        } else if(ch >= 249) {
+            rdr->p += 8 - (255-ch);
+        }
+        break;
+    case KIND_TEXT:
+    case KIND_BLOB:
+        for(; (rdr->p < rdr->e) && (0x80 & *rdr->p); rdr->p++);
+        break;
+    case KIND_UUID:
+        rdr->p += 16;
+        break;
+    case KIND_SEP:
+        *eof = 1;
+        break;
+    default:
+        PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
+        ret = -1;
     }
-    PyErr_Clear();
-    return len;
+    if(rdr->p == rdr->e && !*eof) {
+        *eof = 1;
+    }
+    return ret;
 }
 
 /**

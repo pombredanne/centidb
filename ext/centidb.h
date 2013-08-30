@@ -81,6 +81,7 @@ uint8_t *writer_ptr(struct writer *wtr);
 void writer_abort(struct writer *wtr);
 int write_element(struct writer *wtr, PyObject *arg);
 PyObject *read_element(struct reader *rdr);
+int skip_element(struct reader *rdr, int *eof);
 
 
 PyTypeObject *init_fixed_offset_type(void);
