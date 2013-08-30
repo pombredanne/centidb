@@ -251,6 +251,71 @@ key_iter(Key *self)
 }
 
 /**
+ * Return a hash of the key's content.
+ * (Uses djb_hash()).
+ */
+static long
+key_hash(Key *self)
+{
+    Py_ssize_t len = Py_SIZE(self);
+    uint8_t *p = self->p;
+    long h = 5381;
+    while(len--) {
+        h = ((h << 5) + h) ^ (long)*p++;
+    }
+    return h;
+}
+
+/**
+ * Compare this Key with another.
+ */
+static PyObject *
+key_richcompare(Key *self, PyObject *other, int op)
+{
+    if(Py_TYPE(other) != &KeyType) {
+        PyErr_Format(PyExc_TypeError, "Keys can only be compared with Keys.");
+        return NULL;
+    }
+
+    Py_ssize_t s1 = Py_SIZE(self);
+    Py_ssize_t s2 = Py_SIZE(other);
+    Py_ssize_t minsize = (s1 < s2) ? s1 : s2;
+    int cmpres = memcmp(self->p, ((Key *) other)->p, minsize);
+    if(! cmpres) {
+        if(s1 < s2) {
+            cmpres = -1;
+        } else if(s1 > s2) {
+            cmpres = 1;
+        }
+    }
+
+    int ok = 0;
+    switch(op) {
+    case Py_LT:
+        ok = cmpres < 0;
+        break;
+    case Py_LE:
+        ok = cmpres <= 0;
+        break;
+    case Py_EQ:
+        ok = cmpres == 0;
+        break;
+    case Py_NE:
+        ok = cmpres != 0;
+        break;
+    case Py_GT:
+        ok = cmpres > 0;
+        break;
+    case Py_GE:
+        ok = cmpres >= 0;
+    }
+    if(ok) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+/**
  * Return the length of the tuple pointed to by `rdr`.
  */
 static Py_ssize_t
@@ -311,7 +376,9 @@ key_concat(Key *self, PyObject *other)
     return (PyObject *) out;
 }
 
-
+/**
+ * Fetch the `i`th item from the Key.
+ */
 static PyObject *
 key_item(Key *self, Py_ssize_t i)
 {
@@ -337,9 +404,6 @@ key_item(Key *self, Py_ssize_t i)
 }
 
 
-static PyNumberMethods key_number_methods = {
-};
-
 static PySequenceMethods key_seq_methods = {
     .sq_length = (lenfunc) key_length,
     .sq_concat = (binaryfunc) key_concat,
@@ -360,13 +424,14 @@ static PyTypeObject KeyType = {
     .tp_basicsize = sizeof(Key),
     .tp_itemsize = 1,
     .tp_iter = (getiterfunc) key_iter,
+    .tp_hash = (hashfunc) key_hash,
+    .tp_richcompare = (richcmpfunc) key_richcompare,
     .tp_new = key_new,
     .tp_dealloc = (destructor) key_dealloc,
     .tp_repr = (reprfunc) key_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "centidb._keycoder.Key",
     .tp_methods = key_methods,
-    .tp_as_number = &key_number_methods,
     .tp_as_sequence = &key_seq_methods
 };
 
