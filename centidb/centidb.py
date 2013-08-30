@@ -836,6 +836,7 @@ class Store(object):
             return self._encoder_prefix[encoder]
         except KeyError:
             dct = self.get_info2(KIND_ENCODER, encoder.name)
+            idx = dct.get('idx')
             if not dct:
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
