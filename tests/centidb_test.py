@@ -395,6 +395,55 @@ class LmdbEngineTest(EngineTestBase):
 
 
 @register()
+class OneCollBoundsTest:
+    def setUp(self):
+        self.store = centidb.open('ListEngine')
+        self.store.add_collection('stuff')
+        self.keys = [
+            self.store['stuff'].put('a'),
+            self.store['stuff'].put('b'),
+            self.store['stuff'].put('c')
+        ]
+
+    def test1(self):
+        eq(self.keys[::-1], list(self.store['stuff'].keys(reverse=True)))
+
+    def test2(self):
+        eq(self.keys, list(self.store['stuff'].keys()))
+
+
+@register()
+class TwoCollBoundsTest(OneCollBoundsTest):
+    def setUp(self):
+        OneCollBoundsTest.setUp(self)
+        self.store.add_collection('stuff2')
+        self.store['stuff2'].put('a')
+        self.store['stuff2'].put('b')
+        self.store['stuff2'].put('c')
+
+
+@register()
+class ThreeCollBoundsTest(OneCollBoundsTest):
+    def setUp(self):
+        self.store = centidb.open('ListEngine')
+        self.store.add_collection('stuff')
+        self.keys = [
+            self.store['stuff'].put('a'),
+            self.store['stuff'].put('b'),
+            self.store['stuff'].put('c')
+        ]
+        self.store.add_collection('stuff0')
+        self.store['stuff0'].put('a')
+        self.store['stuff0'].put('b')
+        self.store['stuff0'].put('c')
+        OneCollBoundsTest.setUp(self)
+        self.store.add_collection('stuff2')
+        self.store['stuff2'].put('a')
+        self.store['stuff2'].put('b')
+        self.store['stuff2'].put('c')
+
+
+@register()
 class CollBasicTest:
     def setUp(self):
         self.e = centidb.engines.ListEngine()
