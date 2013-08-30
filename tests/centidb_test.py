@@ -387,18 +387,15 @@ class CollBasicTest:
     def testGetNoExist(self):
         eq(None, self.coll.get('missing'))
 
-    def testGetNoExistRec(self):
-        eq(None, self.coll.get('missing', rec=True))
-
     def testGetNoExistDefault(self):
         eq('dave', self.coll.get('missing', default='dave'))
 
     def testGetExist(self):
-        rec = self.coll.put('')
-        eq(rec.key, (1,))
+        key = self.coll.put('')
+        eq(key, (1,))
         eq('', self.coll.get(1))
-        rec = self.coll.put('x')
-        eq(rec.key, (2,))
+        key = self.coll.put('x')
+        eq(key, (2,))
         eq('x', self.coll.get(2))
 
     def testIterItemsExist(self):
@@ -406,9 +403,9 @@ class CollBasicTest:
         eq([((1,), '')], list(self.coll.items()))
 
     def testIterKeysExist(self):
-        rec = self.coll.put('')
-        rec2 = self.coll.put('')
-        eq([rec.key, rec2.key], list(self.coll.keys()))
+        key = self.coll.put('')
+        key2 = self.coll.put('')
+        eq([key, key2], list(self.coll.keys()))
 
     def testIterValuesExist(self):
         rec = self.coll.put('')
@@ -423,8 +420,8 @@ class IndexTest:
         self.coll = self.store.add_collection('stuff')
         self.i = self.coll.add_index('idx', lambda obj: (69, obj))
 
-        self.key = self.coll.put('dave').key
-        self.key2 = self.coll.put('dave2').key
+        self.key = self.coll.put('dave')
+        self.key2 = self.coll.put('dave2')
         self.expect = [(69, 'dave'), self.key]
         self.expect2 = [(69, 'dave2'), self.key2]
         self.first = [self.expect]
