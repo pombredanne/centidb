@@ -275,6 +275,7 @@ key_richcompare(Key *self, PyObject *other, int op)
             if((cmpres = memcmp(kp, p, minsz))) {
                 break;
             }
+            kp += minsz;
             remain -= minsz;
             wtr.pos = 0;
         }
@@ -287,6 +288,10 @@ key_richcompare(Key *self, PyObject *other, int op)
                 cmpres = -1;
             }
         }
+    } else if(op == Py_EQ) {
+        Py_RETURN_FALSE;
+    } else if(op == Py_NE) {
+        Py_RETURN_TRUE;
     } else {
         PyErr_Format(PyExc_TypeError, "Keys cannot be compared with '%s' objects.",
                      other->ob_type->tp_name);
