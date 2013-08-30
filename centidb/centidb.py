@@ -488,6 +488,9 @@ class Collection(object):
             it = itertools.takewhile(_kcmp(endpred), it)
         return it
 
+    def __getitem__(self, index):
+        return self.indices[index]
+
     def _decompress(self, s):
         encoder = self.store.get_encoder(s[0])
         return encoder.unpack(buffer(s, 1))
@@ -652,14 +655,14 @@ class Collection(object):
 
     def _write_batch(self, txn, items, packer):
         if items:
-            phys, data = self._prepare_batch(items, packer)
+            phys, data = self._prepare_batch(items, packer, txn)
             txn.put(phys, data)
             del items[:]
 
-    def _prepare_batch(self, items, packer):
+    def _prepare_batch(self, items, packer, txn):
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
-            packer_prefix = self.store.add_encoder(packer)
+            packer_prefix = self.store.add_encoder(packer, txn=txn)
         keytups = [key for key, _ in reversed(items)]
         phys = keycoder.packs(self.prefix, keytups)
         out = bytearray()
@@ -735,11 +738,11 @@ class Collection(object):
         packer = packer or encoders.PLAIN_PACKER
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
-            packer_prefix = self.store.add_encoder(packer)
+            packer_prefix = self.store.add_encoder(packer, txn=txn)
 
         if self.indices:
             if not (blind or self.info['blind']):
-                self.delete(key)
+                self.delete(key, txn=txn)
             for index_key in self._index_keys(key, rec):
                 txn.put(index_key, '')
 
@@ -785,13 +788,13 @@ class Store(object):
             encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:3])
         self._colls = {}
 
-    def get_info2(self, kind, name):
-        items = list(self._meta.items(prefix=(kind, name)))
+    def get_info2(self, kind, name, txn=None):
+        items = list(self._meta.items(prefix=(kind, name), txn=txn))
         return dict((a, v) for (n, k, a,), (v,) in items)
 
-    def set_info2(self, kind, name, dct):
+    def set_info2(self, kind, name, dct, txn=None):
         for key, value in dct.iteritems():
-            self._meta.put(value, key=(kind, name, key))
+            self._meta.put(value, key=(kind, name, key), txn=txn)
 
     def check_info2(self, old, new):
         for key, value in old.iteritems():
@@ -821,26 +824,27 @@ class Store(object):
             self._colls[name] = Collection(self, info, **kwargs)
             return self._colls[name]
 
-    def get_index_info(self, name, index_for):
-        dct = self.get_info2(KIND_INDEX, name)
+    def get_index_info(self, name, index_for, txn=None):
+        dct = self.get_info2(KIND_INDEX, name, txn=txn)
         if not dct:
             idx = self.count('\x00collections_idx', init=10)
             dct = {'idx': idx, 'index_for': index_for}
             self.set_info2(KIND_INDEX, name, dct)
         return dct
 
-    def add_encoder(self, encoder):
+    def add_encoder(self, encoder, txn=None):
         """Register an :py:class:`Encoder` so that :py:class:`Collection` can
         find it during decompression/unpacking."""
         try:
             return self._encoder_prefix[encoder]
         except KeyError:
-            dct = self.get_info2(KIND_ENCODER, encoder.name)
+            dct = self.get_info2(KIND_ENCODER, encoder.name, txn=txn)
             idx = dct.get('idx')
             if not dct:
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
-                self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx})
+                self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx},
+                               txn=txn)
             self._encoder_prefix[encoder] = keycoder.pack_int('', idx)
             self._prefix_encoder[keycoder.pack_int('', idx)] = encoder
             return self._encoder_prefix[encoder]
