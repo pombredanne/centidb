@@ -163,6 +163,15 @@ static PyObject *writer_fini(struct writer *wtr)
 }
 
 /**
+ * Discard the partially built string and clear the writer.
+ */
+static void writer_abort(struct writer *wtr)
+{
+    Py_CLEAR(wtr->s);
+    wtr->pos = 0;
+}
+
+/**
  * Encode the unsigned 64-bit integer `v` into `wtr`, optionally prefixing the
  * output with `kind` if nonzero, and XORing all output bytes with `xor` (for
  * negative integers).
