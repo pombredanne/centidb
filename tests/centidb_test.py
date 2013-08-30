@@ -442,9 +442,9 @@ class IndexTest:
 
         eq(self.both[::-1], list(self.i.pairs(reverse=True)))
 
-        self.coll.deletes(self.key)
+        self.coll.delete(self.key)
         eq(self.second, list(self.i.pairs()))
-        self.coll.deletes(self.key2)
+        self.coll.delete(self.key2)
         eq([], list(self.i.pairs()))
 
     # itertups
