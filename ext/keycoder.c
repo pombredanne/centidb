@@ -702,7 +702,8 @@ static PyObject *read_uuid(struct reader *rdr)
  * Decode the next tuple element pointed to by `rdr`, returning NULL and
  * setting an exception on failure.
  */
-static PyObject *read_element(struct reader *rdr)
+PyObject *
+read_element(struct reader *rdr)
 {
     PyObject *tmp;
     PyObject *arg = NULL;

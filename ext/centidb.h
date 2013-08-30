@@ -25,11 +25,14 @@
 #undef NDEBUG
 #endif
 
-#define DEBUG(x, y...) printf(x "\n", ## y);
 
-#include <stdint.h>
 #include "Python.h"
 #include "datetime.h"
+#include <stdint.h>
+#include <stdio.h>
+
+#define DEBUG(s, ...) fprintf(stderr, \
+    "centidb: %s:%s:%d: " s "\n", __FILE__, __func__, __LINE__, ## __VA_ARGS__);
 
 
 // Python 2.5
@@ -77,6 +80,7 @@ int writer_init(struct writer *wtr, Py_ssize_t initial);
 uint8_t *writer_ptr(struct writer *wtr);
 void writer_abort(struct writer *wtr);
 int write_element(struct writer *wtr, PyObject *arg);
+PyObject *read_element(struct reader *rdr);
 
 
 PyTypeObject *init_fixed_offset_type(void);

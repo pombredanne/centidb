@@ -22,6 +22,7 @@
 
 
 static PyTypeObject KeyType;
+static PyTypeObject KeyIterType;
 
 enum KeyFlags {
     // Key is stored in a shared buffer.
@@ -43,6 +44,14 @@ typedef struct {
     // In all cases, points to data.
     uint8_t *p;
 } Key;
+
+typedef struct {
+    PyObject_HEAD
+    // Key we're iterating over.
+    Key *key;
+    // Current position into key->p.
+    Py_ssize_t pos;
+} KeyIter;
 
 
 /**
@@ -114,6 +123,7 @@ key_dealloc(Key *self)
     case KEY_PRIVATE:
         break;
     }
+    PyObject_Del(self);
 }
 
 /**
@@ -225,8 +235,23 @@ key_repr(Key *self)
     return out;
 }
 
+/**
+ * Return a new iterator over the instance.
+ */
+static PyObject *
+key_iter(Key *self)
+{
+    KeyIter *iter = PyObject_New(KeyIter, &KeyIterType);
+    if(iter) {
+        iter->pos = 0;
+        iter->key = self;
+        Py_INCREF(self);
+    }
+    return (PyObject *) iter;
+}
 
-static PyMethodDef offset_methods[] = {
+
+static PyMethodDef key_methods[] = {
     {"from_hex",    (PyCFunction)key_from_hex, METH_VARARGS|METH_CLASS, ""},
     {"from_raw",    (PyCFunction)key_from_raw, METH_VARARGS|METH_CLASS, ""},
     {"to_raw",      (PyCFunction)key_to_raw,   METH_VARARGS,            ""},
@@ -239,20 +264,89 @@ static PyTypeObject KeyType = {
     .tp_name = "centidb._keycoder.Key",
     .tp_basicsize = sizeof(Key),
     .tp_itemsize = 1,
+    .tp_iter = (getiterfunc) key_iter,
     .tp_new = key_new,
     .tp_dealloc = (destructor) key_dealloc,
     .tp_repr = (reprfunc) key_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "centidb._keycoder.Key",
-    .tp_methods = offset_methods
+    .tp_methods = key_methods
 };
 
 
 PyTypeObject *
 init_key_type(void)
 {
+    if(PyType_Ready(&KeyIterType)) {
+        return NULL;
+    }
+
     if(PyType_Ready(&KeyType)) {
         return NULL;
     }
+
     return &KeyType;
 }
+
+
+// -------------
+// Iterator Type
+// -------------
+
+
+/**
+ * Satisfy the iterator protocol by returning a reference to ourself.
+ */
+static PyObject *
+keyiter_iter(KeyIter *self)
+{
+    Py_INCREF((PyObject *) self);
+    return (PyObject *) self;
+}
+
+/**
+ * Satify the iterator protocol by returning the next element from the key.
+ */
+static PyObject *
+keyiter_next(KeyIter *self)
+{
+    Py_ssize_t size = Py_SIZE(self->key);
+    if(self->pos >= size) {
+        return NULL;
+    }
+
+    uint8_t *p = self->key->p + self->pos;
+    struct reader rdr = {p, p + (size - self->pos)};
+    PyObject *elem = read_element(&rdr);
+    self->pos = (rdr.p - self->key->p);
+    return elem;
+}
+
+/**
+ * Do all required to destroy the instance.
+ */
+static void
+keyiter_dealloc(KeyIter *self)
+{
+    Py_DECREF(self->key);
+    PyObject_Del(self);
+}
+
+
+static PyMethodDef keyiter_methods[] = {
+    {"next", (PyCFunction)keyiter_next, METH_NOARGS, ""},
+    {0, 0, 0, 0}
+};
+
+static PyTypeObject KeyIterType = {
+    PyObject_HEAD_INIT(NULL)
+    .tp_name = "centidb._keycoder.KeyIterator",
+    .tp_basicsize = sizeof(KeyIter),
+    .tp_iter = (getiterfunc) keyiter_iter,
+    .tp_iternext = (iternextfunc) keyiter_next,
+    .tp_dealloc = (destructor) keyiter_dealloc,
+    .tp_repr = (reprfunc) key_repr,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_doc = "centidb._keycoder.KeyIterator",
+    .tp_methods = keyiter_methods
+};
