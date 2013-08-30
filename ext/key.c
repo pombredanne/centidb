@@ -24,35 +24,6 @@
 static PyTypeObject KeyType;
 static PyTypeObject KeyIterType;
 
-enum KeyFlags {
-    // Key is stored in a shared buffer.
-    KEY_SHARED = 1,
-    // Key was stored in a shared buffer, but the buffer expired, so we copied
-    // it to a new heap allocation.
-    KEY_COPIED = 2,
-    // Key was created uniquely for this instance, buffer was included in
-    // instance allocation during construction time.
-    KEY_PRIVATE = 4
-};
-
-typedef struct {
-    PyObject_VAR_HEAD
-    // Size is tracked in Py_SIZE(Key).
-    enum KeyFlags flags;
-    // If KEY_SHARED, strong reference to source object.
-    PyObject *source;
-    // In all cases, points to data.
-    uint8_t *p;
-} Key;
-
-typedef struct {
-    PyObject_HEAD
-    // Key we're iterating over.
-    Key *key;
-    // Current position into key->p.
-    Py_ssize_t pos;
-} KeyIter;
-
 
 /**
  * Construct a new Key instance from `p[0..size]` and return it.

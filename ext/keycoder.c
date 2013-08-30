@@ -28,7 +28,8 @@
 #include <sys/types.h>
 #include <time.h>
 
-
+// Reference to key.c::KeyType.
+static PyTypeObject *KeyType;
 // Reference to uuid.UUID().
 static PyTypeObject *UUID_Type;
 // Reference to uuid.UUID.get_bytes().
@@ -482,10 +483,12 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
 
     int ret = 1;
     if(type != &PyList_Type) {
-        if(type != &PyTuple_Type) {
-            ret = write_element(&wtr, tups);
-        } else {
+        if(type == &PyTuple_Type) {
             ret = write_tuple(&wtr, tups);
+        } else if(type == KeyType) {
+            ret = writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
+        } else {
+            ret = write_element(&wtr, tups);
         }
     } else {
         for(int i = 0; ret && i < PyList_GET_SIZE(tups); i++) {
@@ -494,10 +497,13 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
             }
             PyObject *elem = PyList_GET_ITEM(tups, i);
             type = Py_TYPE(elem);
-            if(type != &PyTuple_Type) {
-                ret = write_element(&wtr, elem);
-            } else {
+            if(type == &PyTuple_Type) {
                 ret = write_tuple(&wtr, elem);
+            } else if(type == KeyType) {
+                ret = writer_puts(&wtr, (void *) ((Key *)elem)->p,
+                                  Py_SIZE(elem));
+            } else {
+                ret = write_element(&wtr, elem);
             }
         }
     }
@@ -1051,8 +1057,8 @@ init_keycoder(void)
         PyDict_SetItemString(dct, "FixedOffset", (PyObject *) fixed_offset);
     }
 
-    PyTypeObject *key_type = init_key_type();
-    if(key_type) {
-        PyDict_SetItemString(dct, "Key", (PyObject *) key_type);
+    KeyType = init_key_type();
+    if(KeyType) {
+        PyDict_SetItemString(dct, "Key", (PyObject *) KeyType);
     }
 }
