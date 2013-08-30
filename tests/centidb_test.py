@@ -82,6 +82,8 @@ class PythonMixin:
     def setUpClass(cls):
         global centidb
         os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
+        centidb.keycoder = reload(centidb.keycoder)
+        centidb.encoders = reload(centidb.encoders)
         centidb.centidb = reload(centidb.centidb)
         centidb = reload(centidb)
         getattr(cls, '_setUpClass', lambda: None)()
@@ -92,6 +94,8 @@ class NativeMixin:
     def setUpClass(cls):
         global centidb
         os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
+        centidb.keycoder = reload(centidb.keycoder)
+        centidb.encoders = reload(centidb.encoders)
         centidb.centidb = reload(centidb.centidb)
         centidb = reload(centidb)
         getattr(cls, '_setUpClass', lambda: None)()
@@ -477,11 +481,6 @@ class IndexTest:
         eq(None, self.i.get('missing'))
         eq('dave', self.i.get((69, 'dave')))
         eq('dave2', self.i.get((69, 'dave2')))
-
-    # gets
-    def testGets(self):
-        eq([None, None], list(self.i.gets(('missing', 'missing2'))))
-        eq(['dave', None], list(self.i.gets([(69, 'dave'), 'missing'])))
 
     # has
     def testHas(self):

@@ -489,7 +489,7 @@ class Collection(object):
                 if type(lst) is not list:
                     lst = [lst]
                 for idx_key in lst:
-                    idx_keys.append(keycoder.packs(self.prefix, [idx_key, key]))
+                    idx_keys.append(keycoder.packs(idx.prefix, [idx_key, key]))
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
