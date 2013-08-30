@@ -36,7 +36,9 @@ make_private_key(uint8_t *p, Py_ssize_t size)
         self->hash = -1;
         self->flags = KEY_PRIVATE;
         self->p = (uint8_t *) &self[1];
-        memcpy(self->p, p, size);
+        if(p) {
+            memcpy(self->p, p, size);
+        }
     }
     return self;
 }
@@ -360,13 +362,10 @@ key_concat(Key *self, PyObject *other)
     struct writer wtr;
 
     if(Py_TYPE(other) == &KeyType) {
-        Py_ssize_t combined = Py_SIZE(self) + Py_SIZE(other);
-        if(writer_init(&wtr, combined)) {
-            uint8_t *p = writer_ptr(&wtr);
-            memcpy(p, self->p, Py_SIZE(self));
-            memcpy(p + Py_SIZE(self), ((Key *)other)->p, Py_SIZE(other));
-            out = make_private_key(p, combined);
-            writer_abort(&wtr);
+        out = make_private_key(NULL, Py_SIZE(self) + Py_SIZE(other));
+        if(out) {
+            memcpy(out->p, self->p, Py_SIZE(self));
+            memcpy(out->p + Py_SIZE(self), ((Key *)other)->p, Py_SIZE(other));
         }
     } else if(PyTuple_CheckExact(other)) {
         if(writer_init(&wtr, Py_SIZE(self) * 2)) {
