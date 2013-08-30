@@ -33,6 +33,7 @@ make_private_key(uint8_t *p, Py_ssize_t size)
 {
     Key *self = PyObject_NewVar(Key, &KeyType, size);
     if(self) {
+        self->hash = -1;
         self->flags = KEY_PRIVATE;
         self->p = (uint8_t *) &self[1];
         memcpy(self->p, p, size);
@@ -223,16 +224,22 @@ key_iter(Key *self)
 
 /**
  * Return a hash of the key's content.
- * (Uses djb_hash()).
  */
 static long
 key_hash(Key *self)
 {
-    Py_ssize_t len = Py_SIZE(self);
-    uint8_t *p = self->p;
-    long h = 5381;
-    while(len--) {
-        h = ((h << 5) + h) ^ (long)*p++;
+    long h = self->hash;
+    if(h == -1) {
+        uint8_t *p = self->p;
+        uint8_t *e = self->p + Py_SIZE(self);
+        h = 0;
+        while(p < e) {
+            h = (1000003 * h) ^ *p++;
+        }
+        if(h == -1) {
+            h--;
+        }
+        self->hash = h;
     }
     return h;
 }
