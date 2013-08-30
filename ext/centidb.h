@@ -73,8 +73,16 @@ struct writer
 #define UTCOFFSET_SHIFT 64
 #define UTCOFFSET_DIV (15 * 60)
 
+int writer_init(struct writer *wtr, Py_ssize_t initial);
+uint8_t *writer_ptr(struct writer *wtr);
+void writer_abort(struct writer *wtr);
+int write_element(struct writer *wtr, PyObject *arg);
+
+
 PyTypeObject *init_fixed_offset_type(void);
 PyObject *get_fixed_offset(int offset_secs);
+
+PyTypeObject *init_key_type(void);
 
 
 #endif /* !CENTIDB_H */

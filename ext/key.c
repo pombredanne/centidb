@@ -63,7 +63,7 @@ make_private_key(uint8_t *p, Py_ssize_t size)
 /**
  * Construct a Key from a sequence.
  */
-static int
+static PyObject *
 key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
     if(PyTuple_GET_SIZE(args) == 1) {
@@ -78,12 +78,12 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     }
 
     struct writer wtr;
-    if(! writer_init(wtr, 32)) {
+    if(! writer_init(&wtr, 32)) {
         return NULL;
     }
 
-    int len = PyTuple_GET_SIZE(args);
-    for(int i = 0; i < len; i++) {
+    Py_ssize_t len = PyTuple_GET_SIZE(args);
+    for(Py_ssize_t i = 0; i < len; i++) {
         PyObject *arg = PyTuple_GET_ITEM(args, i);
         if(! write_element(&wtr, arg)) {
             writer_abort(&wtr);
@@ -91,7 +91,7 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         }
     }
 
-    Key *self = make_private_key(writer_ptr(&wtr) - wtr->pos);
+    Key *self = make_private_key(writer_ptr(&wtr) - wtr.pos, wtr.pos);
     writer_abort(&wtr);
     return (PyObject *) self;
 }
@@ -112,6 +112,7 @@ key_dealloc(Key *self)
         free(self->p);
         break;
     case KEY_PRIVATE:
+        break;
     }
 }
 
@@ -146,9 +147,9 @@ static PyObject *
 key_to_hex(Key *self, PyObject *args, PyObject *kwds)
 {
     PyObject *out = NULL;
-    PyObject *raw = PyString_FromStringAndSize(self->s, Py_SIZE(self));
+    PyObject *raw = PyString_FromStringAndSize((void *)self->p, Py_SIZE(self));
     if(raw) {
-        out = PyObject_CallMethod(raw, "encode", "s", "hex"):
+        out = PyObject_CallMethod(raw, "encode", "s", "hex");
         Py_DECREF(raw);
     }
     return out;
@@ -173,7 +174,7 @@ key_from_hex(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     Key *self = NULL;
     PyObject *decoded = PyObject_CallMethod(hex, "decode", "s", "hex");
     if(decoded) {
-        self = make_private_key(PyString_AS_STRING(decoded),
+        self = make_private_key((void *) PyString_AS_STRING(decoded),
                                 PyString_GET_SIZE(decoded));
         Py_DECREF(decoded);
     }
@@ -197,7 +198,8 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     if(raw_len < prefix_len || memcmp(prefix, raw, prefix_len)) {
         Py_RETURN_NONE;
     }
-    return (PyObject *) make_private_key(raw + prefix_len, need);
+    return (PyObject *) make_private_key((void *) raw + prefix_len,
+                                         raw_len - prefix_len);
 }
 
 /**
@@ -206,7 +208,7 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 static PyObject *
 key_repr(Key *self)
 {
-    PyObject *tup = PySequence_Tuple(self);
+    PyObject *tup = PySequence_Tuple((PyObject *) self);
     if(! tup) {
         return NULL;
     }
@@ -228,7 +230,7 @@ static PyMethodDef offset_methods[] = {
     {"from_hex",    (PyCFunction)key_from_hex, METH_VARARGS|METH_CLASS, ""},
     {"from_raw",    (PyCFunction)key_from_raw, METH_VARARGS|METH_CLASS, ""},
     {"to_raw",      (PyCFunction)key_to_raw,   METH_VARARGS,            ""},
-    {"to_hex",      (PyCFunction)key_to_hex,   METH_VARARGS|METH_KW,    ""},
+    {"to_hex",      (PyCFunction)key_to_hex,   METH_VARARGS|METH_KEYWORDS, ""},
     {0,             0,                         0,                       0}
 };
 
@@ -237,7 +239,7 @@ static PyTypeObject KeyType = {
     .tp_name = "centidb._keycoder.Key",
     .tp_basicsize = sizeof(Key),
     .tp_itemsize = 1,
-    .tp_new = (newproc) key_new,
+    .tp_new = key_new,
     .tp_dealloc = (destructor) key_dealloc,
     .tp_repr = (reprfunc) key_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,

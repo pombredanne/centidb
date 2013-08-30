@@ -77,7 +77,7 @@ static uint8_t reader_getchar(struct reader *rdr)
 /**
  * Initialize a struct writer, used to ease direct construction of a PyString.
  */
-static int writer_init(struct writer *wtr, Py_ssize_t initial)
+int writer_init(struct writer *wtr, Py_ssize_t initial)
 {
     wtr->pos = 0;
     wtr->s = PyString_FromStringAndSize(NULL, initial);
@@ -107,7 +107,7 @@ static int writer_need(struct writer *wtr, Py_ssize_t size)
  * Return a pointer to the current write position. The pointer is valid as long
  * as writer_need() is never indirectly called.
  */
-static uint8_t *writer_ptr(struct writer *wtr)
+uint8_t *writer_ptr(struct writer *wtr)
 {
     return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
 }
@@ -165,7 +165,7 @@ static PyObject *writer_fini(struct writer *wtr)
 /**
  * Discard the partially built string and clear the writer.
  */
-static void writer_abort(struct writer *wtr)
+void writer_abort(struct writer *wtr)
 {
     Py_CLEAR(wtr->s);
     wtr->pos = 0;
@@ -370,7 +370,7 @@ static int write_time(struct writer *wtr, PyObject *dt)
  * it to `wtr`. Return 1 on success, or set an exception and return 0 on
  * failure.
  */
-static int write_element(struct writer *wtr, PyObject *arg)
+int write_element(struct writer *wtr, PyObject *arg)
 {
     int ret = 0;
     PyTypeObject *type = Py_TYPE(arg);
@@ -1058,5 +1058,10 @@ init_keycoder(void)
     PyTypeObject *fixed_offset = init_fixed_offset_type();
     if(fixed_offset) {
         PyDict_SetItemString(dct, "FixedOffset", (PyObject *) fixed_offset);
+    }
+
+    PyTypeObject *key_type = init_key_type();
+    if(key_type) {
+        PyDict_SetItemString(dct, "Key", (PyObject *) key_type);
     }
 }
