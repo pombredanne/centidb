@@ -15,6 +15,17 @@ import centidb.centidb
 import centidb.engines
 from centidb import keycoder
 
+try:
+    import plyvel
+except ImportError:
+    plyvel = None
+
+try:
+    import kyotocabinet
+except ImportError:
+    kyotocabinet = None
+
+
 
 def rm_rf(path):
     if os.path.isfile(path):
@@ -100,7 +111,9 @@ class NativeMixin:
         centidb = reload(centidb)
         getattr(cls, '_setUpClass', lambda: None)()
 
-def register(python=True, native=True):
+def register(enable=True, python=True, native=True):
+    if not enable:
+        return
     def fn(klass):
         if python:
             name = 'Py' + klass.__name__
@@ -326,7 +339,7 @@ class SkiplistEngineTest(EngineTestBase):
         self.e = centidb.engines.SkiplistEngine()
 
 
-@register()
+@register(enable=plyvel is not None)
 class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
@@ -344,7 +357,7 @@ class PlyvelEngineTest(EngineTestBase):
         rm_rf('test.ldb')
 
 
-@register()
+@register(enable=kyotocabinet is not None)
 class KyotoEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
