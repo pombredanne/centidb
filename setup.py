@@ -41,10 +41,16 @@ if use_cpython:
             extra_compile_args=extra_compile_args)
     ]
 
+def grep_version():
+    path = os.path.join(os.path.dirname(__file__), 'centidb/__init__.py')
+    with open(path) as fp:
+        for line in fp:
+            if line.startswith('__version__'):
+                return eval(line.split()[-1])
 
 setup(
     name =          'centidb',
-    version =       '0.11',
+    version =       grep_version(),
     description =   'Minimalist DBMS middleware for key/value stores.',
     author =        'David Wilson',
     author_email =  'dw@botanicus.net',
