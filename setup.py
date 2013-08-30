@@ -52,7 +52,7 @@ def grep_version():
 setup(
     name =          'centidb',
     version =       grep_version(),
-    description =   'Minimalist DBMS middleware for key/value stores.',
+    description =   'Key/value stores for humans',
     author =        'David Wilson',
     author_email =  'dw@botanicus.net',
     license =       'Apache 2',

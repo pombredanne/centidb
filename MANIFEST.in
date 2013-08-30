@@ -1,1 +1,7 @@
 include LICENSE
+requirements.txt
+graft centidb/
+graft docs/
+graft ext/
+graft tests/
+graft examples/
