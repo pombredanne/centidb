@@ -809,16 +809,16 @@ class Store(object):
         else:
             new['idx'] = self.count('\x00collections_idx', init=10)
             self.set_info2(KIND_TABLE, name, new)
-        return self[name]
+        return self.__getitem__(name, kwargs)
 
-    def __getitem__(self, name):
+    def __getitem__(self, name, kwargs={}):
         try:
             return self._colls[name]
         except KeyError:
             info = self.get_info2(KIND_TABLE, name)
             if not info:
                 raise
-            self._colls[name] = Collection(self, info)
+            self._colls[name] = Collection(self, info, **kwargs)
             return self._colls[name]
 
     def get_index_info(self, name, index_for):
