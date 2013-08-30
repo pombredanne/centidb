@@ -68,6 +68,10 @@ def open(engine, **kwargs):
     return Store(getattr(sys.modules[modname], classname)(**kwargs))
 
 def decode_offsets(s):
+    """Given a string, decode an array of offsets at the start of the string. A
+    varint indicates the length of the array, followed by one varint for each
+    element, which is a delta from the previous element, starting at 0.
+    """
     ba = bytearray(s)
     length = len(ba)
     count, pos = keycoder.read_int(ba, 0, length, 0)
@@ -138,6 +142,8 @@ class Index(object):
         self.prefix = keycoder.pack_int(self.store.prefix, info['idx'])
 
     def _iter(self, txn, key, lo, hi, reverse, max, include):
+        """Setup a woeful chain of iterators that yields index entries.
+        """
         if lo is None:
             lo = self.prefix
         else:
@@ -377,6 +383,10 @@ class Collection(object):
         return index
 
     def _logical_iter(self, it, reverse, prefix_s, prefix):
+        """Generator that wraps a database engine iterator to yield logical
+        records. For compressed records, each physical record may contain
+        multiple physical records. This job's function is to make the
+        distinction invisible to reads."""
         #   * When iterating forward, if first yielded key lacks collection
         #     prefix, result of iteration is empty.
         #   * When iterating reverse, if first yielded key lacks collection
@@ -519,7 +529,7 @@ class Collection(object):
              include=False, txn=None, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
+        it = self._iter(txn, key, lo, hi, prefix, reverse, None, include, None)
         for _, _, data in it:
             if raw:
                 return data
@@ -670,7 +680,7 @@ class Collection(object):
         """Find the batch `key` belongs to and split it, saving all records
         individually except for `key`."""
         assert False
-        it = self._iter(txn, key, None, None, None, None, None, None)
+        it = self._iter(txn, key, None, None, None, None, None, None, None)
         keys, data = next(it, (None, None))
         assert len(keys) > 1 and key in keys, \
             'Physical key missing: %r' % (key,)
@@ -749,7 +759,7 @@ class Collection(object):
                 for key in self._index_keys(key, obj):
                     (txn or self.engine).delete(key)
             if batch:
-                self._split_batch(rec, txn)
+                self._split_batch(key, txn)
             else:
                 (txn or self.engine).delete(keycoder.packs(self.prefix, key))
 
