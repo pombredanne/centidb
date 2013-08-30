@@ -6,7 +6,7 @@ python:
 
 install:
   - pip install -r requirements-ci.txt --use-mirrors
-  - pip install . --use-mirrors
+  - python setup.py develop --use-mirrors
 
 script: PYTHONPATH=tests python -munittest centidb_test keycoder_test
 
