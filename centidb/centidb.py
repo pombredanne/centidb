@@ -32,6 +32,7 @@ from centidb import encoders
 from centidb import keycoder
 from centidb.encoders import Encoder
 from centidb.keycoder import Key
+from centidb.keycoder import KeyList
 
 __all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
 
@@ -173,7 +174,7 @@ class Index(object):
         for key, _ in it:
             if not key.startswith(self.prefix):
                 break
-            yield Key.from_raw(self.prefix, key)
+            yield KeyList.from_raw(self.prefix, key)
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False,
               txn=None):

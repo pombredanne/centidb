@@ -169,6 +169,12 @@ class Key(object):
         return '<centidb.Key %r>' % (self.args,)
 
 
+class KeyList(object):
+    @classmethod
+    def from_raw(cls, prefix, packed):
+        return unpacks(prefix, packed)
+
+
 
 class FixedOffsetZone(datetime.tzinfo):
     ZERO = datetime.timedelta(0)
