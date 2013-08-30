@@ -244,7 +244,6 @@ class SkiplistTest:
         assert sl._findLess(update, 'dave2')[0] == 'dave'
 
         assert sl._findLess(update, 'dave3')[0] == 'dave2'
-        #print sl.reprNode(sl._findLess(update, 'dave3')[3])
 
 
 @register(native=False)
@@ -569,7 +568,6 @@ class ReopenBugTest:
         st1 = centidb.Store(engine)
         st1.add_collection('dave')
         st2 = centidb.Store(engine)
-        print st2['dave']
 
 
 def x():
