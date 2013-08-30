@@ -112,9 +112,9 @@ class NativeMixin:
         getattr(cls, '_setUpClass', lambda: None)()
 
 def register(enable=True, python=True, native=True):
-    if not enable:
-        return
     def fn(klass):
+        if not enable:
+            klass
         if python:
             name = 'Py' + klass.__name__
             globals()[name] = type(name, (klass, PythonMixin, TestCase), {})
