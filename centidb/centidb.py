@@ -67,18 +67,15 @@ def open(engine, **kwargs):
     return Store(getattr(sys.modules[modname], classname)(**kwargs))
 
 def decode_offsets(s):
-    getc = itertools.imap(ord, s).next
-    ipos = [0]
-    def wrapped():
-        ipos[0] += 1
-        return getc()
+    ba = bytearray(s)
+    length = len(ba)
+    count, pos = keycoder.read_int(ba, 0, length, 0)
 
-    pos = 0
     out = [0]
-    for _ in xrange(keycoder.read_int(wrapped)):
-        pos += keycoder.read_int(wrapped)
-        out.append(pos)
-    return out, ipos[0]
+    for _ in xrange(count):
+        i, pos = keycoder.read_int(ba, pos, length, 0)
+        out.append(out[-1] + i)
+    return out, pos
 
 def next_greater(s):
     """Given a bytestring `s`, return the most compact bytestring that is
@@ -221,14 +218,14 @@ class Index(object):
     def values(self, args=None, lo=None, hi=None, reverse=None, max=None,
                include=False, txn=None):
         """Yield all values referred to by the index, in tuple order."""
-        it = self.items(args, lo, hi, reverse, max, include, txn, rec)
+        it = self.items(args, lo, hi, reverse, max, include, txn)
         return itertools.imap(ITEMGETTER_1, it)
 
     def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
              txn=None, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
-        it = self.values(args, lo, hi, reverse, None, include, txn, rec)
+        it = self.values(args, lo, hi, reverse, None, include, txn)
         return next(it, default)
 
     def has(self, x, txn=None):
@@ -240,7 +237,7 @@ class Index(object):
 
     def get(self, x, txn=None, default=None):
         """Return the first matching record from the index."""
-        for tup in self.items(prefix=x, include=False, txn=txn):
+        for tup in self.items(lo=x, hi=x, include=True, txn=txn):
             return tup[1]
         return default
 
@@ -660,9 +657,9 @@ class Collection(object):
             out.extend(packer_prefix)
             out.extend(packer.pack(items[0][1]))
         else:
-            keycoder.write_int(len(items), out.append)
+            keycoder.write_int(len(items), out.append, 0)
             for _, data in items:
-                keycoder.write_int(len(data), out.append)
+                keycoder.write_int(len(data), out.append, 0)
             out.extend(packer_prefix)
             concat = ''.join(data for _, data in items)
             out.extend(packer.pack(concat))
