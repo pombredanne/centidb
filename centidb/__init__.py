@@ -20,4 +20,4 @@ from centidb import centidb
 from centidb.centidb import *
 __all__ = centidb.__all__
 __doc__ = centidb.__doc__
-__version__ = '0.0.14'
+__version__ = '0.0.15'
