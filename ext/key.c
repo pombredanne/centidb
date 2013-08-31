@@ -252,7 +252,7 @@ key_hash(Key *self)
 static PyObject *
 key_richcompare(Key *self, PyObject *other, int op)
 {
-    int cmpres;
+    int cmpres = 0;
     if(Py_TYPE(other) == &KeyType) {
         Py_ssize_t s1 = Py_SIZE(self);
         Py_ssize_t s2 = Py_SIZE(other);

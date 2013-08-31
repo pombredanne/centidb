@@ -18,6 +18,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "acid.h"
+#include "datetime.h"
 
 #include <arpa/inet.h>
 #include <assert.h>

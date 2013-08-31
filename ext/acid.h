@@ -27,7 +27,6 @@
 
 
 #include "Python.h"
-#include "datetime.h"
 #include <stdint.h>
 #include <stdio.h>
 

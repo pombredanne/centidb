@@ -15,6 +15,7 @@
  */
 
 #include "acid.h"
+#include "datetime.h"
 #include "structmember.h"
 
 
