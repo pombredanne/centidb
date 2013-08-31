@@ -17,7 +17,7 @@
 #define _BSD_SOURCE // timegm()
 #define _POSIX_C_SOURCE 200809L
 
-#include "centidb.h"
+#include "acid.h"
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1006,9 +1006,9 @@ import_object(const char *module, ...)
 }
 
 /**
- * Table of functions exported in the centidb._keycoder module.
+ * Table of functions exported in the acid._keylib module.
  */
-static PyMethodDef KeyCoderMethods[] = {
+static PyMethodDef KeylibMethods[] = {
     {"unpack", py_unpack, METH_VARARGS, "unpack"},
     {"unpacks", py_unpacks, METH_VARARGS, "unpacks"},
     {"pack", py_packs, METH_VARARGS, "pack"},
@@ -1022,7 +1022,7 @@ static PyMethodDef KeyCoderMethods[] = {
  * Do all required to initialize the module.
  */
 PyMODINIT_FUNC
-init_keycoder(void)
+init_keylib(void)
 {
     PyDateTime_IMPORT;
 
@@ -1034,7 +1034,7 @@ init_keycoder(void)
     uuid_get_bytes = import_object("uuid", "UUID", "get_bytes", NULL);
     assert(datetime_utcoffset && uuid_get_bytes);
 
-    PyObject *mod = Py_InitModule("centidb._keycoder", KeyCoderMethods);
+    PyObject *mod = Py_InitModule("acid._keylib", KeylibMethods);
     if(! mod) {
         return;
     }

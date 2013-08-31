@@ -7,9 +7,9 @@ import random
 import shutil
 import time
 
-import centidb
-import centidb.encoders
-import centidb.engines
+import acid
+import acid.encoders
+import acid.engines
 
 TMP_PATH = '/ram/tmp.db'
 INPUT_PATH = os.path.join(os.path.dirname(__file__), 'laforge.json.gz')
@@ -36,13 +36,13 @@ def dotestiter():
 
 try:
     import lz4
-    LZ4_PACKER = centidb.Encoder('lz4', lz4.loads, lz4.dumps)
+    LZ4_PACKER = acid.Encoder('lz4', lz4.loads, lz4.dumps)
 except ImportError:
     LZ4_PACKER = None
 
 try:
     import snappy
-    SNAPPY_PACKER = centidb.Encoder('snappy',
+    SNAPPY_PACKER = acid.Encoder('snappy',
         snappy.uncompress,
         snappy.compress)
 except ImportError:
@@ -61,7 +61,7 @@ def engine_size(engine):
     return sum(len(k) + len(v) for k, v in engine.iter('', False))
 
 
-for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
+for packer in acid.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     if not packer:
         continue
 
@@ -69,9 +69,9 @@ for packer in centidb.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
     for bsize in 1, 2, 4, 5, 8, 16, 32, 64:
         if os.path.exists(TMP_PATH):
             shutil.rmtree(TMP_PATH)
-        st = centidb.open('LmdbEngine', path=TMP_PATH, map_size=1048576*1024)
+        st = acid.open('LmdbEngine', path=TMP_PATH, map_size=1048576*1024)
         co = st.add_collection('people',
-            encoder=centidb.encoders.make_json_encoder(sort_keys=True))
+            encoder=acid.encoders.make_json_encoder(sort_keys=True))
 
         keys = [co.put(rec).key for rec in recs]
         random.shuffle(keys)

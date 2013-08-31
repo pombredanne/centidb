@@ -1,6 +1,6 @@
 include LICENSE
 include requirements.txt
-graft centidb/
+graft acid/
 graft docs/
 graft ext/
 graft tests/

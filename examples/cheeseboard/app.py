@@ -5,7 +5,6 @@ import sys
 import time
 
 import bottle
-import centidb
 import wheezy.template.engine
 import wheezy.template.ext.core
 import wheezy.template.loader

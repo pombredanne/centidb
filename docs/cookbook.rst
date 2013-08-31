@@ -10,12 +10,12 @@ Index Usage
 ::
 
     import itertools
-    import centidb
+    import acid
 
     from operator import itemgetter
     from pprint import pprint
 
-    store = centidb.open('ListEngine')
+    store = acid.open('ListEngine')
     people = store.add_collection('people', key_func=itemgetter(u'name'))
 
     people.add_index('name',     itemgetter(u'name'))
@@ -61,13 +61,13 @@ emulated:
 +-----------+---------------------------------------+
 + Boolean   + ``not b``                             |
 +-----------+---------------------------------------+
-+ String    + ``centidb.invert(s)``                 |
++ String    + ``acid.invert(s)``                 |
 +-----------+---------------------------------------+
-+ Unicode   + ``centidb.invert(s.encode('utf-8'))`` |
++ Unicode   + ``acid.invert(s.encode('utf-8'))`` |
 +-----------+---------------------------------------+
-+ UUID      + ``centidb.invert(uuid.get_bytes())``  |
++ UUID      + ``acid.invert(uuid.get_bytes())``  |
 +-----------+---------------------------------------+
-+ Key       + ``Key(centidb.invert(k))``            |
++ Key       + ``Key(acid.invert(k))``            |
 +-----------+---------------------------------------+
 
 Example:
@@ -83,7 +83,7 @@ itself may be iterated in reverse:
 
 ::
 
-    coll = centidb.Collection(store, 'people',
+    coll = acid.Collection(store, 'people',
         key_func=lambda person: person['name'])
     coll.add_index('age', lambda person: person['age'])
     coll.add_index('age_height',
@@ -91,7 +91,7 @@ itself may be iterated in reverse:
 
     # Not necessary.
     coll.add_index('name_desc',
-        lambda person: centidb.inverse(person['name'].encode('utf-8')))
+        lambda person: acid.inverse(person['name'].encode('utf-8')))
 
     # Not necessary.
     coll.add_index('age_desc', lambda person: -person['age'])
@@ -118,7 +118,7 @@ emulated by encoding the data to be covered as part of the index key:
 
 ::
 
-    coll = centidb.Collection(store, 'people')
+    coll = acid.Collection(store, 'people')
 
     age_height_name = coll.add_index('age_height_name',
         lambda person: (person['age'], person['height'], person['name']))
@@ -165,7 +165,7 @@ keys in the range relate to only a single domain.
 
 ::
 
-    >>> pages = centidb.Collection(store, 'pages')
+    >>> pages = acid.Collection(store, 'pages')
     >>> # ...
 
     >>> pprint(list(pages.keys(max=5)))
@@ -236,23 +236,23 @@ Consider a bulletin board model:
 
 ::
 
-    class Comment(metadb.Model):
-        id = metadb.Integer()
-        parent_id = metadb.Integer()
-        submitter_id = metadb.Integer()
-        text = metadb.String()
+    class Comment(meta.Model):
+        id = meta.Integer()
+        parent_id = meta.Integer()
+        submitter_id = meta.Integer()
+        text = meta.String()
 
-        @metadb.on_create
+        @meta.on_create
         def assign_id(self):
             """Assign a unique short ID on creation."""
-            self.thing_id = cls.METADB_STORE.count('thing_id')
+            self.thing_id = cls.meta_STORE.count('thing_id')
 
-        @metadb.index
+        @meta.index
         def by_id(self):
             """Maintain a secondary index mapping short ID to primary key."""
             return self.thing_id
 
-        @metadb.key
+        @meta.key
         def key(self):
             """Construct our key by recording the path from our parent key to
             the root of the tree."""

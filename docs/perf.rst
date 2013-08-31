@@ -1,5 +1,5 @@
 
-.. currentmodule:: centidb
+.. currentmodule:: acid
 
 Performance
 ###########
@@ -13,7 +13,7 @@ Performance
 ``examples/benchy.py`` drives the library in some basic configurations, showing
 relative performance using the various engines available using a single thread.
 
-* Encoder: :py:func:`centidb.encoders.make_msgpack_encoder`
+* Encoder: :py:func:`acid.encoders.make_msgpack_encoder`
 * Generates 236,000 200 byte dict records with 3 string keys and string values,
   third value containing 150 bytes mostly random data:
 

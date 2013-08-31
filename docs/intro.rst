@@ -1,23 +1,23 @@
 
-.. currentmodule:: centidb
+.. currentmodule:: acid
 
 Introduction
 ############
 
 While it is possible to construct all objects from the :ref:`api-reference`
 manually, some helpers exist to simplify common usage. First we make use of
-:py:func:`centidb.open`, which wraps the process of constructing an
-:py:class:`Engine <centidb.engines.Engine>` and attaching it to a
-:py:class:`Store <centidb.Store>`.
+:py:func:`acid.open`, which wraps the process of constructing an
+:py:class:`Engine <acid.engines.Engine>` and attaching it to a
+:py:class:`Store <acid.Store>`.
 
 Since the library depends on an external engine, an initial consideration might
 be which to use. For now, let's forgo the nasty research and settle on the
-simplest available, :py:class:`ListEngine <centidb.engines.ListEngine>`:
+simplest available, :py:class:`ListEngine <acid.engines.ListEngine>`:
 
 ::
 
-    import centidb
-    store = centidb.open('ListEngine')
+    import acid
+    store = acid.open('ListEngine')
 
 We now have a :py:class:`Store <Store>`. Stores manage metadata for a set of
 collections, along with any registered encodings and counters. Multiple
@@ -204,7 +204,7 @@ we can efficiently iterate key ranges, by controlling the key we can order the
 collection in ways that are very useful for queries.
 
 To make this ordering easy to exploit, keys are treated as tuples of one or
-more :py:func:`primitive values <centidb.keycoder.packs>`, with the order of
+more :py:func:`primitive values <acid.keylib.packs>`, with the order of
 earlier elements taking precedence over later elements, just like a Python
 tuple. When written to storage, tuples are carefully encoded so their ordering
 is preserved by the engine.
@@ -236,7 +236,7 @@ For example, to assign a key based on the time in microseconds:
         >>> def usec_key(val):
         ...     return int(1e6 * time.time())
 
-        >>> stuff = centidb.Collection(store, 'stuff', key_func=usec_key)
+        >>> stuff = acid.Collection(store, 'stuff', key_func=usec_key)
 
 Or by UUID:
 
@@ -245,7 +245,7 @@ Or by UUID:
         >>> def uuid_key(val):
         ...     return uuid.uuid4()
 
-        >>> stuff = centidb.Collection(store, 'stuff', key_func=uuid_key)
+        >>> stuff = acid.Collection(store, 'stuff', key_func=uuid_key)
 
 Finally, a key function may also be marked as `derived` (`derived_keys=True`),
 indicating that if the record value changes, the key function should be
@@ -257,7 +257,7 @@ reinvoked to assign a new key.
         >>> def user_name_key(val):
         ...     return val['username']
 
-        >>> users = centidb.Collection(store, 'users',
+        >>> users = acid.Collection(store, 'users',
         ...     key_func=user_name_key,
         ...     derived_keys=True)
 
@@ -269,7 +269,7 @@ particular region.
 
 ::
 
-    users = centidb.Collection(store, 'users')
+    users = acid.Collection(store, 'users')
 
 
 Auto-increment
@@ -282,7 +282,7 @@ auto-incrementing keys should be used sparingly. Example:
 
 ::
 
-    log_msgs = centidb.Collection(store, 'log_msgs')
+    log_msgs = acid.Collection(store, 'log_msgs')
     log_msgs.put("first")
     log_msgs.put("second")
     log_msgs.put("third")
@@ -345,7 +345,7 @@ simply a case of constructing an :py:class:`Encoder`.
 
 ::
 
-    coll.put({"name": "Alfred" }, packer=centidb.ZLIB_PACKER)
+    coll.put({"name": "Alfred" }, packer=acid.ZLIB_PACKER)
 
 Supporting a new custom compressor is trivial:
 
@@ -354,7 +354,7 @@ Supporting a new custom compressor is trivial:
     import lz4
 
     # Build an Encoder instance describing the encoding.
-    LZ4_PACKER = centidb.Encoder('lz4', lz4.loads, lz4.dumps)
+    LZ4_PACKER = acid.Encoder('lz4', lz4.loads, lz4.dumps)
 
     # Register the encoder with the store, which causes allocation of a
     # persistent numeric ID, and saving the encoder's record in the engine.

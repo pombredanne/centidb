@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# centidb documentation build configuration file, created by
+# acid documentation build configuration file, created by
 # sphinx-quickstart on Wed Nov 28 19:26:19 2012.
 #
 # This file is execfile()d with the current directory set to its containing dir.
@@ -47,7 +47,7 @@ autodoc_member_order = 'groupwise'
 master_doc = 'index'
 
 # General information about the project.
-project = u'centidb'
+project = u'acid'
 copyright = u'2013, David Wilson'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -55,7 +55,7 @@ copyright = u'2013, David Wilson'
 # built documents.
 
 def grep_version():
-    path = os.path.join(os.path.dirname(__file__), '../centidb/__init__.py')
+    path = os.path.join(os.path.dirname(__file__), '../acid/__init__.py')
     with open(path) as fp:
         for line in fp:
             if line.startswith('__version__'):
@@ -183,7 +183,7 @@ html_show_copyright = True
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'centidbdoc'
+htmlhelp_basename = 'aciddoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -202,7 +202,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'centidb.tex', u'centidb Documentation',
+  ('index', 'acid.tex', u'acid Documentation',
    u'David Wilson', 'manual'),
 ]
 
@@ -232,7 +232,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'centidb', u'centidb Documentation',
+    ('index', 'acid', u'acid Documentation',
      [u'David Wilson'], 1)
 ]
 
@@ -246,8 +246,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'centidb', u'centidb Documentation',
-   u'David Wilson', 'centidb', 'One line description of project.',
+  ('index', 'acid', u'acid Documentation',
+   u'David Wilson', 'acid', 'One line description of project.',
    'Miscellaneous'),
 ]
 

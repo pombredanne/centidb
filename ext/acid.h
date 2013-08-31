@@ -14,8 +14,8 @@
  * under the License.
  */
 
-#ifndef CENTIDB_H
-#define CENTIDB_H
+#ifndef ACID_H
+#define ACID_H
 
 #ifndef PY_SSIZE_T_CLEAN
 #define PY_SSIZE_T_CLEAN
@@ -32,7 +32,7 @@
 #include <stdio.h>
 
 #define DEBUG(s, ...) fprintf(stderr, \
-    "centidb: %s:%s:%d: " s "\n", __FILE__, __func__, __LINE__, ## __VA_ARGS__);
+    "acid: %s:%s:%d: " s "\n", __FILE__, __func__, __LINE__, ## __VA_ARGS__);
 
 
 // Python 2.5
@@ -120,4 +120,4 @@ PyObject *get_fixed_offset(int offset_secs);
 PyTypeObject *init_key_type(void);
 
 
-#endif /* !CENTIDB_H */
+#endif /* !ACID_H */

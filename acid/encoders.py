@@ -19,8 +19,8 @@ import functools
 import cPickle as pickle
 import zlib
 
-import centidb
-import centidb.keycoder
+import acid
+import acid.keylib
 
 __all__ = ['Encoder', 'make_json_encoder', 'make_msgpack_encoder',
            'make_thrift_encoder']
@@ -54,7 +54,7 @@ class Encoder(object):
 
 
 def make_json_encoder(separators=',:', **kwargs):
-    """Return an :py:class:`Encoder <centidb.Encoder>` that serializes
+    """Return an :py:class:`Encoder <acid.Encoder>` that serializes
     dict/list/string/float/int/bool/None objects using the :py:mod:`json`
     module. `separators` and `kwargs` are passed to the JSONEncoder
     constructor."""
@@ -62,21 +62,21 @@ def make_json_encoder(separators=',:', **kwargs):
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     decoder = json.JSONDecoder().decode
     decode = lambda s: decoder(str(s))
-    return centidb.Encoder('json', decode, encoder.encode)
+    return acid.Encoder('json', decode, encoder.encode)
 
 
 def make_msgpack_encoder():
-    """Return an :py:class:`Encoder <centidb.Encoder>` that serializes
+    """Return an :py:class:`Encoder <acid.Encoder>` that serializes
     dict/list/string/float/int/bool/None objects using `MessagePack
     <http://msgpack.org/>`_ via the `msgpack-python
     <https://pypi.python.org/pypi/msgpack-python/>`_ package."""
     import msgpack
-    return centidb.Encoder('msgpack', msgpack.loads, msgpack.dumps)
+    return acid.Encoder('msgpack', msgpack.loads, msgpack.dumps)
 
 
 def make_thrift_encoder(klass, factory=None):
     """
-    Return an :py:class:`Encoder <centidb.Encoder>` instance that serializes
+    Return an :py:class:`Encoder <acid.Encoder>` instance that serializes
     `Apache Thrift <http://thrift.apache.org/>`_ structs using a compact binary
     representation.
 
@@ -107,12 +107,12 @@ def make_thrift_encoder(klass, factory=None):
 
     # Form a name from the Thrift ttypes module and struct name.
     name = 'thrift:%s.%s' % (klass.__module__, klass.__name__)
-    return centidb.Encoder(name, loads, dumps)
+    return acid.Encoder(name, loads, dumps)
 
 
-#: Encode Python tuples using keycoder.packs()/keycoder.unpacks().
-KEY_ENCODER = Encoder('key', functools.partial(centidb.keycoder.unpack, ''),
-                             functools.partial(centidb.keycoder.packs, ''))
+#: Encode Python tuples using keylib.packs()/keylib.unpacks().
+KEY_ENCODER = Encoder('key', functools.partial(acid.keylib.unpack, ''),
+                             functools.partial(acid.keylib.packs, ''))
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', lambda b: pickle.loads(str(b)),

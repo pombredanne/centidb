@@ -166,7 +166,7 @@ class Key(object):
     def __repr__(self):
         if self.args is None:
             self.args = unpack(self.prefix, self.packed)
-        return '<centidb.Key %r>' % (self.args,)
+        return '<acid.Key %r>' % (self.args,)
 
 
 class KeyList(object):
@@ -561,7 +561,7 @@ pack = packs
 
 
 def unpacks(prefix, s, first=False):
-    """Decode a bytestring produced by :py:func:`keycoder.packs`, returning the
+    """Decode a bytestring produced by :py:func:`keylib.packs`, returning the
     list of tuples the string represents.
 
         `prefix`:
@@ -628,8 +628,8 @@ def unpack(prefix, s):
 
 # Hack: disable speedups while testing or reading docstrings.
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
-        os.getenv('CENTIDB_NO_SPEEDUPS') is None:
+        os.getenv('ACID_NO_SPEEDUPS') is None:
     try:
-        from centidb._keycoder import *
+        from acid._keylib import *
     except ImportError:
         pass

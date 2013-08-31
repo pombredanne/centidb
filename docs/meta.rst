@@ -1,47 +1,47 @@
 
-.. currentmodule:: centidb.metadb
+.. currentmodule:: acid.meta
 
 Declarative Interface
 #####################
 
-.. automodule:: centidb.metadb
+.. automodule:: acid.meta
 
 ::
 
-    import centidb
-    from centidb import metadb
+    import acid
+    from acid import meta
 
 
-    class Base(metadb.Model):
+    class Base(meta.Model):
         """Base for models belonging to this program. Can be used to add common
-        fields, and to bind all subclasses to a particular centidb.Store with a
+        fields, and to bind all subclasses to a particular acid.Store with a
         single call."""
 
 
     class User(Base):
-        email = metadb.String()
-        first = metadb.String()
-        last = metadb.String()
-        age = metadb.Integer()
+        email = meta.String()
+        first = meta.String()
+        last = meta.String()
+        age = meta.Integer()
 
-        @metadb.constraint
+        @meta.constraint
         def sane_age(self):
             """Ensure the user's age is 1..149 if they provided it."""
             return age is None or (0 < age < 150)
 
 
     class Item(Base):
-        user_id = metadb.Integer()
-        data = metadb.String()
+        user_id = meta.Integer()
+        data = meta.String()
 
-        @metadb.constraint
+        @meta.constraint
         def sane_user_id(self):
             """Ensure a User model exists for user_id."""
             return User.get(self.user_id) is not None
 
 
     def main():
-        Base.bind_store(centidb.open('ListEngine'))
+        Base.bind_store(acid.open('ListEngine'))
 
         user = User(email='dw@botanicus.net', first='David', last='Wilson')
         user.save()
@@ -52,40 +52,40 @@ Declarative Interface
 Model class
 +++++++++++
 
-.. autoclass:: centidb.metadb.Model (\**kwargs)
+.. autoclass:: acid.meta.Model (\**kwargs)
     :members:
     :inherited-members:
 
-.. autoclass:: centidb.metadb.BaseModel (\**kwargs)
+.. autoclass:: acid.meta.BaseModel (\**kwargs)
 
 
 Field Types
 +++++++++++
 
-.. autoclass:: centidb.metadb.Bool
-.. autoclass:: centidb.metadb.Double
-.. autoclass:: centidb.metadb.Integer
-.. autoclass:: centidb.metadb.String
+.. autoclass:: acid.meta.Bool
+.. autoclass:: acid.meta.Double
+.. autoclass:: acid.meta.Integer
+.. autoclass:: acid.meta.String
 
 
 Specifying an index
 +++++++++++++++++++
 
-.. autofunction:: centidb.metadb.index ()
+.. autofunction:: acid.meta.index ()
 
 
 Specifying a key function
 +++++++++++++++++++++++++
 
-.. autofunction:: centidb.metadb.key ()
-.. autofunction:: centidb.metadb.derived_key ()
-.. autofunction:: centidb.metadb.blind ()
+.. autofunction:: acid.meta.key ()
+.. autofunction:: acid.meta.derived_key ()
+.. autofunction:: acid.meta.blind ()
 
 
 Specifying constraints
 ++++++++++++++++++++++
 
-.. autofunction:: centidb.metadb.constraint ()
+.. autofunction:: acid.meta.constraint ()
 
 
 Triggers
@@ -96,13 +96,13 @@ somehow. Inheritance is respected, in that triggers registered against a base
 class will be invoked prior to any registered against the class of the model
 being modified.
 
-.. autofunction:: centidb.metadb.on_create ()
-.. autofunction:: centidb.metadb.on_update ()
-.. autofunction:: centidb.metadb.on_delete ()
+.. autofunction:: acid.meta.on_create ()
+.. autofunction:: acid.meta.on_update ()
+.. autofunction:: acid.meta.on_delete ()
 
-.. autofunction:: centidb.metadb.after_create ()
-.. autofunction:: centidb.metadb.after_update ()
-.. autofunction:: centidb.metadb.after_delete ()
+.. autofunction:: acid.meta.after_create ()
+.. autofunction:: acid.meta.after_update ()
+.. autofunction:: acid.meta.after_delete ()
 
 
 External triggers
@@ -122,15 +122,15 @@ which is a reference to the model class to subscribe to.
 
     def install_debug_helpers():
         if config.DEBUG:
-            metadb.after_create(log_create, models.Base)
-            metadb.after_delete(log_delete, models.Base)
+            meta.after_create(log_create, models.Base)
+            meta.after_delete(log_delete, models.Base)
 
 
 Extension
 +++++++++
 
-.. autoclass:: centidb.metadb.EncoderBinding
+.. autoclass:: acid.meta.EncoderBinding
     :members:
 
 
-.. autofunction:: centidb.metadb.make_thrift_binding
+.. autofunction:: acid.meta.make_thrift_binding

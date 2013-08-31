@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-"""centidb distutils script.
+"""Acid distutils script.
 """
 
 from __future__ import absolute_import
@@ -36,28 +36,28 @@ extra_compile_args = ['-std=c99']
 ext_modules = []
 if use_cpython:
     ext_modules = [
-        Extension("_keycoder", sources=[
-            'ext/keycoder.c', 'ext/key.c', 'ext/fixed_offset.c'],
+        Extension("_keylib", sources=[
+            'ext/keylib.c', 'ext/key.c', 'ext/fixed_offset.c'],
             extra_compile_args=extra_compile_args)
     ]
 
 def grep_version():
-    path = os.path.join(os.path.dirname(__file__), 'centidb/__init__.py')
+    path = os.path.join(os.path.dirname(__file__), 'acid/__init__.py')
     with open(path) as fp:
         for line in fp:
             if line.startswith('__version__'):
                 return eval(line.split()[-1])
 
 setup(
-    name =          'centidb',
+    name =          'acid',
     version =       grep_version(),
     description =   'Key/value stores for humans',
     author =        'David Wilson',
     author_email =  'dw@botanicus.net',
     license =       'Apache 2',
-    url =           'http://github.com/dw/centidb/',
+    url =           'http://github.com/dw/acid/',
     zip_safe =      False,
-    packages =      ['centidb'],
-    ext_package =   'centidb',
+    packages =      ['acid'],
+    ext_package =   'acid',
     ext_modules =   ext_modules
 )

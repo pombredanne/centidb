@@ -10,10 +10,10 @@ import unittest
 from pprint import pprint
 from unittest import TestCase
 
-import centidb
-import centidb.centidb
-import centidb.engines
-from centidb import keycoder
+import acid
+import acid.core
+import acid.engines
+from acid import keylib
 
 try:
     import plyvel
@@ -91,24 +91,24 @@ class PythonMixin:
     """Reload modules with speedups disabled."""
     @classmethod
     def setUpClass(cls):
-        global centidb
-        os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
-        centidb.keycoder = reload(centidb.keycoder)
-        centidb.encoders = reload(centidb.encoders)
-        centidb.centidb = reload(centidb.centidb)
-        centidb = reload(centidb)
+        global acid
+        os.environ['ACID_NO_SPEEDUPS'] = '1'
+        acid.keylib = reload(acid.keylib)
+        acid.encoders = reload(acid.encoders)
+        acid.core = reload(acid.core)
+        acid = reload(acid)
         getattr(cls, '_setUpClass', lambda: None)()
 
 class NativeMixin:
     """Reload modules with speedups enabled."""
     @classmethod
     def setUpClass(cls):
-        global centidb
-        os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
-        centidb.keycoder = reload(centidb.keycoder)
-        centidb.encoders = reload(centidb.encoders)
-        centidb.centidb = reload(centidb.centidb)
-        centidb = reload(centidb)
+        global acid
+        os.environ.pop('ACID_NO_SPEEDUPS', None)
+        acid.keylib = reload(acid.keylib)
+        acid.encoders = reload(acid.encoders)
+        acid.core = reload(acid.core)
+        acid = reload(acid)
         getattr(cls, '_setUpClass', lambda: None)()
 
 def register(enable=True, python=True, native=True):
@@ -157,10 +157,10 @@ class IterTest:
     REVERSE = ITEMS[::-1]
 
     def _encode(self, s):
-        return keycoder.packs(self.prefix, s)
+        return keylib.packs(self.prefix, s)
 
     def setUp(self):
-        self.e = centidb.engines.ListEngine()
+        self.e = acid.engines.ListEngine()
         self.e.put('X', '')
         for key in self.KEYS:
             self.e.put(self._encode(key), '')
@@ -169,8 +169,8 @@ class IterTest:
 
     def iter(self, key=None, lo=None, hi=None, reverse=None,
             include=None, is_index=False):
-        return list(centidb.centidb._iter(self.prefix, self.e, key, lo, hi,
-                                          reverse, include, is_index))
+        return list(acid.core._iter(self.prefix, self.e, key, lo, hi,
+                                    reverse, include, is_index))
 
     def testForward(self):
         eq(self.ITEMS, self.iter())
@@ -233,7 +233,7 @@ class IterTest:
 @register(native=False)
 class SkiplistTest:
     def testFindLess(self):
-        sl = centidb.engines.SkipList()
+        sl = acid.engines.SkipList()
         update = sl._update[:]
         assert sl._findLess(update, 'missing') is sl.head
 
@@ -250,7 +250,7 @@ class SkiplistTest:
 class SkipListTest:
     def testDeleteDepth(self):
         # Ensure 'shallowing' works correctly.
-        sl = centidb.engines.SkipList()
+        sl = acid.engines.SkipList()
         keys = []
         while sl.level < 4:
             k = time.time()
@@ -330,13 +330,13 @@ class EngineTestBase:
 @register()
 class ListEngineTest(EngineTestBase):
     def setUp(self):
-        self.e = centidb.engines.ListEngine()
+        self.e = acid.engines.ListEngine()
 
 
 @register()
 class SkiplistEngineTest(EngineTestBase):
     def setUp(self):
-        self.e = centidb.engines.SkiplistEngine()
+        self.e = acid.engines.SkiplistEngine()
 
 
 @register(enable=plyvel is not None)
@@ -344,7 +344,7 @@ class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
         rm_rf('test.ldb')
-        cls.e = centidb.engines.PlyvelEngine(
+        cls.e = acid.engines.PlyvelEngine(
             name='test.ldb', create_if_missing=True)
 
     def setUp(self):
@@ -363,7 +363,7 @@ class KyotoEngineTest(EngineTestBase):
     def _setUpClass(cls):
         if os.path.exists('test.kct'):
             os.unlink('test.kct')
-        cls.e = centidb.engines.KyotoEngine(path='test.kct')
+        cls.e = acid.engines.KyotoEngine(path='test.kct')
 
     def setUp(self):
         for key, value in list(self.e.iter('', False)):
@@ -382,7 +382,7 @@ class LmdbEngineTest(EngineTestBase):
         rm_rf('test.lmdb')
         import lmdb
         cls.env = lmdb.open('test.lmdb')
-        cls.e = centidb.engines.LmdbEngine(cls.env)
+        cls.e = acid.engines.LmdbEngine(cls.env)
 
     def setUp(self):
         for key, value in list(self.e.iter('', False)):
@@ -397,7 +397,7 @@ class LmdbEngineTest(EngineTestBase):
 @register()
 class OneCollBoundsTest:
     def setUp(self):
-        self.store = centidb.open('ListEngine')
+        self.store = acid.open('ListEngine')
         self.store.add_collection('stuff')
         self.keys = [
             self.store['stuff'].put('a'),
@@ -425,7 +425,7 @@ class TwoCollBoundsTest(OneCollBoundsTest):
 @register()
 class ThreeCollBoundsTest(OneCollBoundsTest):
     def setUp(self):
-        self.store = centidb.open('ListEngine')
+        self.store = acid.open('ListEngine')
         self.store.add_collection('stuff')
         self.keys = [
             self.store['stuff'].put('a'),
@@ -446,8 +446,8 @@ class ThreeCollBoundsTest(OneCollBoundsTest):
 @register()
 class CollBasicTest:
     def setUp(self):
-        self.e = centidb.engines.ListEngine()
-        self.store = centidb.Store(self.e)
+        self.e = acid.engines.ListEngine()
+        self.store = acid.Store(self.e)
         self.coll = self.store.add_collection('coll1')
 
     def testGetNoExist(self):
@@ -481,7 +481,7 @@ class CollBasicTest:
 @register()
 class IndexTest:
     def setUp(self):
-        self.store = centidb.open('ListEngine')
+        self.store = acid.open('ListEngine')
         self.e = self.store.engine
         self.coll = self.store.add_collection('stuff')
         self.i = self.coll.add_index('idx', lambda obj: (69, obj))
@@ -572,8 +572,8 @@ class BatchTest:
     ]
 
     def setUp(self):
-        self.e = centidb.engines.ListEngine()
-        self.store = centidb.Store(self.e)
+        self.e = acid.engines.ListEngine()
+        self.store = acid.Store(self.e)
         self.coll = self.store.add_collection('people')
 
     def testBatch(self):
@@ -589,8 +589,8 @@ class BatchTest:
 @register()
 class CountTest:
     def setUp(self):
-        self.e = CountingEngine(centidb.engines.ListEngine())
-        self.store = centidb.Store(self.e)
+        self.e = CountingEngine(acid.engines.ListEngine())
+        self.store = acid.Store(self.e)
 
     def testNoExistNoCount(self):
         eq(10, self.store.count('test', n=0, init=10))
@@ -621,10 +621,10 @@ class CountTest:
 @register()
 class ReopenBugTest:
     def test1(self):
-        engine = centidb.engines.ListEngine()
-        st1 = centidb.Store(engine)
+        engine = acid.engines.ListEngine()
+        st1 = acid.Store(engine)
         st1.add_collection('dave')
-        st2 = centidb.Store(engine)
+        st2 = acid.Store(engine)
 
 
 def x():
