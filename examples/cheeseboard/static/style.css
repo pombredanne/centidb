@@ -57,3 +57,7 @@ h3 {
 #frame {
     width: 100%;
 }
+
+.nav-float {
+    float: right;
+}
