@@ -162,7 +162,7 @@ class Index(object):
 
         if key is not None:
             if reverse:
-                hi = next_greater(key.to_raw(self.prefix)) # TODO
+                hi = next_greater(Key(key).to_raw(self.prefix)) # TODO
                 assert hi
                 include = False
             else:
