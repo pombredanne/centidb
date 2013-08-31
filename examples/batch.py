@@ -73,7 +73,7 @@ for packer in acid.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
         co = st.add_collection('people',
             encoder=acid.encoders.make_json_encoder(sort_keys=True))
 
-        keys = [co.put(rec).key for rec in recs]
+        keys = [co.put(rec) for rec in recs]
         random.shuffle(keys)
         nextkey = iter(itertools.cycle(keys)).next
 
