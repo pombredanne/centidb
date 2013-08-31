@@ -94,12 +94,12 @@ static PyMethodDef offset_methods[] = {
 
 static PyTypeObject FixedOffsetType = {
     PyObject_HEAD_INIT(NULL)
-    .tp_name = "centidb._keycoder.FixedOffset",
+    .tp_name = "centidb._keylib.FixedOffset",
     .tp_basicsize = sizeof(FixedOffset),
     .tp_init = (initproc) fixedoffset_init,
     .tp_repr = (reprfunc) fixedoffset_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "centidb._keycoder.FixedOffset",
+    .tp_doc = "centidb._keylib.FixedOffset",
     .tp_methods = offset_methods
 };
 

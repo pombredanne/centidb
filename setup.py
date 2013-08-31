@@ -36,8 +36,8 @@ extra_compile_args = ['-std=c99']
 ext_modules = []
 if use_cpython:
     ext_modules = [
-        Extension("_keycoder", sources=[
-            'ext/keycoder.c', 'ext/key.c', 'ext/fixed_offset.c'],
+        Extension("_keylib", sources=[
+            'ext/keylib.c', 'ext/key.c', 'ext/fixed_offset.c'],
             extra_compile_args=extra_compile_args)
     ]
 

@@ -435,7 +435,7 @@ static PyMethodDef key_methods[] = {
 
 static PyTypeObject KeyType = {
     PyObject_HEAD_INIT(NULL)
-    .tp_name = "centidb._keycoder.Key",
+    .tp_name = "centidb._keylib.Key",
     .tp_basicsize = sizeof(Key),
     .tp_itemsize = 1,
     .tp_iter = (getiterfunc) key_iter,
@@ -445,7 +445,7 @@ static PyTypeObject KeyType = {
     .tp_dealloc = (destructor) key_dealloc,
     .tp_repr = (reprfunc) key_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "centidb._keycoder.Key",
+    .tp_doc = "centidb._keylib.Key",
     .tp_methods = key_methods,
     .tp_as_sequence = &key_seq_methods
 };
@@ -517,12 +517,12 @@ static PyMethodDef keyiter_methods[] = {
 
 static PyTypeObject KeyIterType = {
     PyObject_HEAD_INIT(NULL)
-    .tp_name = "centidb._keycoder.KeyIterator",
+    .tp_name = "centidb._keylib.KeyIterator",
     .tp_basicsize = sizeof(KeyIter),
     .tp_iter = (getiterfunc) keyiter_iter,
     .tp_iternext = (iternextfunc) keyiter_next,
     .tp_dealloc = (destructor) keyiter_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "centidb._keycoder.KeyIterator",
+    .tp_doc = "centidb._keylib.KeyIterator",
     .tp_methods = keyiter_methods
 };

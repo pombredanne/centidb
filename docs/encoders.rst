@@ -15,8 +15,8 @@ Encoder Interface
 centidb.KEY_ENCODER
 +++++++++++++++++++
 
-This predefined Encoder uses :py:func:`centidb.keycoder.packs` and
-:py:func:`centidb.keycoder.unpacks` to serialize tuples. It is used internally
+This predefined Encoder uses :py:func:`centidb.keylib.packs` and
+:py:func:`centidb.keylib.unpacks` to serialize tuples. It is used internally
 to represent keys, counters, and :py:class:`Store <centidb.Store>` metadata.
 
 
@@ -112,7 +112,7 @@ These functions are based on `SQLite 4's key encoding
 * Floats are removed.
 * Varints are used for integers.
 
-.. currentmodule:: centidb.keycoder
+.. currentmodule:: centidb.keylib
 
 .. function:: pack (prefix, tups)
 

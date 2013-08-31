@@ -35,5 +35,5 @@ Index Class
 Key Class
 +++++++++
 
-.. autoclass:: centidb.keycoder.Key
+.. autoclass:: centidb.keylib.Key
    :members:

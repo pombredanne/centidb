@@ -29,10 +29,8 @@ import sys
 import warnings
 
 from centidb import encoders
-from centidb import keycoder
+from centidb import keylib
 from centidb.encoders import Encoder
-from centidb.keycoder import Key
-from centidb.keycoder import KeyList
 
 __all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
 
@@ -74,11 +72,11 @@ def decode_offsets(s):
     """
     ba = bytearray(s)
     length = len(ba)
-    count, pos = keycoder.read_int(ba, 0, length, 0)
+    count, pos = keylib.read_int(ba, 0, length, 0)
 
     out = [0]
     for _ in xrange(count):
-        i, pos = keycoder.read_int(ba, pos, length, 0)
+        i, pos = keylib.read_int(ba, pos, length, 0)
         out.append(out[-1] + i)
     return out, pos
 
@@ -139,7 +137,7 @@ class Index(object):
         self.info = info
         #: The index function.
         self.func = func
-        self.prefix = keycoder.pack_int(self.store.prefix, info['idx'])
+        self.prefix = keylib.pack_int(self.store.prefix, info['idx'])
 
     def _iter(self, txn, key, lo, hi, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
@@ -147,7 +145,7 @@ class Index(object):
         if lo is None:
             lo = self.prefix
         else:
-            lo = Key(lo).to_raw(self.prefix)
+            lo = keylib.Key(lo).to_raw(self.prefix)
 
         if hi is None:
             hi = next_greater(self.prefix)
@@ -157,16 +155,16 @@ class Index(object):
             # This is a broken mess. When doing reverse queries we must account
             # for the key tuple of the index key. next_greater() may fail if
             # the last byte of the index tuple is FF. Needs a better solution.
-            hi = next_greater(Key(hi).to_raw(self.prefix)) # TODO WTF
+            hi = next_greater(keylib.Key(hi).to_raw(self.prefix)) # TODO WTF
             assert hi
 
         if key is not None:
             if reverse:
-                hi = next_greater(Key(key).to_raw(self.prefix)) # TODO
+                hi = next_greater(keylib.Key(key).to_raw(self.prefix)) # TODO
                 assert hi
                 include = False
             else:
-                lo = Key(key).to_raw(self.prefix)
+                lo = keylib.Key(key).to_raw(self.prefix)
 
         if reverse:
             it = (txn or self.engine).iter(hi, True)
@@ -180,7 +178,7 @@ class Index(object):
         for key, _ in it:
             if not key.startswith(self.prefix):
                 break
-            yield KeyList.from_raw(self.prefix, key)
+            yield keylib.KeyList.from_raw(self.prefix, key)
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False,
               txn=None):
@@ -238,7 +236,7 @@ class Index(object):
     def has(self, x, txn=None):
         """Return True if an entry with the exact tuple `x` exists in the
         index."""
-        x = Key(x)
+        x = keylib.Key(x)
         tup, _ = next(self.pairs(x, txn=txn), (None, None))
         return tup == x
 
@@ -296,7 +294,7 @@ class Collection(object):
         self.store = store
         self.engine = store.engine
         self.info = info
-        self.prefix = keycoder.pack_int(self.store.prefix, info['idx'])
+        self.prefix = keylib.pack_int(self.store.prefix, info['idx'])
         if not (key_func or txn_key_func):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
@@ -400,13 +398,14 @@ class Collection(object):
         if tup and tup[0][:len(prefix_s)] == prefix_s:
             it = itertools.chain((tup,), it)
         for key, value in it:
-            keys = keycoder.unpacks(prefix_s, key)
+            keys = keylib.unpacks(prefix_s, key)
             if not keys:
                 return
 
             lenk = len(keys)
             if lenk == 1:
-                yield False, Key(*(prefix + keys[0])), self._decompress(value)
+                key = keylib.Key(*(prefix + keys[0]))
+                yield False, key, self._decompress(value)
             else: # Batch record.
                 offsets, dstart = decode_offsets(value)
                 data = self._decompress(buffer(value, dstart))
@@ -422,7 +421,8 @@ class Collection(object):
                     key = keys[-1 - i]
                     offs = offsets[i]
                     size = offsets[i+1] - offs
-                    yield True, Key(*(prefix + key)), buffer(data, offs, size)
+                    key = keylib.Key(*(prefix + key))
+                    yield True, key, buffer(data, offs, size)
                     i += step
 
     # -----------------------------------------------------------
@@ -441,7 +441,7 @@ class Collection(object):
     #                     startpred=lokey, endpred=
     def _iter(self, txn, key, lo, hi, prefix, reverse, max_, include, max_phys):
         if key is not None:
-            key = Key(key)
+            key = keylib.Key(key)
             if reverse:
                 hi = key
                 include = True
@@ -449,21 +449,21 @@ class Collection(object):
                 lo = key
 
         if prefix:
-            prefix_s = Key(prefix).to_raw(self.prefix)
+            prefix_s = keylib.Key(prefix).to_raw(self.prefix)
         else:
             prefix_s = self.prefix
 
         if lo is None:
             lokey = prefix_s
         else:
-            lo = Key(lo)
+            lo = keylib.Key(lo)
             lokey = lo.to_raw(self.prefix)
 
         if hi is None:
             hikey = next_greater(prefix_s)
             include = False
         else:
-            hi = Key(hi)
+            hi = keylib.Key(hi)
             hikey = hi.to_raw(self.prefix)
 
         if reverse:
@@ -503,7 +503,7 @@ class Collection(object):
                 if type(lst) is not list:
                     lst = [lst]
                 for idx_key in lst:
-                    idx_keys.append(keycoder.packs(idx.prefix, [idx_key, key]))
+                    idx_keys.append(keylib.packs(idx.prefix, [idx_key, key]))
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
@@ -664,16 +664,16 @@ class Collection(object):
         if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer, txn=txn)
         keytups = [key for key, _ in reversed(items)]
-        phys = keycoder.packs(self.prefix, keytups)
+        phys = keylib.packs(self.prefix, keytups)
         out = bytearray()
 
         if len(items) == 1:
             out.extend(packer_prefix)
             out.extend(packer.pack(items[0][1]))
         else:
-            keycoder.write_int(len(items), out.append, 0)
+            keylib.write_int(len(items), out.append, 0)
             for _, data in items:
-                keycoder.write_int(len(data), out.append, 0)
+                keylib.write_int(len(data), out.append, 0)
             out.extend(packer_prefix)
             concat = ''.join(data for _, data in items)
             out.extend(packer.pack(concat))
@@ -734,7 +734,7 @@ class Collection(object):
         txn = txn or self.engine
         if key is None:
             key = self._assign_key(rec, txn)
-        key = Key(key)
+        key = keylib.Key(key)
         packer = packer or encoders.PLAIN_PACKER
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
@@ -764,7 +764,7 @@ class Collection(object):
             if batch:
                 self._split_batch(key, txn)
             else:
-                (txn or self.engine).delete(keycoder.packs(self.prefix, key))
+                (txn or self.engine).delete(keylib.packs(self.prefix, key))
 
 class Store(object):
     """Represents access to the underlying storage engine, and manages
@@ -779,9 +779,9 @@ class Store(object):
         self.engine = engine
         self.prefix = prefix
         self._counter_key_cache = {}
-        self._encoder_prefix = dict((e, keycoder.pack_int('', 1 + i))
+        self._encoder_prefix = dict((e, keylib.pack_int('', 1 + i))
                                     for i, e in enumerate(encoders._ENCODERS))
-        self._prefix_encoder = dict((keycoder.pack_int('', 1 + i), e)
+        self._prefix_encoder = dict((keylib.pack_int('', 1 + i), e)
                                     for i, e in enumerate(encoders._ENCODERS))
         # ((kind, name, attr), value)
         self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
@@ -845,8 +845,8 @@ class Store(object):
                 assert idx <= 240
                 self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx},
                                txn=txn)
-            self._encoder_prefix[encoder] = keycoder.pack_int('', idx)
-            self._prefix_encoder[keycoder.pack_int('', idx)] = encoder
+            self._encoder_prefix[encoder] = keylib.pack_int('', idx)
+            self._prefix_encoder[keylib.pack_int('', idx)] = encoder
             return self._encoder_prefix[encoder]
 
     def get_encoder(self, prefix):
@@ -857,7 +857,7 @@ class Store(object):
         except KeyError:
             it = self._meta.items(prefix=KIND_ENCODER)
             dct = dict((v, n) for (k, n, a), v in it if a == 'idx')
-            idx = keycoder.unpack_int(prefix)
+            idx = keylib.unpack_int(prefix)
             raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
 
     def count(self, name, n=1, init=1, txn=None):
@@ -882,7 +882,7 @@ class Store(object):
         try:
             key = self._counter_key_cache[name]
         except KeyError:
-            key = Key(KIND_COUNTER, name, None)
+            key = keylib.Key(KIND_COUNTER, name, None)
             self._counter_key_cache[name] = key
 
         value, = self._meta.get(key, default=(init,), txn=txn)
@@ -894,6 +894,6 @@ class Store(object):
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
         os.getenv('CENTIDB_NO_SPEEDUPS') is None:
     try:
-        from centidb._keycoder import decode_offsets
+        from centidb._keylib import decode_offsets
     except ImportError:
         pass

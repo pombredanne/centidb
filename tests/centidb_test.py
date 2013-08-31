@@ -13,7 +13,7 @@ from unittest import TestCase
 import centidb
 import centidb.centidb
 import centidb.engines
-from centidb import keycoder
+from centidb import keylib
 
 try:
     import plyvel
@@ -93,7 +93,7 @@ class PythonMixin:
     def setUpClass(cls):
         global centidb
         os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
-        centidb.keycoder = reload(centidb.keycoder)
+        centidb.keylib = reload(centidb.keylib)
         centidb.encoders = reload(centidb.encoders)
         centidb.centidb = reload(centidb.centidb)
         centidb = reload(centidb)
@@ -105,7 +105,7 @@ class NativeMixin:
     def setUpClass(cls):
         global centidb
         os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
-        centidb.keycoder = reload(centidb.keycoder)
+        centidb.keylib = reload(centidb.keylib)
         centidb.encoders = reload(centidb.encoders)
         centidb.centidb = reload(centidb.centidb)
         centidb = reload(centidb)
@@ -157,7 +157,7 @@ class IterTest:
     REVERSE = ITEMS[::-1]
 
     def _encode(self, s):
-        return keycoder.packs(self.prefix, s)
+        return keylib.packs(self.prefix, s)
 
     def setUp(self):
         self.e = centidb.engines.ListEngine()

@@ -50,7 +50,7 @@ type, or to provide exact emulation of the sort order of other databases (e.g.
 App Engine).
 
 Several difficulties arise with parameterizing key encoding. Firstly,
-:py:class:`Index` relies on :py:func:`centidb.keycoder.packs` to function. One
+:py:class:`Index` relies on :py:func:`centidb.keylib.packs` to function. One
 solution might be to parameterize :py:class:`Index`'s key construction, or
 force key encodings to accept lists of keys as part of their interface. A
 second issue is that is that the 'innocence' of the key encoding might be

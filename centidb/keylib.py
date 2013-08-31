@@ -561,7 +561,7 @@ pack = packs
 
 
 def unpacks(prefix, s, first=False):
-    """Decode a bytestring produced by :py:func:`keycoder.packs`, returning the
+    """Decode a bytestring produced by :py:func:`keylib.packs`, returning the
     list of tuples the string represents.
 
         `prefix`:
@@ -630,6 +630,6 @@ def unpack(prefix, s):
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
         os.getenv('CENTIDB_NO_SPEEDUPS') is None:
     try:
-        from centidb._keycoder import *
+        from centidb._keylib import *
     except ImportError:
         pass

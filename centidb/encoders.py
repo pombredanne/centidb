@@ -20,7 +20,7 @@ import cPickle as pickle
 import zlib
 
 import centidb
-import centidb.keycoder
+import centidb.keylib
 
 __all__ = ['Encoder', 'make_json_encoder', 'make_msgpack_encoder',
            'make_thrift_encoder']
@@ -110,9 +110,9 @@ def make_thrift_encoder(klass, factory=None):
     return centidb.Encoder(name, loads, dumps)
 
 
-#: Encode Python tuples using keycoder.packs()/keycoder.unpacks().
-KEY_ENCODER = Encoder('key', functools.partial(centidb.keycoder.unpack, ''),
-                             functools.partial(centidb.keycoder.packs, ''))
+#: Encode Python tuples using keylib.packs()/keylib.unpacks().
+KEY_ENCODER = Encoder('key', functools.partial(centidb.keylib.unpack, ''),
+                             functools.partial(centidb.keylib.packs, ''))
 
 #: Encode Python objects using the cPickle version 2 protocol."""
 PICKLE_ENCODER = Encoder('pickle', lambda b: pickle.loads(str(b)),

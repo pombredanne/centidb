@@ -10,8 +10,8 @@ from pprint import pprint
 from unittest import TestCase
 
 import dateutil.tz
-from centidb import keycoder
-from centidb import _keycoder
+from centidb import keylib
+from centidb import _keylib
 
 
 #
@@ -28,20 +28,20 @@ class PythonMixin:
     """Reload modules with speedups disabled."""
     @classmethod
     def setUpClass(cls):
-        global keycoder
+        global keylib
         os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
-        keycoder = reload(keycoder)
-        keycoder = reload(keycoder)
+        keylib = reload(keylib)
+        keylib = reload(keylib)
         getattr(cls, '_setUpClass', lambda: None)()
 
 class NativeMixin:
     """Reload modules with speedups enabled."""
     @classmethod
     def setUpClass(cls):
-        global keycoder
+        global keylib
         os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
-        keycoder = reload(keycoder)
-        keycoder = reload(keycoder)
+        keylib = reload(keylib)
+        keylib = reload(keylib)
         getattr(cls, '_setUpClass', lambda: None)()
 
 def register(python=True, native=True):
@@ -93,10 +93,10 @@ class KeysTest:
     ]
 
     def _enc(self, *args, **kwargs):
-        return keycoder.packs('', *args, **kwargs)
+        return keylib.packs('', *args, **kwargs)
 
     def _dec(self, *args, **kwargs):
-        return keycoder.unpacks('', *args, **kwargs)
+        return keylib.unpacks('', *args, **kwargs)
 
     def test_counter(self):
         s = self._enc(('dave', 1))
@@ -104,14 +104,14 @@ class KeysTest:
 
     def test_single(self):
         for val in self.SINGLE_VALS:
-            encoded = keycoder.packs('', (val,))
-            decoded = keycoder.unpacks('', encoded)
+            encoded = keylib.packs('', (val,))
+            decoded = keylib.unpacks('', encoded)
             eq([(val,)], decoded, 'input was %r' % (val,))
 
     def test_single_sort_lower(self):
         for val in self.SINGLE_VALS:
-            e1 = keycoder.packs('', (val,))
-            e2 = keycoder.packs('', [(val, val),])
+            e1 = keylib.packs('', (val,))
+            e2 = keylib.packs('', [(val, val),])
             lt(e1, e2, 'eek %r' % (val,))
 
     def test_list(self):
@@ -123,10 +123,10 @@ class KeysTest:
 @register()
 class StringEncodingTest:
     def do_test(self, k):
-        packed = keycoder.packs('', k)
+        packed = keylib.packs('', k)
         try:
-            unpacked = keycoder.unpack('', packed)
-            eq(k, keycoder.unpack('', keycoder.packs('', k)))
+            unpacked = keylib.unpack('', packed)
+            eq(k, keylib.unpack('', keylib.packs('', k)))
         except:
             print 'failing enc was: %r' % (packed,)
             raise
@@ -151,10 +151,10 @@ class StringEncodingTest:
 @register()
 class KeyTest:
     def test_already_key(self):
-        eq(keycoder.Key(), keycoder.Key(keycoder.Key()))
+        eq(keylib.Key(), keylib.Key(keylib.Key()))
 
     def test_not_already_tuple(self):
-        eq(keycoder.Key(""), keycoder.Key(""))
+        eq(keylib.Key(""), keylib.Key(""))
 
 
 @register()
@@ -168,8 +168,8 @@ class EncodeIntTest:
 
     def testInts(self):
         for i in self.INTS:
-            s = keycoder.pack_int('', i)
-            j = keycoder.unpack_int(s)
+            s = keylib.pack_int('', i)
+            j = keylib.unpack_int(s)
             assert j == i, (i, j, s)
 
 
@@ -179,9 +179,9 @@ class IntKeyTest:
 
     def test1(self):
         for i in self.INTS:
-            s = keycoder.packs('', i)
+            s = keylib.packs('', i)
             try:
-                j, = keycoder.unpack('', s)
+                j, = keylib.unpack('', s)
                 eq(j, i)
             except:
                 print [i, s]
@@ -192,8 +192,8 @@ class IntKeyTest:
 class SameIntEncodingTest:
     def test1(self):
         for i in EncodeIntTest.INTS:
-            native = _keycoder.packs('', i)
-            python = keycoder.packs('', i)
+            native = _keylib.packs('', i)
+            python = keylib.packs('', i)
             try:
                 eq(native, python)
             except:
@@ -204,16 +204,16 @@ class SameIntEncodingTest:
 @register()
 class TupleTest:
     def assertOrder(self, tups):
-        tups = map(keycoder.Key, tups)
-        encs = map(keycoder.packs, tups)
+        tups = map(keylib.Key, tups)
+        encs = map(keylib.packs, tups)
         encs.sort()
-        eq(tups, [keycoder.unpack(x) for x in encs])
+        eq(tups, [keylib.unpack(x) for x in encs])
 
     def testStringSorting(self):
         strs = [(x,) for x in ('dave', 'dave\x00', 'dave\x01', 'davee\x01')]
-        encs = map(lambda o: keycoder.packs('', o), strs)
+        encs = map(lambda o: keylib.packs('', o), strs)
         encs.sort()
-        eq(strs, [keycoder.unpack('', x) for x in encs])
+        eq(strs, [keylib.unpack('', x) for x in encs])
 
     def testTupleNonTuple(self):
         pass
@@ -223,26 +223,26 @@ class TupleTest:
 class UuidTest:
     def testUuid(self):
         t = ('a', uuid.uuid4(), 'b')
-        s = keycoder.packs('', t)
-        eq(t, keycoder.unpack('', s))
+        s = keylib.packs('', t)
+        eq(t, keylib.unpack('', s))
 
 
 @register()
 class Mod7BugTest:
     def test1(self):
         t = [('', 11, 'item')]
-        p = keycoder.packs('', t)
-        eq(keycoder.unpacks('', p), t)
+        p = keylib.packs('', t)
+        eq(keylib.unpacks('', p), t)
 
     def test2(self):
         t = [('index:I', 11, 'item')]
-        p = keycoder.packs('', t)
-        eq(keycoder.unpacks('', p), t)
+        p = keylib.packs('', t)
+        eq(keylib.unpacks('', p), t)
 
     def test3(self):
         t = [('index:Item:first_last', 11, 'item')]
-        p = keycoder.packs('', t)
-        eq(keycoder.unpacks('', p), t)
+        p = keylib.packs('', t)
+        eq(keylib.unpacks('', p), t)
 
 
 @register(python=True)
@@ -250,40 +250,40 @@ class NativeTimeTest:
     def test_utc(self):
         tz = dateutil.tz.gettz('Etc/UTC')
         dt = datetime.now(tz)
-        sn = _keycoder.packs('', dt)
-        sp = keycoder.packs('', dt)
+        sn = _keylib.packs('', dt)
+        sp = keylib.packs('', dt)
         eq(sn, sp)
 
-        dn = _keycoder.unpacks('', sn)
-        dp = keycoder.unpacks('', sp)
+        dn = _keylib.unpacks('', sn)
+        dp = keylib.unpacks('', sp)
         eq(dn, dp)
 
     def test_naive(self):
         dt = datetime.now()
-        sn = _keycoder.packs('', dt)
-        sp = keycoder.packs('', dt)
+        sn = _keylib.packs('', dt)
+        sp = keylib.packs('', dt)
         eq(sn, sp)
 
     def test_neg(self):
         tz = dateutil.tz.gettz('Etc/GMT-1')
         dt = datetime.now(tz)
-        sn = _keycoder.packs('', dt)
-        sp = keycoder.packs('', dt)
+        sn = _keylib.packs('', dt)
+        sp = keylib.packs('', dt)
         eq(sn, sp)
 
-        dn = _keycoder.unpacks('', sn)
-        dp = keycoder.unpacks('', sp)
+        dn = _keylib.unpacks('', sn)
+        dp = keylib.unpacks('', sp)
         eq(dn, dp)
 
     def test_pos(self):
         tz = dateutil.tz.gettz('Etc/GMT+1')
         dt = datetime.now(tz)
-        sn = _keycoder.packs('', dt)
-        sp = keycoder.packs('', dt)
+        sn = _keylib.packs('', dt)
+        sp = keylib.packs('', dt)
         eq(sn, sp)
 
-        dn = _keycoder.unpacks('', sn)
-        dp = keycoder.unpacks('', sp)
+        dn = _keylib.unpacks('', sn)
+        dp = keylib.unpacks('', sp)
         eq(dn, dp)
 
 
@@ -295,29 +295,29 @@ class TimeTest:
 
     def test_naive(self):
         dt = self._now_truncate()
-        s = keycoder.packs('', dt)
-        dt2, = keycoder.unpack('', s)
+        s = keylib.packs('', dt)
+        dt2, = keylib.unpack('', s)
         eq(dt.utctimetuple(), dt2.utctimetuple())
 
     def test_utc(self):
         tz = dateutil.tz.gettz('Etc/UTC')
         dt = self._now_truncate(tz)
-        s = keycoder.packs('', dt)
-        dt2, = keycoder.unpack('', s)
+        s = keylib.packs('', dt)
+        dt2, = keylib.unpack('', s)
         eq(dt, dt2)
 
     def test_plusone(self):
         tz = dateutil.tz.gettz('Etc/GMT+1')
         dt = self._now_truncate(tz)
-        s = keycoder.packs('', dt)
-        dt2, = keycoder.unpack('', s)
+        s = keylib.packs('', dt)
+        dt2, = keylib.unpack('', s)
         eq(dt, dt2)
 
     def test_minusone(self):
         tz = dateutil.tz.gettz('Etc/GMT-1')
         dt = self._now_truncate(tz)
-        s = keycoder.packs('', dt)
-        dt2, = keycoder.unpack('', s)
+        s = keylib.packs('', dt)
+        dt2, = keylib.unpack('', s)
         eq(dt, dt2)
 
 
@@ -338,7 +338,7 @@ class SortTest:
 
     def test1(self):
         for seq in self.SEQS:
-            packed = map(lambda s: keycoder.packs('', s), seq)
+            packed = map(lambda s: keylib.packs('', s), seq)
             rnge = range(len(packed))
             done = sorted(rnge, key=packed.__getitem__)
             try:
