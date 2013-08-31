@@ -14,7 +14,7 @@
  * under the License.
  */
 
-#include "centidb.h"
+#include "acid.h"
 #include "structmember.h"
 
 
@@ -94,12 +94,12 @@ static PyMethodDef offset_methods[] = {
 
 static PyTypeObject FixedOffsetType = {
     PyObject_HEAD_INIT(NULL)
-    .tp_name = "centidb._keylib.FixedOffset",
+    .tp_name = "acid._keylib.FixedOffset",
     .tp_basicsize = sizeof(FixedOffset),
     .tp_init = (initproc) fixedoffset_init,
     .tp_repr = (reprfunc) fixedoffset_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "centidb._keylib.FixedOffset",
+    .tp_doc = "acid._keylib.FixedOffset",
     .tp_methods = offset_methods
 };
 

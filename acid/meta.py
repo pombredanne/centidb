@@ -15,7 +15,7 @@
 #
 
 """
-The `centidb.metadb` module provides an ORM-like metaclass that allows
+The `acid.meta` module provides an ORM-like metaclass that allows
 simplified definition of database models using Python code.
 
 This module is a work in progress, and the most interesting aspect of it is
@@ -26,8 +26,8 @@ produce and maintain a compact encoding. For now this is just a curiosity.
 from __future__ import absolute_import
 import operator
 
-import centidb
-import centidb.encoders
+import acid
+import acid.encoders
 
 
 class Field(object):
@@ -35,15 +35,15 @@ class Field(object):
     """
     def __get__(self, instance, klass):
         if instance:
-            return klass.METADB_BINDING.get(instance._rec.data, self.name)
+            return klass.META_BINDING.get(instance._rec.data, self.name)
         return self
 
     def __set__(self, instance, value):
-        klass.METADB_BINDING.set(instance._rec.data, self.name, value)
+        klass.META_BINDING.set(instance._rec.data, self.name, value)
 
     def __delete__(self, instance):
         try:
-            instance.METADB_BINDING.delete(instance._rec.data, self.name)
+            instance.META_BINDING.delete(instance._rec.data, self.name)
         except KeyError:
             raise AttributeError(self.name)
 
@@ -69,7 +69,7 @@ class String(Field):
 
 
 class LazyIndexProperty(object):
-    """Property that replaces itself with a centidb.Index when it is first
+    """Property that replaces itself with a acid.Index when it is first
     accessed."""
     def __init__(self, name):
         self.name = name
@@ -85,7 +85,7 @@ class EncoderBinding(object):
     encoder. You must instantiate this to support new encoders.
 
     `encoder`
-        The :py:class:`centidb.encoders.Encoder` instance itself.
+        The :py:class:`acid.encoders.Encoder` instance itself.
 
     `new`
         Callable that produces a new, empty instance of the encoder's value
@@ -123,7 +123,7 @@ def make_thrift_binding(klass, factory=None):
     attributes we must :py:func:`getattr`, :py:func:`setattr` and
     :py:func:`delattr` for value access.
     """
-    import centidb.encoders
+    import acid.encoders
     encoder = encoders.make_thrift_encoder(klass, factory=factory)
     return EncoderBinding(encoder=encoder, factory=klass,
                           get=getattr, set=setattr, delete=delattr)
@@ -143,51 +143,51 @@ class ModelMeta(type):
 
     @classmethod
     def setup_type_vars(cls, klass, bases, attrs):
-        if 'METADB_COLLECTION_NAME' not in attrs:
-            klass.METADB_COLLECTION_NAME = klass.__name__
-        if 'METADB_KIND_NAME' not in attrs:
+        if 'META_COLLECTION_NAME' not in attrs:
+            klass.META_COLLECTION_NAME = klass.__name__
+        if 'META_KIND_NAME' not in attrs:
             qname = '%s.%s' % (klass.__module__, klass.__name__)
-            klass.METADB_KIND_NAME = qname
-        klass.METADB_COLLECTION = None
+            klass.META_KIND_NAME = qname
+        klass.META_COLLECTION = None
 
     @classmethod
     def setup_key_func(cls, klass, bases, attrs):
         key_func = None
         for key, value in attrs.iteritems():
-            if not hasattr(value, 'metadb_derived_key'):
+            if not hasattr(value, 'meta_derived_key'):
                 continue
             if key_func:
                 raise TypeError('%r: multiple key functions found: %r and %r'
                                 % (klass, key_func, value))
             key_func = value
         if key_func:
-            klass.METADB_KEY_FUNC = key_func
+            klass.META_KEY_FUNC = key_func
 
     @classmethod
     def setup_index_funcs(cls, klass, bases, attrs):
-        index_funcs = list(getattr(klass, 'METADB_INDEX_FUNCS', []))
+        index_funcs = list(getattr(klass, 'META_INDEX_FUNCS', []))
         for key, value in attrs.iteritems():
-            if not hasattr(value, 'metadb_index_func'):
+            if not hasattr(value, 'meta_index_func'):
                 continue
             if any(f.func_name == value.func_name for f in base_index_funcs):
                 raise TypeError('index %r already defined by a base class'
                                 % (value.func_name,))
             index_funcs.append(value)
-        klass.METADB_INDEX_FUNCS = index_funcs
+        klass.META_INDEX_FUNCS = index_funcs
 
     @classmethod
     def setup_index_properties(cls, klass, bases, attrs):
-        for index_func in klass.METADB_INDEX_FUNCS:
+        for index_func in klass.META_INDEX_FUNCS:
             setattr(klass, index_func.func_name,
                     LazyIndexProperty(index_func.func_name))
 
     @classmethod
     def setup_constraints(cls, klass, bases, attrs):
-        constraints = list(getattr(klass, 'METADB_CONSTRAINTS', []))
+        constraints = list(getattr(klass, 'META_CONSTRAINTS', []))
         for key, value in attrs.iteritems():
-            if getattr(value, 'metadb_constraint', False):
+            if getattr(value, 'meta_constraint', False):
                 constraints.append(value)
-        klass.METADB_CONSTRAINTS = constraints
+        klass.META_CONSTRAINTS = constraints
 
     @classmethod
     def setup_field_properties(cls, klass, bases, attrs):
@@ -197,7 +197,7 @@ class ModelMeta(type):
 
     @classmethod
     def setup_binding(cls, klass, bases, attrs):
-        cls.METADB_BINDING = EncoderBinding()
+        cls.META_BINDING = EncoderBinding()
 
 
 def key(func):
@@ -207,11 +207,11 @@ def key(func):
 
     ::
 
-        @metadb.key
+        @meta.key
         def key_func(self):
             return int(time.time() * 1000)
     """
-    func.metadb_derived_key = False
+    func.meta_derived_key = False
     return func
 
 
@@ -222,11 +222,11 @@ def derived_key(func):
 
     ::
 
-        @metadb.derived_key
+        @meta.derived_key
         def key_func(self):
             return self.name, self.email
     """
-    func.metadb_derived_key = True
+    func.meta_derived_key = True
     return func
 
 
@@ -237,12 +237,12 @@ def blind(func):
 
     ::
 
-        @metadb.blind
-        @metadb.key
+        @meta.blind
+        @meta.key
         def never_repeating_key_func(self):
             return int(time.time() * 10000000000)
     """
-    func.metadb_blind_keys = True
+    func.meta_blind_keys = True
     return func
 
 
@@ -250,20 +250,20 @@ def index(func):
     """Mark a function as an index for the model. The function will be called
     during update to produce secondary indices for each item.
 
-    See :py:class:`centidb.Index` for more information on the function's return
+    See :py:class:`acid.Index` for more information on the function's return
     value.
 
     Once the model class has been constructed, accessing ``Model.func_name``
-    will return a :py:class:`centidb.Index` instance representing the index.
+    will return a :py:class:`acid.Index` instance representing the index.
     The original function can still be accessed via
-    :py:attr:`centidb.Index.func`.
+    :py:attr:`acid.Index.func`.
 
     ::
 
-        class Person(metadb.Model):
-            age = metadb.Integer()
+        class Person(meta.Model):
+            age = meta.Integer()
 
-            @metadb.index
+            @meta.index
             def by_age(self):
                 return self.age
 
@@ -275,21 +275,21 @@ def index(func):
         youngest = Person.by_age.find()
         oldest = Person.by_age.find(reverse=True)
     """
-    func.metadb_index_func = True
+    func.meta_index_func = True
     return func
 
 
 def constraint(func):
     """Mark a function as implementing a collection constraint. Constraints are
-    checked during :py:meth:`centidb.metadb.Model.save`.
+    checked during :py:meth:`acid.meta.Model.save`.
 
     ::
 
-        @metadb.constraint
+        @meta.constraint
         def is_age_valid(self):
             return 0 < age < 150
     """
-    func.metadb_constraint = True
+    func.meta_constraint = True
     return func
 
 
@@ -299,13 +299,13 @@ def on_create(func, klass=None):
 
     ::
 
-        @metadb.on_create
+        @meta.on_create
         def set_created(self):
             '''Update the model's creation time.'''
             self.created = datetime.datetime.now()
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.metadb_on_create = True
+    func.meta_on_create = True
     return func
 
 
@@ -314,13 +314,13 @@ def on_update(func, klass=None):
 
     ::
 
-        @metadb.on_update
+        @meta.on_update
         def set_modified(self):
             '''Update the model's modified time.'''
             self.modified = datetime.datetime.utcnow()
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.metadb_on_update = True
+    func.meta_on_update = True
     return func
 
 
@@ -329,14 +329,14 @@ def on_delete(func, klass=None):
 
     ::
 
-        @metadb.on_delete
+        @meta.on_delete
         def ensure_can_delete(self):
             '''Prevent deletion if account is active.'''
             if self.state == 'active':
                 raise Exception("can't delete while account is active.")
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.metadb_on_delete = True
+    func.meta_on_delete = True
     return func
 
 
@@ -345,14 +345,14 @@ def after_create(func, klass=None):
 
     ::
 
-        @metadb.after_create
+        @meta.after_create
         def send_welcome_message(self):
             '''Send the user a welcome message.'''
             msg = Message(user_id=self.id, text='Welcome to our service!')
             msg.save()
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.metadb_after_create = True
+    func.meta_after_create = True
     return func
 
 
@@ -361,13 +361,13 @@ def after_update(func, klass=None):
 
     ::
 
-        @metadb.after_update
+        @meta.after_update
         def notify_update(self):
             '''Push an update event to message queue subscribers.'''
             my_message_queue.send(topic='account-updated', id=self.id)
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.metadb_after_update = True
+    func.meta_after_update = True
     return func
 
 
@@ -376,14 +376,14 @@ def after_delete(func, klass=None):
 
     ::
 
-        @metadb.after_delete
+        @meta.after_delete
         def delete_messages(self):
             '''Delete all the account's messages.'''
             for msg in Message.user_index.find(prefix=self.id):
                 msg.delete()
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.metadb_on_delete = True
+    func.meta_on_delete = True
     return func
 
 
@@ -394,59 +394,59 @@ class BaseModel(object):
     """
     @classmethod
     def create_collection(cls):
-        if not hasattr(cls, 'METADB_STORE'):
+        if not hasattr(cls, 'META_STORE'):
             raise TypeError('%s nor any of its bases have been bound to a '
                             'Store. You must call %s.bind_store() with a '
-                            'centidb.Store instance.'
+                            'acid.Store instance.'
                             % (cls.__name__, cls.__name__))
 
-        key_func = getattr(cls, 'METADB_KEY_FUNC', None)
-        coll = cls.METADB_STORE.collection(
-            name=cls.METADB_COLLECTION_NAME,
+        key_func = getattr(cls, 'META_KEY_FUNC', None)
+        coll = cls.META_STORE.collection(
+            name=cls.META_COLLECTION_NAME,
             key_func=key_func,
-            encoder=cls.METADB_ENCODER,
-            blind=getattr(key_func, 'metadb_blind_keys', False))
+            encoder=cls.META_ENCODER,
+            blind=getattr(key_func, 'meta_blind_keys', False))
 
-        for index_func in cls.METADB_INDEX_FUNCS:
+        for index_func in cls.META_INDEX_FUNCS:
             coll.add_index(index_func.func_name, index_func)
-        cls.METADB_COLLECTION = coll
+        cls.META_COLLECTION = coll
 
     @classmethod
     def collection(cls):
-        """Return the :py:class:`centidb.Collection` used to store instances of
+        """Return the :py:class:`acid.Collection` used to store instances of
         this model. The collection handles objects understood by the underlying
         encoder, not Model instances.
 
         :py:meth:`bind_store` must be called before accessing this property.
         """
-        coll = cls.METADB_COLLECTION
+        coll = cls.META_COLLECTION
         if coll:
             return coll
         cls.create_collection()
-        return cls.METADB_COLLECTION
+        return cls.META_COLLECTION
 
     @classmethod
     def bind_store(cls, store):
-        """Bind this class and all subclasses to a :py:class:`centidb.Store`.
+        """Bind this class and all subclasses to a :py:class:`acid.Store`.
 
         ::
 
-            store = centidb.open('ListEngine')
+            store = acid.open('ListEngine')
             MyModel.bind_store(store)
         """
-        assert isinstance(store, centidb.Store)
-        cls.METADB_STORE = store
+        assert isinstance(store, acid.Store)
+        cls.META_STORE = store
 
     @classmethod
     def get(cls, key):
         """Fetch an instance given its key; see
-        :py:meth:`centidb.Collection.get`."""
+        :py:meth:`acid.Collection.get`."""
         return cls.collection().get(key)
 
     @classmethod
     def find(cls, key=None, lo=None, hi=None, reverse=None, include=False):
         """Fetch the first matching instance; see
-        :py:meth:`centidb.Collection.find`.
+        :py:meth:`acid.Collection.find`.
         """
         return cls.collection().find(key, lo, hi, reverse, include)
 
@@ -454,12 +454,12 @@ class BaseModel(object):
     def iter(cls, key=None, lo=None, hi=None, reverse=None, max=None,
              include=False):
         """Yield matching models in key order; see
-        :py:meth:`centidb.Store.values`."""
+        :py:meth:`acid.Store.values`."""
         return cls.collection().values(key, lo, hi, reverse, max, include)
 
     def __init__(self, _rec=None, **kwargs):
         if not _rec:
-            _rec = centidb.Record(self.collection(), self.METADB_BINDING.new())
+            _rec = acid.Record(self.collection(), self.META_BINDING.new())
         if kwargs:
             for name, value in kwargs.iteritems():
                 setattr(self, name, value)
@@ -484,7 +484,7 @@ class BaseModel(object):
                 importing e.g. old data.
         """
         if check_constraints:
-            for func in self.METADB_CONSTRAINTS:
+            for func in self.META_CONSTRAINTS:
                 if not func(self):
                     raise ValueError('constraint %r failed for %r'
                                      % (func.func_name, self))

@@ -1,4 +1,4 @@
-"","Redis","Postgres","MongoDB","LevelDB","LMDB","CentiDB"
+"","Redis","Postgres","MongoDB","LevelDB","LMDB","Acid"
 "Atomic Updates","Hard","Easy","Limited","Hard","Easy","Easy"
 "Read Txns","No","Yes","No","Yes","Yes","Yes"
 "Write Txns","No","Yes","No","No","Yes","Yes"

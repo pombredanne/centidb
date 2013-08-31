@@ -1,5 +1,5 @@
 
-.. currentmodule:: centidb
+.. currentmodule:: acid
 
 Notes
 #####
@@ -50,7 +50,7 @@ type, or to provide exact emulation of the sort order of other databases (e.g.
 App Engine).
 
 Several difficulties arise with parameterizing key encoding. Firstly,
-:py:class:`Index` relies on :py:func:`centidb.keylib.packs` to function. One
+:py:class:`Index` relies on :py:func:`acid.keylib.packs` to function. One
 solution might be to parameterize :py:class:`Index`'s key construction, or
 force key encodings to accept lists of keys as part of their interface. A
 second issue is that is that the 'innocence' of the key encoding might be
@@ -89,7 +89,7 @@ The library is experimental, but eventually it should become a small,
 convenient way to store data for programs with medium sized datasets. Already
 with a suitable engine it can offer better durability guarantees, and vastly
 better performance than larger and more established systems, such as MongoDB.
-Coupled with :py:class:`LmdbEngine <centidb.engines.LmdbEngine>` it is even
+Coupled with :py:class:`LmdbEngine <acid.engines.LmdbEngine>` it is even
 possible to make consistent online backups without resorting to platform
 tricks, unlike MongoDB.
 
@@ -112,8 +112,8 @@ removed from the lifecycle of a typical request. For example:
 
 * By explicitly controlling the encoding, there may be no need for ever
   deserializing data before passing it to the user, such as via
-  :py:func:`make_json_encoder <centidb.encoders.make_json_encoder>` and
-  :py:meth:`get(... raw=True) <centidb.Collection.get>`.
+  :py:func:`make_json_encoder <acid.encoders.make_json_encoder>` and
+  :py:meth:`get(... raw=True) <acid.Collection.get>`.
 
 * Through careful buffer control during a transaction, memory copies are
   drastically reduced.

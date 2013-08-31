@@ -10,8 +10,8 @@ from pprint import pprint
 from unittest import TestCase
 
 import dateutil.tz
-from centidb import keylib
-from centidb import _keylib
+from acid import keylib
+from acid import _keylib
 
 
 #
@@ -29,7 +29,7 @@ class PythonMixin:
     @classmethod
     def setUpClass(cls):
         global keylib
-        os.environ['CENTIDB_NO_SPEEDUPS'] = '1'
+        os.environ['ACID_NO_SPEEDUPS'] = '1'
         keylib = reload(keylib)
         keylib = reload(keylib)
         getattr(cls, '_setUpClass', lambda: None)()
@@ -39,7 +39,7 @@ class NativeMixin:
     @classmethod
     def setUpClass(cls):
         global keylib
-        os.environ.pop('CENTIDB_NO_SPEEDUPS', None)
+        os.environ.pop('ACID_NO_SPEEDUPS', None)
         keylib = reload(keylib)
         keylib = reload(keylib)
         getattr(cls, '_setUpClass', lambda: None)()

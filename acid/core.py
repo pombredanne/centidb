@@ -17,7 +17,7 @@
 """
 Minimalist object DBMS for Python
 
-See http://centidb.readthedocs.org/
+See http://acid.readthedocs.org/
 """
 
 from __future__ import absolute_import
@@ -28,9 +28,9 @@ import os
 import sys
 import warnings
 
-from centidb import encoders
-from centidb import keylib
-from centidb.encoders import Encoder
+from acid import encoders
+from acid import keylib
+from acid.encoders import Encoder
 
 __all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
 
@@ -48,19 +48,19 @@ KIND_STRUCT = 4
 def open(engine, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
     `engine(**kwargs)` and wrap the result in a :py:class:`Store`. `engine`
-    can either be a name from :py:mod:`centidb.engines` or a fully qualified
+    can either be a name from :py:mod:`acid.engines` or a fully qualified
     name for a class in another module.
 
     ::
 
-        >>> # Uses centidb.engines.SkiplistEngine
-        >>> centidb.open('SkiplistEngine')
+        >>> # Uses acid.engines.SkiplistEngine
+        >>> acid.open('SkiplistEngine')
 
         >>> # Uses mymodule.BlarghEngine
-        >>> centidb.open('mymodule.BlarghEngine')
+        >>> acid.open('mymodule.BlarghEngine')
     """
     if '.' not in engine:
-        engine = 'centidb.engines.' + engine
+        engine = 'acid.engines.' + engine
     modname, _, classname = engine.rpartition('.')
     __import__(modname)
     return Store(getattr(sys.modules[modname], classname)(**kwargs))
@@ -803,7 +803,7 @@ class Store(object):
                                  (key, value, new[key]))
 
     def add_collection(self, name, **kwargs):
-        """Shorthand for `centidb.Collection(self, **kwargs)`."""
+        """Shorthand for `acid.Collection(self, **kwargs)`."""
         old = self.get_info2(KIND_TABLE, name)
         encoder = kwargs.get('encoder', encoders.PICKLE_ENCODER)
         new = {'name': name, 'encoder': encoder.name}
@@ -892,8 +892,8 @@ class Store(object):
 
 # Hack: disable speedups while testing or reading docstrings.
 if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
-        os.getenv('CENTIDB_NO_SPEEDUPS') is None:
+        os.getenv('ACID_NO_SPEEDUPS') is None:
     try:
-        from centidb._keylib import decode_offsets
+        from acid._keylib import decode_offsets
     except ImportError:
         pass

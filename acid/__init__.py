@@ -16,8 +16,8 @@
 
 from __future__ import absolute_import
 
-from centidb import centidb
-from centidb.centidb import *
-__all__ = centidb.__all__
-__doc__ = centidb.__doc__
+from acid import core
+from acid.core import *
+__all__ = core.__all__
+__doc__ = core.__doc__
 __version__ = '0.0.15'

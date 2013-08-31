@@ -1,13 +1,13 @@
 
-centidb
-#######
+acid
+####
 
 .. warning::
 
     This is a prototype, focusing on useful APIs and physical data layout. Many
     parts are missing, slow, broken and/or very nasty.
 
-**centidb** is a compromise between the minimalism of key/value stores and the
+**Acid** is a compromise between the minimalism of key/value stores and the
 convenience of SQL. It augments any store offering an ordered-map interface to
 support keys composed of tuples rather than bytestrings, and easy maintenance
 of secondary indices, with key and index functions written directly in Python
@@ -21,8 +21,8 @@ compressed and the batch size is configurable.
 
 .. toctree::
     intro
-    api
-    metadb
+    core
+    meta
     engines
     encoders
     cookbook

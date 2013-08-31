@@ -10,8 +10,8 @@ import sqlite3
 import sys
 import time
 
-import centidb
-import centidb.encoders
+import acid
+import acid.encoders
 
 try:
     import pymongo
@@ -32,8 +32,8 @@ if not os.path.exists(BASE_PATH):
     os.mkdir(BASE_PATH, 0744)
 
 
-class CentiEngine(object):
-    ENCODER = centidb.encoders.make_msgpack_encoder()
+class AcidEngine(object):
+    ENCODER = acid.encoders.make_msgpack_encoder()
     KEY_FUNC = operator.itemgetter('name', 'location')
 
     def create(self):
@@ -75,25 +75,25 @@ class CentiEngine(object):
             coll.get((words[i], upper[i]), txn=txn)
 
 
-class LmdbEngine(CentiEngine):
+class LmdbEngine(AcidEngine):
     PATH = BASE_PATH + 'test.lmdb'
     def make_engine(self):
-        self.store = centidb.open('LmdbEngine',
+        self.store = acid.open('LmdbEngine',
             path=self.PATH, map_size=1048576*1024,
             writemap=USE_SPARSE_FILES)
 
 
-class SkiplistEngine(CentiEngine):
+class SkiplistEngine(AcidEngine):
     PATH = None
     def make_engine(self):
-         self.store = centidb.open('SkiplistEngine', maxsize=int(1e9))
+         self.store = acid.open('SkiplistEngine', maxsize=int(1e9))
 
 
-class PlyvelEngine(CentiEngine):
+class PlyvelEngine(AcidEngine):
     PATH = BASE_PATH + 'test.ldb'
 
     def make_engine(self):
-        self.store = centidb.open('PlyvelEngine', name=self.PATH,
+        self.store = acid.open('PlyvelEngine', name=self.PATH,
                                   create_if_missing=True)
 
 

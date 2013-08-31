@@ -1,6 +1,6 @@
 
-What is centidb for?
-####################
+What is Acid for?
+#################
 
 .. csv-table:: Typical storage engine trade-offs
     :header-rows: 1

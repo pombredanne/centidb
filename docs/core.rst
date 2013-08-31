@@ -1,5 +1,5 @@
 
-.. currentmodule:: centidb
+.. currentmodule:: acid
 
 .. _api-reference:
 
@@ -10,7 +10,7 @@ Core Interface
 open
 ++++
 
-.. autofunction:: centidb.open
+.. autofunction:: acid.open
 
 
 Store Class
@@ -35,5 +35,5 @@ Index Class
 Key Class
 +++++++++
 
-.. autoclass:: centidb.keylib.Key
+.. autoclass:: acid.keylib.Key
    :members:
