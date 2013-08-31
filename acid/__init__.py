@@ -20,4 +20,4 @@ from acid import core
 from acid.core import *
 __all__ = core.__all__
 __doc__ = core.__doc__
-__version__ = '0.0.15'
+__version__ = '0.0.16'
