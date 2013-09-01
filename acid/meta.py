@@ -169,7 +169,7 @@ class ModelMeta(type):
         for key, value in attrs.iteritems():
             if not hasattr(value, 'meta_index_func'):
                 continue
-            if any(f.func_name == value.func_name for f in base_index_funcs):
+            if any(f.func_name == value.func_name for f in index_funcs):
                 raise TypeError('index %r already defined by a base class'
                                 % (value.func_name,))
             index_funcs.append(value)
@@ -458,12 +458,10 @@ class BaseModel(object):
         return cls.collection().values(key, lo, hi, reverse, max, include)
 
     def __init__(self, _rec=None, **kwargs):
-        if not _rec:
-            _rec = acid.Record(self.collection(), self.META_BINDING.new())
+        self._rec = _rec or self.META_BINDING.new()
         if kwargs:
             for name, value in kwargs.iteritems():
                 setattr(self, name, value)
-        self._rec = _rec
 
     @property
     def is_saved(self):

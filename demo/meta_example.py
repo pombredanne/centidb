@@ -5,23 +5,23 @@
 #
 
 import acid
-from acid import meta
+import acid.meta
 
 
-class MyModel(meta.Model):
+class MyModel(acid.meta.Model):
     pass
 
 
 class Item(MyModel):
-    email = meta.String()
-    password = meta.String()
-    first_name = meta.String()
-    last_name = meta.String()
-    age = meta.Integer()
-    id = meta.Integer()
-    parent_id = meta.Integer()
+    email = acid.meta.String()
+    password = acid.meta.String()
+    first_name = acid.meta.String()
+    last_name = acid.meta.String()
+    age = acid.meta.Integer()
+    id = acid.meta.Integer()
+    parent_id = acid.meta.Integer()
 
-    @meta.key
+    @acid.meta.key
     def key(self):
         key = [self.id]
         parent_id = self.parent_id
@@ -32,7 +32,7 @@ class Item(MyModel):
             parent_id = parent.id
         return reversed(key)
 
-    @meta.index
+    @acid.meta.index
     def first_last(self):
         return self.first, self.last
 
