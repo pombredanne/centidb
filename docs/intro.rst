@@ -28,7 +28,7 @@ Let's create a ``people`` collection:
 
 ::
 
-    people = store.add_collection('people')
+    store.add_collection('people')
 
 Underneath a few interesting things just occurred. Since the engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
@@ -42,14 +42,14 @@ Now let's insert some people using :py:meth:`Collection.put`:
 
 ::
 
-    >>> people.put(('Buffy', 'girl'))
-    <Record people:(1L) ('Buffy', 'girl')>
+    >>> store['people'].put(('Buffy', 'girl'))
+    acid.Key(1L,)
 
-    >>> people.put(('Willow', 'girl'))
-    <Record people:(2L) ('Willow', 'girl')>
+    >>> store['people'].put(('Willow', 'girl'))
+    acid.Key(2L,)
 
-    >>> people.put(('Spike', 'boy'))
-    <Record people:(3L) ('Spike', 'boy')>
+    >>> store['people'].put(('Spike', 'boy'))
+    acid.Key(3L,)
 
 Since we didn't specify an encoder during construction, the default pickle
 encoder is used which allows almost any Python value, although here we use
@@ -84,15 +84,15 @@ missing:
 
 ::
 
-    >>> people.get(2)
+    >>> store['people'].get(2)
     ('Willow', 'girl')
 
     >>> # No such record.
-    >>> people.get(99)
+    >>> store['people'].get(99)
     None
 
     >>> # Default is returned.
-    >>> people.get(99, default=('Angel', 'boy'))
+    >>> store['people'].get(99, default=('Angel', 'boy'))
     ('Angel', 'boy')
 
 Be aware that unlike :py:meth:`dict.get`, :py:meth:`Collection.get` and related
@@ -102,8 +102,8 @@ respect :py:class:`Collection` only superficially behaves like a
 
 ::
 
-    >>> t1 = people.get(2)
-    >>> t2 = people.get(2)
+    >>> t1 = store['people'].get(2)
+    >>> t2 = store['people'].get(2)
 
     >>> # The copies are equal:
     >>> t1 == t2
@@ -125,11 +125,11 @@ highest records:
 ::
 
     >>> # Find record with lowest key, 1
-    >>> people.find()
+    >>> store['people'].find()
     ('Buffy', 'girl')
 
     >>> # Find record with highest key, 3
-    >>> people.find(reverse=True)
+    >>> store['people'].find(reverse=True)
     ('Spike', 'boy')
 
 We can locate records based only on the relation of their key to some
@@ -138,11 +138,11 @@ constraining keys:
 ::
 
     >>> # Find first record with 2 <= key < 99.
-    >>> people.find(lo=2, hi=99)
+    >>> store['people'].find(lo=2, hi=99)
     ('Willow', 'girl')
 
     >>> # Find last record with 2 <= key < 99.
-    >>> people.find(lo=2, hi=99, reverse=True)
+    >>> store['people'].find(lo=2, hi=99, reverse=True)
     ('Spike', 'boy')
 
 
@@ -159,19 +159,19 @@ supported combinations.
     ::
 
         >>> # All keys, start to end:
-        >>> list(people.keys())
+        >>> list(store['people'].keys())
         [(1L,), (2L,), (3L,)]
 
         >>> # All keys, end to start.
-        >>> list(people.keys(reverse=True))
+        >>> list(store['people'].keys(reverse=True))
         [(3L,), (2L,), (1L,)]
 
         >>> # Keys from 2 to end:
-        >>> list(people.keys(2))
+        >>> list(store['people'].keys(2))
         [(2L,), (3L,)]
 
         >>> # Keys from 2 to start:
-        >>> list(people.keys(2, reverse=True))
+        >>> list(store['people'].keys(2, reverse=True))
         [(2L,), (1L,)]
 
 
@@ -180,7 +180,7 @@ supported combinations.
     ::
 
         >>> # All values, start to end:
-        >>> pprint(list(people.values()))
+        >>> pprint(list(store['people'].values()))
         [('Buffy', 'girl'),
          ('Willow', 'girl'),
          ('Spike', 'boy')]
@@ -190,7 +190,7 @@ supported combinations.
     ::
 
         >>> # All (key, value) pairs, from 99 to 2:
-        >>> pprint(list(people.items(lo=2, hi=99, reverse=True)))
+        >>> pprint(list(store['people'].items(lo=2, hi=99, reverse=True)))
         [((3L,), ('Spike', 'boy')),
          ((2L,), ('Willow', 'girl'))]
 
@@ -314,7 +314,7 @@ a name and function implementing the index:
     def age_index(person):
         return person['age']
 
-    people.add_index('by_age', age_index)
+    store['people'].add_index('by_age', age_index)
 
 An index function can return a ``None``, a single primitive value, a tuple of
 values, or a list of any of the above. Returning ``None`` indicates that no
@@ -345,7 +345,7 @@ simply a case of constructing an :py:class:`Encoder`.
 
 ::
 
-    coll.put({"name": "Alfred" }, packer=acid.ZLIB_PACKER)
+    store['coll'].put({"name": "Alfred" }, packer=acid.ZLIB_PACKER)
 
 Supporting a new custom compressor is trivial:
 
