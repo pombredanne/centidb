@@ -160,19 +160,19 @@ supported combinations.
 
         >>> # All keys, start to end:
         >>> list(store['people'].keys())
-        [(1L,), (2L,), (3L,)]
+        [acid.Key(1L,), acid.Key(2L,), acid.Key(3L,)]
 
         >>> # All keys, end to start.
         >>> list(store['people'].keys(reverse=True))
-        [(3L,), (2L,), (1L,)]
+        [acid.Key(3L,), acid.Key(2L,), acid.Key(1L,)]
 
         >>> # Keys from 2 to end:
         >>> list(store['people'].keys(2))
-        [(2L,), (3L,)]
+        [acid.Key(2L,), acid.Key(3L,)]
 
         >>> # Keys from 2 to start:
         >>> list(store['people'].keys(2, reverse=True))
-        [(2L,), (1L,)]
+        [acid.Key(2L,), acid.Key(1L,)]
 
 
 :py:meth:`Collection.values`
@@ -191,8 +191,8 @@ supported combinations.
 
         >>> # All (key, value) pairs, from 99 to 2:
         >>> pprint(list(store['people'].items(lo=2, hi=99, reverse=True)))
-        [((3L,), ('Spike', 'boy')),
-         ((2L,), ('Willow', 'girl'))]
+        [(acid.Key(3L,), ('Spike', 'boy')),
+         (acid.Key(2L,), ('Willow', 'girl'))]
 
 
 Keys & Indices
