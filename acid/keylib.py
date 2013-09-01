@@ -166,7 +166,7 @@ class Key(object):
     def __repr__(self):
         if self.args is None:
             self.args = unpack(self.prefix, self.packed)
-        return '<acid.Key %r>' % (self.args,)
+        return 'acid.Key%r' % (self.args,)
 
 
 class KeyList(object):

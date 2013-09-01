@@ -204,7 +204,7 @@ key_repr(Key *self)
     }
 
     const char *repr_s = PyString_AS_STRING(tup_repr);
-    PyObject *out = PyString_FromFormat("<acid.Key %s>", repr_s);
+    PyObject *out = PyString_FromFormat("acid.Key%s", repr_s);
     Py_DECREF(tup_repr);
     return out;
 }
