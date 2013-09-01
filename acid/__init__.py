@@ -18,6 +18,7 @@ from __future__ import absolute_import
 
 from acid import core
 from acid.core import *
+from acid.keylib import Key
 __all__ = core.__all__
 __doc__ = core.__doc__
 __version__ = '0.0.16'
