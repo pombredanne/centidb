@@ -357,7 +357,7 @@ def after_create(func, klass=None):
 
 
 def after_update(func, klass=None):
-    """Mark a function to be called prior to create or update of a model.
+    """Mark a function to be called after create or update of a model.
 
     ::
 
