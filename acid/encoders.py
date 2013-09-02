@@ -62,7 +62,7 @@ def make_json_encoder(separators=',:', **kwargs):
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     decoder = json.JSONDecoder().decode
     decode = lambda s: decoder(str(s))
-    return acid.Encoder('json', decode, encoder.encode)
+    return Encoder('json', decode, encoder.encode)
 
 
 def make_msgpack_encoder():
@@ -71,7 +71,7 @@ def make_msgpack_encoder():
     <http://msgpack.org/>`_ via the `msgpack-python
     <https://pypi.python.org/pypi/msgpack-python/>`_ package."""
     import msgpack
-    return acid.Encoder('msgpack', msgpack.loads, msgpack.dumps)
+    return Encoder('msgpack', msgpack.loads, msgpack.dumps)
 
 
 def make_thrift_encoder(klass, factory=None):
@@ -107,7 +107,7 @@ def make_thrift_encoder(klass, factory=None):
 
     # Form a name from the Thrift ttypes module and struct name.
     name = 'thrift:%s.%s' % (klass.__module__, klass.__name__)
-    return acid.Encoder(name, loads, dumps)
+    return Encoder(name, loads, dumps)
 
 
 #: Encode Python tuples using keylib.packs()/keylib.unpacks().
