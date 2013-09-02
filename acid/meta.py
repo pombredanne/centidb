@@ -162,7 +162,11 @@ class ModelMeta(type):
                                 % (klass, key_func, value))
             key_func = value
         if key_func:
-            klass.META_KEY_FUNC = key_func
+            klass.META_KEY_FUNC = staticmethod(key_func)
+        if key_func or not hasattr(klass, 'META_KEY_FUNC'):
+            name = getattr(key_func, 'func_name', 'key')
+            getter = operator.attrgetter('_key')
+            setattr(klass, name, property(getter, setattr))
 
     @classmethod
     def setup_index_funcs(cls, klass, bases, attrs):
@@ -458,7 +462,8 @@ class BaseModel(object):
         :py:meth:`acid.Store.values`."""
         return cls.collection().values(key, lo, hi, reverse, max, include)
 
-    def __init__(self, _rec=None, **kwargs):
+    def __init__(self, _rec=None, _key=None, **kwargs):
+        self._key = _key
         self._rec = _rec or self.META_BINDING.new()
         if kwargs:
             for name, value in kwargs.iteritems():
@@ -468,7 +473,7 @@ class BaseModel(object):
     def is_saved(self):
         """``True`` if the model has been saved already.
         """
-        return self._rec.key is not None
+        return self._key is not None
 
     def delete(self):
         """Delete the model if it has been saved."""
