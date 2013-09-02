@@ -341,7 +341,7 @@ Compression
 Individual values may be compressed by passing a `packer=` argument to
 :py:meth:`Collection.put`, or to the :py:class:`Collection` constructor. A
 predefined ``ZLIB_PACKER`` is included, however adding new compressors is
-simply a case of constructing an :py:class:`Encoder`.
+simply a case of constructing an :py:class:`acid.encoders.Encoder <Encoder>`.
 
 ::
 
@@ -354,7 +354,7 @@ Supporting a new custom compressor is trivial:
     import lz4
 
     # Build an Encoder instance describing the encoding.
-    LZ4_PACKER = acid.Encoder('lz4', lz4.loads, lz4.dumps)
+    LZ4_PACKER = acid.encoders.Encoder('lz4', lz4.loads, lz4.dumps)
 
     # Register the encoder with the store, which causes allocation of a
     # persistent numeric ID, and saving the encoder's record in the engine.

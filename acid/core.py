@@ -30,9 +30,8 @@ import warnings
 
 from acid import encoders
 from acid import keylib
-from acid.encoders import Encoder
 
-__all__ = ['Store', 'Encoder', 'Collection', 'Index', 'open']
+__all__ = ['Store', 'Collection', 'Index', 'open']
 
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
@@ -334,8 +333,8 @@ class Collection(object):
             `counter_name`.
 
         `encoder`:
-            :py:class:`Encoder` used to serialize record values to bytestrings;
-            defaults to ``PICKLE_ENCODER``.
+            :py:class:`acid.encoders.Encoder` used to serialize record values
+            to bytestrings; defaults to ``PICKLE_ENCODER``.
 
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
@@ -890,8 +889,8 @@ class Store(object):
         return dct
 
     def add_encoder(self, encoder, txn=None):
-        """Register an :py:class:`Encoder` so that :py:class:`Collection` can
-        find it during decompression/unpacking."""
+        """Register an :py:class:`acid.encoders.Encoder` so that
+        :py:class:`Collection` can find it during decompression/unpacking."""
         try:
             return self._encoder_prefix[encoder]
         except KeyError:
@@ -907,8 +906,8 @@ class Store(object):
             return self._encoder_prefix[encoder]
 
     def get_encoder(self, prefix):
-        """Get a registered :py:class:`Encoder` given its string prefix, or
-        raise an error."""
+        """Get a registered :py:class:`acid.encoders.Encoder` given its string
+        prefix, or raise an error."""
         try:
             return self._prefix_encoder[prefix]
         except KeyError:
