@@ -1,4 +1,9 @@
 
+.. warning::
+
+    This is a work in progress! The code you see here does not run yet, itonly
+    illustrates how the library will eventually work.
+
 .. currentmodule:: acid.meta
 
 Declarative Interface
