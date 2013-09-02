@@ -48,10 +48,10 @@ Declarative Interface
     def main():
         Base.bind_store(acid.open('ListEngine'))
 
-        user = User(email='dw@botanicus.net', first='David', last='Wilson')
+        user = User(email='dw@botanicus.net', first='David')
         user.save()
 
-        user = User.by_key(1)
+        user = User.get(1)
 
 
 Model class

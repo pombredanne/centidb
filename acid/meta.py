@@ -35,15 +35,15 @@ class Field(object):
     """
     def __get__(self, instance, klass):
         if instance:
-            return klass.META_BINDING.get(instance._rec.data, self.name)
+            return klass.META_BINDING.get(instance._rec, self.name)
         return self
 
     def __set__(self, instance, value):
-        klass.META_BINDING.set(instance._rec.data, self.name, value)
+        instance.META_BINDING.set(instance._rec, self.name, value)
 
     def __delete__(self, instance):
         try:
-            instance.META_BINDING.delete(instance._rec.data, self.name)
+            instance.META_BINDING.delete(instance._rec, self.name)
         except KeyError:
             raise AttributeError(self.name)
 
@@ -111,9 +111,10 @@ class EncoderBinding(object):
 
         The default is :py:func:`operator.delitem`.
     """
-    def __init__(self, new=None, get=None, set=None, delete=None):
+    def __init__(self, encoder, new=None, get=None, set=None, delete=None):
+        self.encoder = encoder
         self.new = new or dict
-        self.get = get or operator.getitem
+        self.get = get or dict.get
         self.set = set or operator.setitem
         self.delete = delete or operator.delitem
 
@@ -197,7 +198,8 @@ class ModelMeta(type):
 
     @classmethod
     def setup_binding(cls, klass, bases, attrs):
-        cls.META_BINDING = EncoderBinding()
+        encoder = acid.encoders.make_json_encoder()
+        klass.META_BINDING = EncoderBinding(encoder)
 
 
 def key(func):
@@ -401,11 +403,10 @@ class BaseModel(object):
                             % (cls.__name__, cls.__name__))
 
         key_func = getattr(cls, 'META_KEY_FUNC', None)
-        coll = cls.META_STORE.collection(
+        coll = cls.META_STORE.add_collection(
             name=cls.META_COLLECTION_NAME,
             key_func=key_func,
-            encoder=cls.META_ENCODER,
-            blind=getattr(key_func, 'meta_blind_keys', False))
+            encoder=cls.META_BINDING.encoder)
 
         for index_func in cls.META_INDEX_FUNCS:
             coll.add_index(index_func.func_name, index_func)
