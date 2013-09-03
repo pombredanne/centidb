@@ -54,22 +54,21 @@ class RecordEncoder(object):
             instances. The default is :py:class:`dict`.
 
         `get`
-            Callable that when invoked as `func(obj, attr)` returns the value
-            of the named attribute `attr` from `obj`. Used by
-            :py:mod:`acid.meta` to implement attribute access. The default is
+            Functions invoked as `func(obj, attr)` to return the value of
+            attribute `attr` from `obj`. Used by :py:mod:`acid.meta` to
+            implement attribute access. The default is
             :py:func:`operator.getitem`.
 
         `set`
-            Callable that when invoked as `func(obj, attr, value)` sets the
-            value of the named attribute `attr` on `obj` to `value`. Used by
-            :py:mod:`acid.meta` to implement attribute access. The default is
+            Function invoked as `func(obj, attr, value)` to set the attribute
+            `attr` on `obj` to `value`. Used by :py:mod:`acid.meta` to
+            implement attribute access. The default is
             :py:func:`operator.setitem`.
 
         `delete`
-            Callable that when invoked as `func(obj, attr)` deletes the named
-            attribute `attr` from `obj`. Used by :py:mod:`acid.meta` to
-            implement attribute access. The default is
-            :py:func:`operator.delitem`.
+            Function invoked as `func(obj, attr)` to delete the attribute
+            `attr` from `obj`. Used by :py:mod:`acid.meta` to implement
+            attribute access. The default is :py:func:`operator.delitem`.
     """
     def __init__(self, name, unpack, pack, new=None,
                  get=None, set=None, delete=None):
