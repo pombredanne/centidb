@@ -102,7 +102,7 @@ class Compressor(object):
             interface.
 
         `pack`:
-            Function inoked as `func(data)` to to compress a bytestring. The
+            Function invoked as `func(data)` to compress a bytestring. The
             `data` argument may be **a buffer**. If your compressor does not
             support the :py:func:`buffer` interface (many C extensions do),
             then first convert it using :py:func:`str`. The function may return
