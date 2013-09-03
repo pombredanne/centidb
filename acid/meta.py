@@ -71,6 +71,11 @@ class String(Field):
     """
 
 
+class Time(Field):
+    """A datetime.datetime field.
+    """
+
+
 class LazyIndexProperty(object):
     """Property that replaces itself with a acid.Index when it is first
     accessed."""
@@ -157,7 +162,7 @@ class ModelMeta(type):
     def setup_encoder(cls, klass, bases, attrs):
         wrapped = acid.encoders.make_json_encoder()
         klass.META_ENCODER = acid.encoders.RecordEncoder(
-            name='meta:' + wrapped.name,
+            name=wrapped.name,
             unpack=(lambda key, data: klass(wrapped.unpack(key, data), key)),
             pack=(lambda model: wrapped.pack(model._rec)),
             new=wrapped.new, get=wrapped.get, set=wrapped.set,
