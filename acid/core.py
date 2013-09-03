@@ -568,7 +568,7 @@ class Collection(object):
         it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
         if raw:
             return it
-        return ((key, self.encoder.unpack(key, data)) for _, key, data in it)
+        return ((key_, self.encoder.unpack(key_, data)) for _, key_, data in it)
 
     def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
              max=None, include=False, txn=None):
@@ -582,17 +582,17 @@ class Collection(object):
         it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
         if raw:
             return itertools.imap(ITEMGETTER_2, it)
-        return (self.encoder.unpack(key, data) for _, key, data in it)
+        return (self.encoder.unpack(key_, data) for _, key_, data in it)
 
     def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
              include=False, txn=None, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
         it = self._iter(txn, key, lo, hi, prefix, reverse, None, include, None)
-        for _, _, data in it:
+        for _, key_, data in it:
             if raw:
                 return data
-            return self.encoder.unpack(key, data)
+            return self.encoder.unpack(key_, data)
         return default
 
     def get(self, key, default=None, txn=None, raw=False):
@@ -600,10 +600,10 @@ class Collection(object):
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead."""
         it = self._iter(txn, None, key, key, None, False, None, True, None)
-        for _, _, data in it:
+        for _, key_, data in it:
             if raw:
                 return data
-            return self.encoder.unpack(key, data)
+            return self.encoder.unpack(key_, data)
         return default
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
