@@ -152,8 +152,13 @@ class ModelMeta(type):
 
     @classmethod
     def setup_encoder(cls, klass, bases, attrs):
-        # TODO
-        klass.META_ENCODER = acid.encoders.make_json_encoder()
+        wrapped = acid.encoders.make_json_encoder()
+        klass.META_ENCODER = acid.encoders.RecordEncoder(
+            name='meta:' + wrapped.name,
+            unpack=(lambda key, data: klass(wrapped.unpack(key, data), key)),
+            pack=(lambda model: wrapped.pack(model._rec)),
+            new=wrapped.new, get=wrapped.get, set=wrapped.set,
+            delete=wrapped.delete)
 
 
 def key(func):
@@ -360,7 +365,7 @@ class BaseModel(object):
         coll = cls.META_STORE.add_collection(
             name=cls.META_COLLECTION_NAME,
             key_func=key_func,
-            encoder=cls.META_ENCODER.encoder)
+            encoder=cls.META_ENCODER)
 
         for index_func in cls.META_INDEX_FUNCS:
             coll.add_index(index_func.func_name, index_func)
@@ -427,8 +432,8 @@ class BaseModel(object):
 
     def delete(self):
         """Delete the model if it has been saved."""
-        if self._rec.key:
-            self.collection().delete(self._rec)
+        if self._key:
+            self.collection().delete(self._key)
 
     def save(self, check_constraints=True):
         """Create or update the model in the database.
@@ -442,13 +447,13 @@ class BaseModel(object):
                 if not func(self):
                     raise ValueError('constraint %r failed for %r'
                                      % (func.func_name, self))
-        self.collection().put(self._rec)
+        self._key = self.collection().put(self, key=self._key)
 
     def __repr__(self):
         klass = self.__class__
         qname = '%s.%s' % (klass.__module__, klass.__name__)
         if self.is_saved:
-            return '<%s %s>' % (qname, self._rec.key)
+            return '<%s %s>' % (qname, self._key)
         return '<%s unsaved>' % (qname,)
 
 

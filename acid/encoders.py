@@ -123,7 +123,7 @@ def make_json_encoder(separators=',:', **kwargs):
     import json
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     decoder = json.JSONDecoder().decode
-    decode = lambda s: decoder(str(s))
+    decode = lambda key, data: decoder(str(data))
     return RecordEncoder('json', decode, encoder.encode)
 
 
@@ -133,7 +133,8 @@ def make_msgpack_encoder():
     <http://msgpack.org/>`_ via the `msgpack-python
     <https://pypi.python.org/pypi/msgpack-python/>`_ package."""
     import msgpack
-    return RecordEncoder('msgpack', msgpack.loads, msgpack.dumps)
+    unpack = lambda key, data: msgpack.loads(data)
+    return RecordEncoder('msgpack', unpack, msgpack.dumps)
 
 
 def make_thrift_encoder(klass, factory=None):
@@ -156,8 +157,8 @@ def make_thrift_encoder(klass, factory=None):
     if not factory:
         factory = thrift.protocol.TCompactProtocol.TCompactProtocolFactory()
 
-    def loads(buf):
-        transport = thrift.transport.TTransport.TMemoryBuffer(buf)
+    def loads(key, data):
+        transport = thrift.transport.TTransport.TMemoryBuffer(data)
         proto = factory.getProtocol(transport)
         value = klass()
         value.read(proto)

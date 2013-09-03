@@ -21,6 +21,10 @@ class Item(MyModel):
     id = acid.meta.Integer()
     parent_id = acid.meta.Integer()
 
+    @acid.meta.constraint
+    def check_id(self):
+        return self.id is not None
+
     @acid.meta.key
     def key(self):
         key = [self.id]
@@ -30,16 +34,18 @@ class Item(MyModel):
             parent = self.get(id=parent_id)
             assert parent
             parent_id = parent.id
-        return reversed(key)
+        key.reverse()
+        return tuple(key)
 
     @acid.meta.index
     def first_last(self):
-        return self.first, self.last
+        return self.first_name, self.last_name
 
 
 store = acid.open('ListEngine')
 MyModel.bind_store(store)
 
-i = Item()
+i = Item(id=123)
 print i
 i.save()
+print i
