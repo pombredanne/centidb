@@ -124,7 +124,7 @@ class ModelMeta(type):
         if key_func or not hasattr(klass, 'META_KEY_FUNC'):
             name = getattr(key_func, 'func_name', 'key')
             getter = operator.attrgetter('_key')
-            setattr(klass, name, property(getter, setattr))
+            setattr(klass, name, property(getter))
 
     @classmethod
     def setup_index_funcs(cls, klass, bases, attrs):
