@@ -40,13 +40,13 @@ class RecordEncoder(object):
 
         `unpack`:
             Function invoked as `func(key, data)` to deserialize an encoded
-            record. The `data` argument may be **a buffer object**. If your
-            encoder does not support :py:func:`buffer` objects (many C
-            extensions do), then first convert the buffer using :py:func:`str`.
+            record. The `data` argument may be **a buffer**. If your encoder
+            does not support the :py:func:`buffer` interface (many C extensions
+            do), then first convert it using :py:func:`str`.
 
         `pack`:
-            Function invoked as `func(record)` to serialize a record. It may
-            return :py:func:`str` or any object supporting the
+            Function invoked as `func(record)` to serialize a record. The
+            function may return :py:func:`str` or any object supporting the
             :py:func:`buffer` interface.
 
         `new`
@@ -94,15 +94,20 @@ class Compressor(object):
             first use.
 
         `unpack`:
-            Function to decompress a bytestring. It may be called with **a
-            buffer object containing the encoded bytestring** as its argument,
-            and should return the decoded value. If your compressor does not
-            support :py:func:`buffer` objects (many C extensions do), then
-            convert the buffer using :py:func:`str`.
+            Function invoked as `func(data)` to decompress a bytestring. The
+            `data` argument may be **a buffer**. If your compressor does not
+            support the :py:func:`buffer` interface (many C extensions do),
+            then first convert it using :py:func:`str`. The function may return
+            :py:func:`str` or any object supporting the :py:func:`buffer`
+            interface.
 
         `pack`:
-            Function to compress a bytestring. It is called with the value as
-            its sole argument, and should return the encoded bytestring.
+            Function inoked as `func(data)` to to compress a bytestring. The
+            `data` argument may be **a buffer**. If your compressor does not
+            support the :py:func:`buffer` interface (many C extensions do),
+            then first convert it using :py:func:`str`. The function may return
+            :py:func:`str` or any object supporting the :py:func:`buffer`
+            interface.
     """
     def __init__(self, name, unpack, pack):
         self.name = name
