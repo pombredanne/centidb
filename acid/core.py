@@ -546,8 +546,8 @@ class Collection(object):
         return self.indices[index]
 
     def _decompress(self, s):
-        encoder = self.store.get_encoder(s[0])
-        return encoder.unpack(buffer(s, 1))
+        compressor = self.store.get_encoder(s[0])
+        return compressor.unpack(buffer(s, 1))
 
     def _index_keys(self, key, obj):
         """Generate a list of encoded keys representing index entries for `obj`
@@ -568,7 +568,7 @@ class Collection(object):
         it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
         if raw:
             return it
-        return ((key, self.encoder.unpack(data)) for _, key, data in it)
+        return ((key, self.encoder.unpack(key, data)) for _, key, data in it)
 
     def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
              max=None, include=False, txn=None):
@@ -582,7 +582,7 @@ class Collection(object):
         it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
         if raw:
             return itertools.imap(ITEMGETTER_2, it)
-        return (self.encoder.unpack(data) for _, key, data in it)
+        return (self.encoder.unpack(key, data) for _, key, data in it)
 
     def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
              include=False, txn=None, raw=None, default=None):
@@ -592,7 +592,7 @@ class Collection(object):
         for _, _, data in it:
             if raw:
                 return data
-            return self.encoder.unpack(data)
+            return self.encoder.unpack(key, data)
         return default
 
     def get(self, key, default=None, txn=None, raw=False):
@@ -603,7 +603,7 @@ class Collection(object):
         for _, _, data in it:
             if raw:
                 return data
-            return self.encoder.unpack(data)
+            return self.encoder.unpack(key, data)
         return default
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
@@ -703,7 +703,7 @@ class Collection(object):
                         items.append((key, data))
                 done = max_recs and len(items) == max_recs
                 if (not done) and grouper:
-                    val = grouper(self.encoder.unpack(data))
+                    val = grouper(self.encoder.unpack(key, data))
                     done = val != groupval
                     groupval = val
                 if done:
@@ -815,7 +815,7 @@ class Collection(object):
         for batch, key_, data in it:
             if key != key_:
                 break
-            obj = self.encoder.unpack(data)
+            obj = self.encoder.unpack(key, data)
             if self.indices:
                 for key in self._index_keys(key, obj):
                     (txn or self.engine).delete(key)

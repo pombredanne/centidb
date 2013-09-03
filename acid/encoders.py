@@ -18,6 +18,7 @@ from __future__ import absolute_import
 import functools
 import operator
 import cPickle as pickle
+import cStringIO as StringIO
 import zlib
 
 import acid
@@ -38,15 +39,15 @@ class RecordEncoder(object):
             the :py:class:`acid.Collection`.
 
         `unpack`:
-            Function to deserialize an encoded value. It may be called with **a
-            buffer object containing the encoded bytestring** as its argument,
-            and should return the decoded value. If your encoder does not
-            support :py:func:`buffer` objects (many C extensions do), then
-            convert the buffer using :py:func:`str`.
+            Function invoked as `func(key, data)` to deserialize an encoded
+            record. The `data` argument may be **a buffer object**. If your
+            encoder does not support :py:func:`buffer` objects (many C
+            extensions do), then first convert the buffer using :py:func:`str`.
 
         `pack`:
-            Function to serialize a value. It is called with the value as its
-            sole argument, and should return the encoded bytestring.
+            Function invoked as `func(record)` to serialize a record. It may
+            return :py:func:`str` or any object supporting the
+            :py:func:`buffer` interface.
 
         `new`
             Function that produces a new, empty instance of the encoder's value
@@ -168,11 +169,19 @@ def make_thrift_encoder(klass, factory=None):
 
 
 #: Encode Python tuples using keylib.packs()/keylib.unpacks().
-KEY = RecordEncoder('key', functools.partial(acid.keylib.unpack, ''),
+KEY = RecordEncoder('key', lambda key, value: acid.keylib.unpack('', value),
                     functools.partial(acid.keylib.packs, ''))
 
-#: Encode Python objects using the cPickle version 2 protocol."""
-PICKLE = RecordEncoder('pickle', lambda b: pickle.loads(str(b)),
+def _pickle_unpack(key, value):
+    """cPickle.loads() can't reading from a buffer directly, however for
+    strings it internally constructs a cStringIO.StringI() and invokes load(),
+    which has a special case for StringI instances, which do accept buffers. So
+    we avoid string copy by constructing the StringI and passing it to load
+    instead."""
+    return pickle.load(StringIO.StringIO(value))
+
+#: Encode Python objects using the cPickle version 2 protocol.
+PICKLE = RecordEncoder('pickle', _pickle_unpack,
                        functools.partial(pickle.dumps, protocol=2))
 
 #: Perform no compression at all.
