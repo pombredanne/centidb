@@ -15,8 +15,8 @@
 #
 
 """
-The `acid.meta` module provides an ORM-like metaclass that allows
-simplified definition of database models using Python code.
+The `acid.meta` module provides an ORM-like metaclass that simplifies
+definition of records models using Python code.
 
 .. warning::
 
