@@ -334,7 +334,7 @@ class Collection(object):
 
         `encoder`:
             :py:class:`acid.encoders.Encoder` used to serialize record values
-            to bytestrings; defaults to ``PICKLE_ENCODER``.
+            to bytestrings; defaults to :py:attr:`acid.encoders.PICKLE`.
 
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
@@ -359,7 +359,7 @@ class Collection(object):
         self.key_func = key_func
         self.txn_key_func = txn_key_func
 
-        self.encoder = encoder or encoders.PICKLE_ENCODER
+        self.encoder = encoder or encoders.PICKLE
         self.encoder_prefix = self.store.add_encoder(self.encoder)
         #: Dict mapping indices added using :py:meth:`Collection.add_index` to
         #: :py:class:`Index` instances representing them.
@@ -659,7 +659,8 @@ class Collection(object):
                 contribute to the currently building batch.
 
             `packer`:
-                Encoding to use as compressor, defaults to PLAIN_PACKER.
+                Encoding to use as compressor, defaults to
+                :py:attr:`acid.encoders.PLAIN`.
 
             `txn`:
                 Transaction to use, or ``None`` to indicate the default
@@ -683,7 +684,7 @@ class Collection(object):
         assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
         txn = txn or self.engine
-        packer = packer or encoders.PLAIN_PACKER
+        packer = packer or encoders.PLAIN
         it = self._iter(txn, None, lo, hi, prefix, False, None, True, max_phys)
         groupval = None
         items = []
@@ -768,7 +769,8 @@ class Collection(object):
                 behaviour of the storage engine.
 
             `packer`:
-                Encoding to use as compressor, defaults to PLAIN_PACKER.
+                Encoding to use as compressor, defaults to
+                :py:attr:`acid.encoders.PLAIN`.
 
             `key`:
                 If specified, overrides the use of collection's key function
@@ -791,7 +793,7 @@ class Collection(object):
         if key is None:
             key = self._assign_key(rec, txn)
         key = keylib.Key(key)
-        packer = packer or encoders.PLAIN_PACKER
+        packer = packer or encoders.PLAIN
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer, txn=txn)
@@ -841,7 +843,7 @@ class Store(object):
                                     for i, e in enumerate(encoders._ENCODERS))
         # ((kind, name, attr), value)
         self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
-            encoder=encoders.KEY_ENCODER, key_func=lambda t: t[:3])
+            encoder=encoders.KEY, key_func=lambda t: t[:3])
         self._colls = {}
 
     def get_info2(self, kind, name, txn=None):
@@ -861,7 +863,7 @@ class Store(object):
     def add_collection(self, name, **kwargs):
         """Shorthand for `acid.Collection(self, **kwargs)`."""
         old = self.get_info2(KIND_TABLE, name)
-        encoder = kwargs.get('encoder', encoders.PICKLE_ENCODER)
+        encoder = kwargs.get('encoder', encoders.PICKLE)
         new = {'name': name, 'encoder': encoder.name}
         if old:
             self.check_info2(old or {}, new)

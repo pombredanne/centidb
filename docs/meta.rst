@@ -129,13 +129,3 @@ which is a reference to the model class to subscribe to.
         if config.DEBUG:
             meta.after_create(log_create, models.Base)
             meta.after_delete(log_delete, models.Base)
-
-
-Extension
-+++++++++
-
-.. autoclass:: acid.meta.EncoderBinding
-    :members:
-
-
-.. autofunction:: acid.meta.make_thrift_binding

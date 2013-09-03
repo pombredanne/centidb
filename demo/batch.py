@@ -36,17 +36,15 @@ def dotestiter():
 
 try:
     import lz4
-    LZ4_PACKER = acid.Encoder('lz4', lz4.loads, lz4.dumps)
+    LZ4 = acid.Encoder('lz4', lz4.loads, lz4.dumps)
 except ImportError:
-    LZ4_PACKER = None
+    LZ4 = None
 
 try:
     import snappy
-    SNAPPY_PACKER = acid.Encoder('snappy',
-        snappy.uncompress,
-        snappy.compress)
+    SNAPPY = acid.Encoder('snappy', snappy.uncompress, snappy.compress)
 except ImportError:
-    SNAPPY_PACKER = None
+    SNAPPY = None
 
 
 print '"Packer","Size","Count","Ratio","BatchSz","Gets/sec","Iters/sec","Iterrecs/sec"'
@@ -61,7 +59,7 @@ def engine_size(engine):
     return sum(len(k) + len(v) for k, v in engine.iter('', False))
 
 
-for packer in acid.encoders.ZLIB_PACKER, SNAPPY_PACKER, LZ4_PACKER:
+for packer in acid.encoders.ZLIB, SNAPPY, LZ4:
     if not packer:
         continue
 

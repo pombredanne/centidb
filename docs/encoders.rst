@@ -6,44 +6,53 @@ Encoders
 ########
 
 
+
 Encoder Interface
 +++++++++++++++++
 
-.. autoclass:: Encoder
+.. autoclass:: RecordEncoder
 
 
-acid.KEY_ENCODER
-+++++++++++++++++++
+Compressor Interface
+++++++++++++++++++++
 
-This predefined Encoder uses :py:func:`acid.keylib.packs` and
-:py:func:`acid.keylib.unpacks` to serialize tuples. It is used internally
-to represent keys, counters, and :py:class:`Store <acid.Store>` metadata.
+.. autoclass:: Compressor
 
 
-acid.PICKLE_ENCODER
-++++++++++++++++++++++
+Predefined Record Encoders
+++++++++++++++++++++++++++
 
-This predefined Encoder uses :py:func:`pickle.dumps` and
+.. attribute:: acid.encoders.KEY
+
+This predefined :py:class:`RecordEncoder` uses :py:func:`acid.keylib.packs` and
+:py:func:`acid.keylib.unpacks` to serialize tuples. It is used internally to
+represent keys, counters, and :py:class:`Store <acid.Store>` metadata.
+
+
+.. attribute:: acid.encoders.PICKLE
+
+This predefined :py:class:`RecordEncoder` uses :py:func:`pickle.dumps` and
 :py:func:`pickle.loads` with protocol 2 to serialize any pickleable object. It
 is the default encoder if no specific `encoder=` argument is given to the
 :py:class:`Collection <acid.Collection>` constructor.
 
 
-acid.PLAIN_PACKER
-+++++++++++++++++++++
+Predefined Compressors
+++++++++++++++++++++++
 
-This predefined Encoder performs no work; the input is returned unchanged. It
-is used as the default :py:class:`Collection(..., packer=)
-<acid.Collection>` argument when no other packer is provided.
+.. attribute:: acid.encoders.PLAIN
+
+This predefined :py:class:`Compressor` returns its input unchanged. It is used
+as the default :py:class:`Collection(..., packer=) <acid.Collection>` argument
+when no explicit compressor is provided.
 
 
-acid.ZLIB_PACKER
-+++++++++++++++++++
+.. attribute:: acid.encoders.ZLIB
 
-This predefined Encoder uses :py:func:`zlib.compress` and
+This predefined :py:class:`Compressor` uses :py:func:`zlib.compress` and
 :py:func:`zlib.decompress` to provide value compression. It may be passed as
-the `packer=` argument to :py:meth:`Collection.put <acid.Collection.put>`,
-or specified as the default using the `packer=` argument to the
+the `packer=` argument to :py:meth:`Collection.put <acid.Collection.put>`, or
+specified as the default using the `packer=` argument to the
 :py:class:`Collection <acid.Collection>` constructor.
 
 

@@ -61,13 +61,13 @@ emulated:
 +-----------+---------------------------------------+
 + Boolean   + ``not b``                             |
 +-----------+---------------------------------------+
-+ String    + ``acid.invert(s)``                 |
++ String    + ``acid.invert(s)``                    |
 +-----------+---------------------------------------+
-+ Unicode   + ``acid.invert(s.encode('utf-8'))`` |
++ Unicode   + ``acid.invert(s.encode('utf-8'))``    |
 +-----------+---------------------------------------+
-+ UUID      + ``acid.invert(uuid.get_bytes())``  |
++ UUID      + ``acid.invert(uuid.get_bytes())``     |
 +-----------+---------------------------------------+
-+ Key       + ``Key(acid.invert(k))``            |
++ Key       + ``Key(acid.invert(k))``               |
 +-----------+---------------------------------------+
 
 Example:

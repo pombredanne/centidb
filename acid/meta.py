@@ -35,15 +35,15 @@ class Field(object):
     """
     def __get__(self, instance, klass):
         if instance:
-            return klass.META_BINDING.get(instance._rec, self.name)
+            return klass.META_ENCODER.get(instance._rec, self.name)
         return self
 
     def __set__(self, instance, value):
-        instance.META_BINDING.set(instance._rec, self.name, value)
+        instance.META_ENCODER.set(instance._rec, self.name, value)
 
     def __delete__(self, instance):
         try:
-            instance.META_BINDING.delete(instance._rec, self.name)
+            instance.META_ENCODER.delete(instance._rec, self.name)
         except KeyError:
             raise AttributeError(self.name)
 
@@ -80,56 +80,6 @@ class LazyIndexProperty(object):
         return index
 
 
-class EncoderBinding(object):
-    """Wrap implementations for value manipulation on a model's underlying
-    encoder. You must instantiate this to support new encoders.
-
-    `encoder`
-        The :py:class:`acid.encoders.Encoder` instance itself.
-
-    `new`
-        Callable that produces a new, empty instance of the encoder's value
-        type.
-
-        The default is :py:class:`dict`.
-
-    `get`
-        Callable that when invoked as `func(obj, attr)` returns the value of
-        the named attribute `attr` from `obj`.
-
-        The default is :py:func:`operator.getitem`.
-
-    `set`
-        Callable that when invoked as `func(obj, attr, value)` sets the value
-        of the named attribute `attr` on `obj` to `value`.
-
-        The default is :py:func:`operator.setitem`.
-
-    `delete`
-        Callable that when invoked as `func(obj, attr)` deletes the named
-        attribute `attr` from `obj`.
-
-        The default is :py:func:`operator.delitem`.
-    """
-    def __init__(self, encoder, new=None, get=None, set=None, delete=None):
-        self.encoder = encoder
-        self.new = new or dict
-        self.get = get or dict.get
-        self.set = set or operator.setitem
-        self.delete = delete or operator.delitem
-
-
-def make_thrift_binding(klass, factory=None):
-    """Creates a binding for a Thrift type. Since Thrift exposes user data as
-    attributes we must :py:func:`getattr`, :py:func:`setattr` and
-    :py:func:`delattr` for value access.
-    """
-    import acid.encoders
-    encoder = encoders.make_thrift_encoder(klass, factory=factory)
-    return EncoderBinding(encoder=encoder, factory=klass,
-                          get=getattr, set=setattr, delete=delattr)
-
-
 class ModelMeta(type):
     def __new__(cls, name, bases, attrs):
         klass = type.__new__(cls, name, bases, attrs)
@@ -139,7 +89,7 @@ class ModelMeta(type):
         cls.setup_index_properties(klass, bases, attrs)
         cls.setup_field_properties(klass, bases, attrs)
         cls.setup_constraints(klass, bases, attrs)
-        cls.setup_binding(klass, bases, attrs)
+        cls.setup_encoder(klass, bases, attrs)
         return klass
 
     @classmethod
@@ -201,9 +151,9 @@ class ModelMeta(type):
                 value.name = key
 
     @classmethod
-    def setup_binding(cls, klass, bases, attrs):
-        encoder = acid.encoders.make_json_encoder()
-        klass.META_BINDING = EncoderBinding(encoder)
+    def setup_encoder(cls, klass, bases, attrs):
+        # TODO
+        klass.META_ENCODER = acid.encoders.make_json_encoder()
 
 
 def key(func):
@@ -410,7 +360,7 @@ class BaseModel(object):
         coll = cls.META_STORE.add_collection(
             name=cls.META_COLLECTION_NAME,
             key_func=key_func,
-            encoder=cls.META_BINDING.encoder)
+            encoder=cls.META_ENCODER.encoder)
 
         for index_func in cls.META_INDEX_FUNCS:
             coll.add_index(index_func.func_name, index_func)
@@ -464,7 +414,7 @@ class BaseModel(object):
 
     def __init__(self, _rec=None, _key=None, **kwargs):
         self._key = _key
-        self._rec = _rec or self.META_BINDING.new()
+        self._rec = _rec or self.META_ENCODER.new()
         if kwargs:
             for name, value in kwargs.iteritems():
                 setattr(self, name, value)

@@ -16,25 +16,26 @@
 
 from __future__ import absolute_import
 import functools
+import operator
 import cPickle as pickle
 import zlib
 
 import acid
 import acid.keylib
 
-__all__ = ['Encoder', 'make_json_encoder', 'make_msgpack_encoder',
+__all__ = ['RecordEncoder', 'make_json_encoder', 'make_msgpack_encoder',
            'make_thrift_encoder']
 
 
-class Encoder(object):
-    """Instances of this class represent an encoding.
+class RecordEncoder(object):
+    """Instances of this class represent a record encoding, and provides
+    accessors for the record's value type. You must instantiate this to support
+    new encoders.
 
         `name`:
             ASCII string uniquely identifying the encoding. A future version
             may use this to verify the encoding matches what was used to create
-            the :py:class:`Collection`. For encodings used as compressors, this
-            name is persisted forever in :py:class:`Store`'s metadata after
-            first use.
+            the :py:class:`acid.Collection`.
 
         `unpack`:
             Function to deserialize an encoded value. It may be called with **a
@@ -46,6 +47,62 @@ class Encoder(object):
         `pack`:
             Function to serialize a value. It is called with the value as its
             sole argument, and should return the encoded bytestring.
+
+        `new`
+            Function that produces a new, empty instance of the encoder's value
+            type. Used by :py:mod:`acid.meta` to manufacture empty Model
+            instances. The default is :py:class:`dict`.
+
+        `get`
+            Callable that when invoked as `func(obj, attr)` returns the value
+            of the named attribute `attr` from `obj`. Used by
+            :py:mod:`acid.meta` to implement attribute access. The default is
+            :py:func:`operator.getitem`.
+
+        `set`
+            Callable that when invoked as `func(obj, attr, value)` sets the
+            value of the named attribute `attr` on `obj` to `value`. Used by
+            :py:mod:`acid.meta` to implement attribute access. The default is
+            :py:func:`operator.setitem`.
+
+        `delete`
+            Callable that when invoked as `func(obj, attr)` deletes the named
+            attribute `attr` from `obj`. Used by :py:mod:`acid.meta` to
+            implement attribute access. The default is
+            :py:func:`operator.delitem`.
+    """
+    def __init__(self, name, unpack, pack, new=None,
+                 get=None, set=None, delete=None):
+        self.name = name
+        self.unpack = unpack
+        self.pack = pack
+        self.new = new or dict
+        self.get = get or dict.get
+        self.set = set or operator.setitem
+        self.delete = delete or operator.delitem
+
+
+class Compressor(object):
+    """Represents a compression method. You must instantiate this class and
+    pass it to :py:meth:`acid.Store.add_encoder` to register a new compressor.
+
+        `name`:
+            ASCII string uniquely identifying the compressor. A future version
+            may use this to verify the encoding matches what was used to create
+            the :py:class:`Collection`. For encodings used as compressors, this
+            name is persisted forever in :py:class:`Store`'s metadata after
+            first use.
+
+        `unpack`:
+            Function to decompress a bytestring. It may be called with **a
+            buffer object containing the encoded bytestring** as its argument,
+            and should return the decoded value. If your compressor does not
+            support :py:func:`buffer` objects (many C extensions do), then
+            convert the buffer using :py:func:`str`.
+
+        `pack`:
+            Function to compress a bytestring. It is called with the value as
+            its sole argument, and should return the encoded bytestring.
     """
     def __init__(self, name, unpack, pack):
         self.name = name
@@ -62,7 +119,7 @@ def make_json_encoder(separators=',:', **kwargs):
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     decoder = json.JSONDecoder().decode
     decode = lambda s: decoder(str(s))
-    return Encoder('json', decode, encoder.encode)
+    return RecordEncoder('json', decode, encoder.encode)
 
 
 def make_msgpack_encoder():
@@ -71,7 +128,7 @@ def make_msgpack_encoder():
     <http://msgpack.org/>`_ via the `msgpack-python
     <https://pypi.python.org/pypi/msgpack-python/>`_ package."""
     import msgpack
-    return Encoder('msgpack', msgpack.loads, msgpack.dumps)
+    return RecordEncoder('msgpack', msgpack.loads, msgpack.dumps)
 
 
 def make_thrift_encoder(klass, factory=None):
@@ -107,21 +164,24 @@ def make_thrift_encoder(klass, factory=None):
 
     # Form a name from the Thrift ttypes module and struct name.
     name = 'thrift:%s.%s' % (klass.__module__, klass.__name__)
-    return Encoder(name, loads, dumps)
+    return RecordEncoder(name, loads, dumps, factory=klass,
+                         get=getattr, set=setattr, delete=delattr)
 
 
 #: Encode Python tuples using keylib.packs()/keylib.unpacks().
-KEY_ENCODER = Encoder('key', functools.partial(acid.keylib.unpack, ''),
-                             functools.partial(acid.keylib.packs, ''))
+KEY = RecordEncoder('key', functools.partial(acid.keylib.unpack, ''),
+                    functools.partial(acid.keylib.packs, ''))
 
 #: Encode Python objects using the cPickle version 2 protocol."""
-PICKLE_ENCODER = Encoder('pickle', lambda b: pickle.loads(str(b)),
-                         functools.partial(pickle.dumps, protocol=2))
+PICKLE = RecordEncoder('pickle', lambda b: pickle.loads(str(b)),
+                       functools.partial(pickle.dumps, protocol=2))
 
 #: Perform no compression at all.
-PLAIN_PACKER = Encoder('plain', str, lambda o: o)
+PLAIN = Compressor('plain', str, lambda o: o)
 
 #: Compress bytestrings using zlib.compress()/zlib.decompress().
-ZLIB_PACKER = Encoder('zlib', zlib.decompress, zlib.compress)
+ZLIB = Compressor('zlib', zlib.decompress, zlib.compress)
 
-_ENCODERS = (KEY_ENCODER, PICKLE_ENCODER, PLAIN_PACKER, ZLIB_PACKER)
+# The order of this tuple is significant. See core.Store source/data format
+# documentation for more information.
+_ENCODERS = (KEY, PICKLE, PLAIN, ZLIB)

@@ -37,3 +37,11 @@ Key Class
 
 .. autoclass:: acid.keylib.Key
    :members:
+
+
+
+PhysicalIterator Class
+++++++++++++++++++++++
+
+.. autoclass:: acid.core.PhysicalIterator
+    :members:
