@@ -16,14 +16,14 @@
 
 """
 The `acid.meta` module provides an ORM-like metaclass that simplifies
-definition of records models using Python code.
+definition of database models using Python code.
 
 .. warning::
 
     This is a work in progress! The examples here do not yet work perfectly,
-    and the most interesting aspect is missing. A future version will use model
-    definition to maintain a compact encoding automatically. For now this is
-    just a curiosity.
+    and the most interesting aspect is missing. A future version will use the
+    model definitions to maintain a compact encoding automatically. For now
+    this is just a curiosity.
 """
 
 from __future__ import absolute_import
