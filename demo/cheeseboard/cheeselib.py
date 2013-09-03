@@ -7,14 +7,16 @@ import acid.encoders
 
 def open_store():
     store = acid.open('LmdbEngine',
-        path='/home/dmw/i2.lmdb',
+        path='/media/scratch/i3.lmdb',
          map_size=1048576*1024*10,
          map_async=True,
          sync=False,
          metasync=False,
          writemap=True)
 
+    # From old board example.
     store.add_collection('posts')
+
     encoder = acid.encoders.make_json_encoder(sort_keys=True)
 
     reddits = store.add_collection('reddits', encoder=encoder,
