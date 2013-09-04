@@ -217,7 +217,7 @@ class Index(object):
             else:
                 lo = keylib.Key(key).to_raw(self.prefix)
 
-        it = self.store._txn_manager.get().iter(hi, reverse)
+        it = self.store._txn_context.get().iter(hi, reverse)
         if reverse:
             pred = lo.__le__
         else:
@@ -512,7 +512,7 @@ class Collection(object):
             startpred = None
             endpred = hi and (hi.__ge__ if include else hi.__gt__)
 
-        it = self.store._txn_manager.get().iter(startkey, reverse)
+        it = self.store._txn_context.get().iter(startkey, reverse)
         if max_phys is not None:
             it = itertools.islice(it, max_phys)
 
@@ -662,7 +662,7 @@ class Collection(object):
         """
         assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
-        txn = self.store._txn_manager.get()
+        txn = self.store._txn_context.get()
         packer = packer or encoders.PLAIN
         it = self._iter(None, lo, hi, prefix, False, None, True, max_phys)
         groupval = None
@@ -724,7 +724,7 @@ class Collection(object):
         assert len(keys) > 1 and key in keys, \
             'Physical key missing: %r' % (key,)
 
-        self.store._txn_manager.get().delete(phys)
+        self.store._txn_context.get().delete(phys)
         objs = self.encoder.loads_many(self._decompress(data))
         for i, obj in enumerate(objs):
             this_key = keys[-(1 + i)]
@@ -759,7 +759,7 @@ class Collection(object):
                 obsolete keys when this is detected, however other index
                 methods will not.
         """
-        txn = self.store._txn_manager.get()
+        txn = self.store._txn_context.get()
         if key is None:
             key = self.key_func(obj)
         key = keylib.Key(key)
@@ -782,7 +782,7 @@ class Collection(object):
         """Delete any existing record filed under `key`.
         """
         it = self._iter(key, None, None, None, None, True, None)
-        txn = self.store._txn_manager.get()
+        txn = self.store._txn_context.get()
         for batch, key_, data in it:
             if key != key_:
                 break
@@ -796,63 +796,60 @@ class Collection(object):
                 txn.delete(keylib.packs(self.prefix, key))
 
 
-class TxnManager(object):
-    """Abstraction for maintaining the local context's transaction. The default
-    implementation relies on TLS.
+class TxnContext(object):
+    """Abstraction for maintaining the local context's transaction. This
+    implementation uses TLS.
     """
-    def __init__(self):
+    def __init__(self, engine):
+        self.engine = engine
         self.local = threading.local()
 
+    def begin(self, write=False):
+        self.write = write
+        return self
+
     def __enter__(self):
-        self.local.entered = True
+        txn = getattr(self.local, 'txn', None)
+        if txn:
+            raise Exception('Transaction already active for this thread.')
+        txn = self.engine.begin(write=self.write)
+        setattr(self.local, 'txn', txn)
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type:
             self.local.txn.abort()
         else:
             self.local.txn.commit()
+        del self.local.txn
 
     def get(self):
-        if not getattr(self.local, 'entered', None):
-            raise Exception('Transactions *must* be wrapped in a with: '
-                            'block to ensure proper destruction.')
-        return self.local.txn
-
-    def begin(self, write=False):
         txn = getattr(self.local, 'txn', None)
         if txn:
-            raise Exception('Transaction already active for this thread.')
-        txn = store.engine.begin(write=write)
-        setattr(self.local, 'txn', txn)
-
-    def commit(self):
-        txn = getattr(self.local, 'txn', None)
-        if not txn:
-            raise Exception('No transaction active for this thread.')
-        txn.commit()
-        self.local.txn = None
-
-    def abort(self):
-        txn = getattr(self.local, 'txn', None)
-        if not txn:
-            raise Exception('No transaction active for this thread.')
-        txn.abort()
-        self.local.txn = None
+            return txn
+        raise Exception('Transactions *must* be wrapped in a with: '
+                        'block to ensure proper destruction.')
 
 
 class Store(object):
     """Represents access to the underlying storage engine, and manages
     counters.
 
+        `txn_context`:
+            If not ``None``, override the default
+            :py:class:`acid.core.TxnContext` implementation to provide
+            request-local storage of the active database transaction. The
+            default implementation uses TLS.
+
         `prefix`:
             Prefix for all keys used by any associated object (record, index,
             counter, metadata). This allows the storage engine's key space to
             be shared amongst several users.
     """
-    def __init__(self, engine, prefix=''):
+    def __init__(self, engine, txn_context=None, prefix=''):
         self.engine = engine
         self.prefix = prefix
-        self._txn_manager = TxnManager()
+        self._txn_context = txn_context or TxnContext(engine)
+        self.begin = self._txn_context.begin
         self._counter_key_cache = {}
         self._encoder_prefix = dict((e, keylib.pack_int('', 1 + i))
                                     for i, e in enumerate(encoders._ENCODERS))
@@ -864,7 +861,15 @@ class Store(object):
         self._colls = {}
 
     def begin(self, write=False):
-        return self._txn_manager.begin()
+        """Return a context manager that starts a database transaction when it
+        is entered.
+
+        ::
+
+            with store.begin(write=True):
+                store['people'].put('me')
+        """
+        return self._txn_context.begin()
 
     def get_info2(self, kind, name):
         items = list(self._meta.items(prefix=(kind, name)))
