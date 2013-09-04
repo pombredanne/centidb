@@ -33,6 +33,24 @@ class Engine(object):
     documentary purposes. All key and value variables below are ``NUL``-safe
     bytestrings.
     """
+    def close(self):
+        """Close the database connection."""
+        raise NotImplementedError
+
+    def begin(self, write=False):
+        """Start a database transaction, returning an :py:class:`Engine`
+        instance requests should be directed to for the duration of the
+        transaction. If the engine does not support transactions, should simply
+        return `self`."""
+        raise NotImplementedError
+
+    def abort(self):
+        """Abort the active database transaction."""
+        raise NotImplementedError
+
+    def commit(self):
+        """Commit the active database transaction."""
+        raise NotImplementedError
 
     def get(self, key):
         """Return the value of `key` or ``None`` if it does not exist."""
@@ -243,6 +261,9 @@ class ListEngine(object):
         #: Size in bytes for stored items, i.e.
         #: ``sum(len(k)+len(v) for k, v in items)``.
         self.size = 0
+
+    def begin(self, write):
+        return self
 
     def get(self, k):
         idx = bisect.bisect_left(self.items, (k,))
