@@ -227,9 +227,10 @@ class Index(object):
         if max is not None:
             it = itertools.islice(it, max)
         for key, _ in it:
-            if not key.startswith(self.prefix):
+            lst = keylib.KeyList.from_raw(self.prefix, key)
+            if not lst:
                 break
-            yield keylib.KeyList.from_raw(self.prefix, key)
+            yield lst
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False):
         """Return a count of index entries matching the parameter
@@ -250,20 +251,20 @@ class Index(object):
         """Yield all index tuples in the index, in tuple order. The index tuple
         is the part of the entry produced by the user's index function, i.e.
         the index's natural "value"."""
-        it = self.pairs(args, lo, hi, reverse, max, include)
+        it = self._iter(args, lo, hi, reverse, max, include)
         return itertools.imap(ITEMGETTER_0, it)
 
     def keys(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=False):
         """Yield all keys in the index, in tuple order."""
-        it = self.pairs(args, lo, hi, reverse, max, include)
+        it = self._iter(args, lo, hi, reverse, max, include)
         return itertools.imap(ITEMGETTER_1, it)
 
     def items(self, args=None, lo=None, hi=None, reverse=None, max=None,
               include=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order."""
-        for _, key in self.pairs(args, lo, hi, reverse, max, include):
+        for _, key in self._iter(args, lo, hi, reverse, max, include):
             obj = self.coll.get(key)
             if obj:
                 yield key, obj
