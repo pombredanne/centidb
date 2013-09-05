@@ -476,6 +476,12 @@ class BaseModel(object):
                 If ``False``, then constraint checking is disabled. Useful for
                 importing e.g. old data.
         """
+        if check_constraints:
+            for func in self.META_CONSTRAINTS:
+                if not func(self):
+                    raise acid.errors.ConstraintError(name=func.func_name,
+                        msg='Constraint %r failed' % (func.func_name,))
+
         key = self._key
         if key:
             on_funcs = self.META_ON_UPDATE
@@ -483,12 +489,6 @@ class BaseModel(object):
         else:
             on_funcs = self.META_ON_CREATE
             after_funcs = self.META_AFTER_CREATE
-
-        if check_constraints:
-            for func in self.META_CONSTRAINTS:
-                if not func(self):
-                    raise acid.errors.ConstraintError(name=func.func_name,
-                        msg='Constraint %r failed' % (func.func_name,))
 
         for func in on_funcs:
             func(self)
