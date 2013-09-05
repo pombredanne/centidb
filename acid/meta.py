@@ -99,6 +99,7 @@ class ModelMeta(type):
         cls.setup_field_properties(klass, bases, attrs)
         cls.setup_constraints(klass, bases, attrs)
         cls.setup_encoder(klass, bases, attrs)
+        cls.setup_triggers(klass, bases, attrs)
         return klass
 
     @classmethod
@@ -152,6 +153,23 @@ class ModelMeta(type):
             if getattr(value, 'meta_constraint', False):
                 constraints.append(value)
         klass.META_CONSTRAINTS = constraints
+
+    @classmethod
+    def setup_triggers(cls, klass, bases, attrs):
+        triggers = ('on_create', 'on_update', 'on_delete',
+                    'after_create', 'after_update', 'after_delete')
+        lists = {}
+        for trigger in triggers:
+            lst = list(getattr(klass, 'META_' + trigger.upper(), []))
+            lists[trigger] = lst
+
+        for key, value in attrs.iteritems():
+            for trigger in triggers:
+                if getattr(value, 'meta_' + trigger, None):
+                    lists[trigger].append(value)
+
+        for trigger in triggers:
+            setattr(klass, 'META_' + trigger.upper(), lists[trigger])
 
     @classmethod
     def setup_field_properties(cls, klass, bases, attrs):
@@ -290,6 +308,7 @@ def on_update(func, klass=None):
             self.modified = datetime.datetime.utcnow()
     """
     assert klass is None, 'external triggers not supported yet.'
+    func.meta_on_create = True
     func.meta_on_update = True
     return func
 
@@ -323,6 +342,7 @@ def after_create(func, klass=None):
     """
     assert klass is None, 'external triggers not supported yet.'
     func.meta_after_create = True
+    func.meta_after_update = True
     return func
 
 
@@ -353,7 +373,7 @@ def after_delete(func, klass=None):
                 msg.delete()
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.meta_on_delete = True
+    func.meta_after_delete = True
     return func
 
 
@@ -441,8 +461,13 @@ class BaseModel(object):
 
     def delete(self):
         """Delete the model if it has been saved."""
-        if self._key:
-            self.collection().delete(self._key)
+        if not self._key:
+            return
+        for func in self.META_ON_DELETE:
+            func(self)
+        self.collection().delete(self._key)
+        for func in self.META_AFTER_DELETE:
+            func(self)
 
     def save(self, check_constraints=True):
         """Create or update the model in the database.
@@ -451,13 +476,25 @@ class BaseModel(object):
                 If ``False``, then constraint checking is disabled. Useful for
                 importing e.g. old data.
         """
+        key = self._key
+        if key:
+            before_funcs = self.META_BEFORE_UPDATE
+            after_funcs = self.META_AFTER_UPDATE
+        else:
+            before_funcs = self.META_BEFORE_CREATE
+            after_funcs = self.META_AFTER_CREATE
+
         if check_constraints:
             for func in self.META_CONSTRAINTS:
                 if not func(self):
                     raise acid.errors.ConstraintError(name=func.func_name,
                         msg='Constraint %r failed' % (func.func_name,))
 
-        self._key = self.collection().put(self, key=self._key)
+        for func in before_funcs:
+            func(self)
+        self._key = self.collection().put(self, key=key)
+        for func in after_funcs:
+            func(self)
 
     def __repr__(self):
         klass = self.__class__
