@@ -1,19 +1,22 @@
 
 import sys
 import time
+import urllib
 
 import acid
+import acid.meta
 import bottle
 import wheezy.template.engine
 import wheezy.template.ext.core
 import wheezy.template.loader
 
+import models
+
 templates = wheezy.template.engine.Engine(
     loader=wheezy.template.loader.FileLoader(['templates']),
     extensions=[wheezy.template.ext.core.CoreExtension()])
 
-store = acid.open('LmdbEngine', path='store.lmdb', map_size=512e6)
-store.add_collection('posts')
+store = models.init_store()
 
 
 def getint(name, default=None):
@@ -27,10 +30,12 @@ def getint(name, default=None):
 def index():
     t0 = time.time()
     hi = getint('hi')
-    posts = list(store['posts'].items(hi=hi, reverse=True, max=5))
-    highest_id = next(store['posts'].keys(reverse=True), None)
+    with store.begin():
+        posts = list(models.Post.iter(hi=hi, reverse=True, max=5))
+        highest_id = models.Post.find(reverse=True)
+        print list(models.Post.iter())
     t1 = time.time()
-
+    print posts
     older = None
     newer = None
     if posts:
@@ -41,6 +46,7 @@ def index():
             newer = '?hi=' + str(posts[0][0][0] + 5)
 
     return templates.get_template('index.html').render({
+        'error': bottle.request.query.get('error'),
         'posts': posts,
         'older': older,
         'newer': newer,
@@ -55,9 +61,13 @@ def static(filename):
 
 @bottle.post('/newpost')
 def newpost():
-    post = dict(bottle.request.forms.iteritems())
-    post['created'] = time.time()
-    store['posts'].put(post)
+    post = models.Post(name=bottle.request.POST.get('name'),
+                       text=bottle.request.POST.get('text'))
+    try:
+        with store.begin(write=True):
+            post.save()
+    except acid.errors.ConstraintError, e:
+        return bottle.redirect('.?error=' + urllib.quote(str(e)))
     return bottle.redirect('.')
 
 

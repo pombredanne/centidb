@@ -1,4 +1,4 @@
-@require(posts, newer, older, msec)
+@require(error, posts, newer, older, msec)
 <!doctype html>
 <title>CheeseBoard!</title>
 <link rel=stylesheet href=static/style.css>
@@ -14,7 +14,11 @@ CheeseBoard
 <td id=body>
 
 <div id=newpost>
+
 <h3>New Post</h3>
+@if error:
+    <div style="color: red;">@error</div>
+@end
 
 <form action=newpost method=post>
 <table>
