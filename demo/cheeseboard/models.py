@@ -47,6 +47,10 @@ class Reddit(Model):
         return self.id
 
     @acid.meta.index
+    def by_id(self):
+        return self.id
+
+    @acid.meta.index
     def by_links(self):
         return self.links
 
