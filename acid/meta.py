@@ -27,6 +27,7 @@ definition of database models using Python code.
 """
 
 from __future__ import absolute_import
+import functools
 import operator
 
 import acid
@@ -77,6 +78,15 @@ class Time(Field):
     """
 
 
+def _check_constraint(func, model):
+    """on_update trigger that checks a constraint is correct. The metaclass
+    wraps this in a functools.partial() and adds to to the list of on_update
+    triggers for the model."""
+    if not func(model):
+        raise acid.errors.ConstraintError(name=func.func_name,
+            msg='Constraint %r failed' % (func.func_name,))
+
+
 class LazyIndexProperty(object):
     """Property that replaces itself with a acid.Index when it is first
     accessed."""
@@ -97,9 +107,9 @@ class ModelMeta(type):
         cls.setup_index_funcs(klass, bases, attrs)
         cls.setup_index_properties(klass, bases, attrs)
         cls.setup_field_properties(klass, bases, attrs)
-        cls.setup_constraints(klass, bases, attrs)
         cls.setup_encoder(klass, bases, attrs)
         cls.setup_triggers(klass, bases, attrs)
+        cls.setup_constraints(klass, bases, attrs)
         return klass
 
     @classmethod
@@ -147,14 +157,6 @@ class ModelMeta(type):
                     LazyIndexProperty(index_func.func_name))
 
     @classmethod
-    def setup_constraints(cls, klass, bases, attrs):
-        constraints = list(getattr(klass, 'META_CONSTRAINTS', []))
-        for key, value in attrs.iteritems():
-            if getattr(value, 'meta_constraint', False):
-                constraints.append(value)
-        klass.META_CONSTRAINTS = constraints
-
-    @classmethod
     def setup_triggers(cls, klass, bases, attrs):
         triggers = ('on_create', 'on_update', 'on_delete',
                     'after_create', 'after_update', 'after_delete')
@@ -170,6 +172,14 @@ class ModelMeta(type):
 
         for trigger in triggers:
             setattr(klass, 'META_' + trigger.upper(), lists[trigger])
+
+    @classmethod
+    def setup_constraints(cls, klass, bases, attrs):
+        for key, value in attrs.iteritems():
+            if getattr(value, 'meta_constraint', False):
+                wrapped = functools.partial(_check_constraint, value)
+                klass.META_ON_CREATE.append(wrapped)
+                klass.META_ON_UPDATE.append(wrapped)
 
     @classmethod
     def setup_field_properties(cls, klass, bases, attrs):
@@ -275,7 +285,7 @@ def constraint(func):
 
         @meta.constraint
         def is_age_valid(self):
-            return 0 < age < 150
+            return 0 < self.age < 150
     """
     func.meta_constraint = True
     return func
@@ -471,19 +481,9 @@ class BaseModel(object):
         for func in self.META_AFTER_DELETE:
             func(self)
 
-    def save(self, check_constraints=True):
+    def save(self):
         """Create or update the model in the database.
-
-            `check_constraints`:
-                If ``False``, then constraint checking is disabled. Useful for
-                importing e.g. old data.
         """
-        if check_constraints:
-            for func in self.META_CONSTRAINTS:
-                if not func(self):
-                    raise acid.errors.ConstraintError(name=func.func_name,
-                        msg='Constraint %r failed' % (func.func_name,))
-
         key = self._key
         if key:
             on_funcs = self.META_ON_UPDATE
