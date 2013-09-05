@@ -762,7 +762,7 @@ class Collection(object):
         """
         txn = self.store._txn_context.get()
         if key is None:
-            key = self.key_func(obj)
+            key = self.key_func(rec)
         key = keylib.Key(key)
         packer = packer or encoders.PLAIN
         packer_prefix = self.store._encoder_prefix.get(packer)
