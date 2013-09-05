@@ -24,6 +24,7 @@ compressed and the batch size is configurable.
     core
     meta
     engines
+    errors
     encoders
     cookbook
     notes
