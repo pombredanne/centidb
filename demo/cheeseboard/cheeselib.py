@@ -7,7 +7,7 @@ import acid.encoders
 
 def open_store():
     store = acid.open('LmdbEngine',
-        path='/media/scratch/i3.lmdb',
+        path='store.lmdb',
          map_size=1048576*1024*10,
          map_async=True,
          sync=False,
