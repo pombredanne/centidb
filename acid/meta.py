@@ -455,7 +455,7 @@ class BaseModel(object):
             for func in self.META_CONSTRAINTS:
                 if not func(self):
                     raise acid.errors.ConstraintError(name=func.func_name,
-                        msg='%r failed for %r' % (func.func_name, self))
+                        msg='Constraint %r failed' % (func.func_name,))
 
         self._key = self.collection().put(self, key=self._key)
 
