@@ -22,7 +22,7 @@ All custom exceptions thrown by Acid should be defined here.
 class Error(Exception):
     """Base class for Acid exceptions."""
     def __init__(self, msg, inner=None):
-        Exception.__init__(msg)
+        Exception.__init__(self, msg)
         #: The inner exception, if any.
         self.inner = inner
 
