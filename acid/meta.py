@@ -425,6 +425,8 @@ class BaseModel(object):
         """
         assert isinstance(store, acid.Store)
         cls.META_STORE = store
+        if hasattr(cls, 'META_COLLECTION'):
+            del cls.META_COLLECTION
 
     @classmethod
     def get(cls, key):
