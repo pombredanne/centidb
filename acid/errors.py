@@ -30,15 +30,22 @@ class ConfigError(Error):
     """Attempt to use a store in a misconfigured state (e.g. missing index
     functions, or incompatible constructor options)."""
 
+class ConstraintError(Error):
+    """An acid.meta model constraint failed."""
+    def __init__(self, msg, name):
+        Error.__init__(self, msg, None)
+        #: String name of the constraint function that failed.
+        self.name = name
+
+class EngineError(Error):
+    """Unspecified error occurred with the database engine. The original
+    exception may be available as the :py:attr:`inner` attribute."""
+
 class NameInUse(Error):
     """Attempt to rename an object to a name already in use."""
 
 class NotFound(Error):
     """Attempt to fetch an object that doesn't exist."""
-
-class EngineError(Error):
-    """Unspecified error occurred with the database engine. The original
-    exception may be available as the :py:attr:`inner` attribute."""
 
 class TxnError(Error):
     """An attempt to start, cancel or commit a transaction failed."""

@@ -31,6 +31,7 @@ import operator
 
 import acid
 import acid.encoders
+import acid.errors
 
 
 class Field(object):
@@ -453,8 +454,9 @@ class BaseModel(object):
         if check_constraints:
             for func in self.META_CONSTRAINTS:
                 if not func(self):
-                    raise ValueError('constraint %r failed for %r'
-                                     % (func.func_name, self))
+                    raise acid.errors.ConstraintError(name=func.func_name,
+                        msg='%r failed for %r' % (func.func_name, self))
+
         self._key = self.collection().put(self, key=self._key)
 
     def __repr__(self):

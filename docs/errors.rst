@@ -11,6 +11,8 @@ Errors
 
 .. autoclass:: acid.errors.ConfigError
 
+.. autoclass:: acid.errors.ConstraintError
+
 .. autoclass:: acid.errors.EngineError
 
 .. autoclass:: acid.errors.NameInUse
