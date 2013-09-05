@@ -478,10 +478,10 @@ class BaseModel(object):
         """
         key = self._key
         if key:
-            before_funcs = self.META_BEFORE_UPDATE
+            on_funcs = self.META_ON_UPDATE
             after_funcs = self.META_AFTER_UPDATE
         else:
-            before_funcs = self.META_BEFORE_CREATE
+            on_funcs = self.META_ON_CREATE
             after_funcs = self.META_AFTER_CREATE
 
         if check_constraints:
@@ -490,7 +490,7 @@ class BaseModel(object):
                     raise acid.errors.ConstraintError(name=func.func_name,
                         msg='Constraint %r failed' % (func.func_name,))
 
-        for func in before_funcs:
+        for func in on_funcs:
             func(self)
         self._key = self.collection().put(self, key=key)
         for func in after_funcs:
