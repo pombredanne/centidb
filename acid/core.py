@@ -30,6 +30,7 @@ import threading
 import warnings
 
 from acid import encoders
+from acid import errors
 from acid import keylib
 
 __all__ = ['Store', 'Collection', 'Index', 'open']
@@ -804,6 +805,13 @@ class TxnContext(object):
         self.engine = engine
         self.local = threading.local()
 
+    def mode(self):
+        """Return a tristate indicating the active transaction mode: ``None`
+        means if no transaction is active, ``False`` if a read-only transaction
+        is active, or ``True`` if a write transaction is active."""
+        if hasattr(self.local, 'txn'):
+            return self.mode
+
     def begin(self, write=False):
         self.write = write
         return self
@@ -811,7 +819,7 @@ class TxnContext(object):
     def __enter__(self):
         txn = getattr(self.local, 'txn', None)
         if txn:
-            raise Exception('Transaction already active for this thread.')
+            raise errors.TxnError('Transaction already active for this thread.')
         txn = self.engine.begin(write=self.write)
         setattr(self.local, 'txn', txn)
 
@@ -826,8 +834,8 @@ class TxnContext(object):
         txn = getattr(self.local, 'txn', None)
         if txn:
             return txn
-        raise Exception('Transactions *must* be wrapped in a with: '
-                        'block to ensure proper destruction.')
+        raise errors.TxnError('Transactions *must* be wrapped in a with: '
+                              'block to ensure proper destruction.')
 
 
 class Store(object):
@@ -871,30 +879,34 @@ class Store(object):
         """
         return self._txn_context.begin()
 
-    def get_info2(self, kind, name):
-        items = list(self._meta.items(prefix=(kind, name)))
-        return dict((a, v) for (n, k, a,), (v,) in items)
+    def in_txn(self, func, write=False):
+        """Execute `func()` inside a transaction, and return its return value.
+        If a transaction is already active, `func()` runs inside the current
+        transaction."""
+        mode = self._txn_context.mode()
+        if mode is None:
+            with self._txn_context.begin():
+                return func()
+        elif mode == False and write == True:
+            raise errors.TxnError('attempted write in a read-only transaction')
+        else:
+            return func()
 
-    def clear_info2(self, kind, name):
-        for key in list(self._meta.keys(prefix=(kind, name))):
-            self._meta.delete(key)
+    def get_info2(self, kind, name):
+        func = lambda: list(self._meta.items(prefix=(kind, name)))
+        return dict((a, v) for (n, k, a,), (v,) in self.in_txn(func))
 
     def set_info2(self, kind, name, dct):
-        self.clear_info2(kind, name)
-        for key, value in dct.iteritems():
-            self._meta.put(value, key=(kind, name, key))
-
-    def check_info2(self, old, new):
-        for key, value in old.iteritems():
-            if new.setdefault(key, value) != value:
-                raise ValueError('attribute %r mismatch: %r vs %r' %\
-                                 (key, value, new[key]))
+        def _set_info_txn():
+            for key in list(self._meta.keys(prefix=(kind, name))):
+                self._meta.delete(key)
+            for key, value in dct.iteritems():
+                self._meta.put(value, key=(kind, name, key))
+        return self.in_txn(_set_info_txn)
 
     def rename_collection(self, old, new):
         if self.get_info2(KIND_TABLE, name):
-            raise ValueError('collection named %r already exists.'
-                             % (new,))
-
+            raise errors.NameInUse('collection %r already exists.' % (new,))
         coll = self[old]
         info = self.get_info(KIND_TABLE, name)
         info['name'] = new
@@ -905,7 +917,10 @@ class Store(object):
         encoder = kwargs.get('encoder', encoders.PICKLE)
         new = {'name': name, 'encoder': encoder.name}
         if old:
-            self.check_info2(old or {}, new)
+            for key, value in old.iteritems():
+                if new.setdefault(key, value) != value:
+                    raise errors.ConfigError('attribute %r: %r != %r' %\
+                                             (key, value, new[key]))
         else:
             new['idx'] = self.count('\x00collections_idx', init=10)
             self.set_info2(KIND_TABLE, name, new)
@@ -954,7 +969,8 @@ class Store(object):
             it = self._meta.items(prefix=KIND_ENCODER)
             dct = dict((v, n) for (k, n, a), v in it if a == 'idx')
             idx = keylib.unpack_int(prefix)
-            raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
+            raise errors.ConfigError('Missing encoder: %r / %d' %\
+                                     (dct.get(idx), idx))
 
     def count(self, name, n=1, init=1):
         """Increment a counter and return its previous value. The counter is
