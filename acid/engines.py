@@ -34,23 +34,23 @@ class Engine(object):
     bytestrings.
     """
     def close(self):
-        """Close the database connection."""
-        raise NotImplementedError
+        """Close the database connection. The default implementation does
+        nothing."""
 
     def begin(self, write=False):
         """Start a database transaction, returning an :py:class:`Engine`
         instance requests should be directed to for the duration of the
-        transaction. If the engine does not support transactions, should simply
-        return `self`."""
-        raise NotImplementedError
+        transaction. The default implementation does nothing, and returns
+        itself."""
+        return self
 
     def abort(self):
-        """Abort the active database transaction."""
-        raise NotImplementedError
+        """Abort the active database transaction. The default implmentation
+        does nothing."""
 
     def commit(self):
-        """Commit the active database transaction."""
-        raise NotImplementedError
+        """Commit the active database transaction. The default implementation
+        does nothing."""
 
     def get(self, key):
         """Return the value of `key` or ``None`` if it does not exist."""
@@ -82,12 +82,6 @@ class Engine(object):
             is reached.
         """
         raise NotImplementedError
-
-    #: Name for the transaction represented by the object; may be any Python
-    #: value. Omit the attribute for engines or "transaction objects" that do
-    #: not support transactions. If your engine supports transactions but
-    #: cannot provide an ID, simply set it to :py:func:`time.time`.
-    txn_id = None
 
 
 class SkipList(object):
@@ -215,7 +209,7 @@ class SkipList(object):
             return node[1]
 
 
-class SkiplistEngine(object):
+class SkiplistEngine(Engine):
     """Storage engine that backs onto a `Skip List
     <http://en.wikipedia.org/wiki/Skip_list>`_. Lookup and insertion are
     logarithmic.
@@ -236,20 +230,11 @@ class SkiplistEngine(object):
         self.delete = self.sl.delete
         self.iter = self.sl.items
 
-    def begin(self, write=False):
-        return self
-
     def close(self):
         self.sl = None
 
-    def abort(self):
-        pass
 
-    def commit(self):
-        pass
-
-
-class ListEngine(object):
+class ListEngine(Engine):
     """Storage engine that backs onto a sorted list of `(key, value)` tuples.
     Lookup is logarithmic while insertion is linear.
 
@@ -261,9 +246,6 @@ class ListEngine(object):
         #: Size in bytes for stored items, i.e.
         #: ``sum(len(k)+len(v) for k, v in items)``.
         self.size = 0
-
-    def begin(self, write):
-        return self
 
     def get(self, k):
         idx = bisect.bisect_left(self.items, (k,))
@@ -299,7 +281,7 @@ class ListEngine(object):
         return itertools.imap(self.items[:].__getitem__, xr)
 
 
-class PlyvelEngine(object):
+class PlyvelEngine(Engine):
     """Storage engine that uses Google LevelDB via the `Plyvel
     <http://plyvel.readthedocs.org/>`_ module.
 
@@ -308,8 +290,6 @@ class PlyvelEngine(object):
             database. Otherwise, the remaining keyword args are passed to the
             `plyvel.DB` constructor.
     """
-    txn_id = None
-
     def __init__(self, db=None, wb=None, **kwargs):
         if not db:
             import plyvel
@@ -342,12 +322,10 @@ class PlyvelEngine(object):
         return it
 
 
-class KyotoEngine(object):
+class KyotoEngine(Engine):
     """Storage engine that uses `Kyoto Cabinet
     <http://fallabs.com/kyotocabinet/>`_. Note a treedb must be used.
     """
-    txn_id = None
-
     def __init__(self, db=None, path=None):
         self.db = db
         if not self.db:
@@ -393,8 +371,6 @@ class LmdbEngine(object):
             If `env` and `txn` are ``None``, pass these keyword arguments to
             create a new :py:class:`lmdb.Environment`.
     """
-    txn_id = None
-
     def __init__(self, env=None, txn=None, db=None, **kwargs):
         if not (env or txn):
             import lmdb
@@ -419,6 +395,9 @@ class LmdbEngine(object):
         """
         assert not self.txn
         return LmdbEngine(self.env, self.env.begin(write=write))
+
+    def abort(self):
+        self.txn.abort()
 
     def commit(self):
         self.txn.commit()
