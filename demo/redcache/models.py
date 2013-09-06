@@ -97,8 +97,31 @@ class Comment(Model):
     ups = acid.meta.Integer()
     downs = acid.meta.Integer()
 
+    def get_ancestry(self):
+        """Return the comment's ancestry."""
+        parents = []
+        comment = self
+        while comment.parent_id:
+            parents.append(comment.parent_id)
+            comment = self.by_id.get(comment.parent_id)
+            if comment:
+                assert comment.id != comment.parent_id
+                assert comment.parent_id != parents[-1]
+            if not comment:
+                return
+        parents.reverse()
+        return parents
+
     @acid.meta.key
     def key(self):
+        ancestry = self.get_ancestry()
+        assert ancestry is not None
+        ancestry.insert(0, self.subreddit_id)
+        ancestry.append(self.id)
+        return tuple(ancestry)
+
+    @acid.meta.index
+    def by_id(self):
         return self.id
 
     @acid.meta.index

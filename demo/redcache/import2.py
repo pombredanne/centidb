@@ -21,7 +21,7 @@ def db36(s):
 
 def get_path_list():
     paths = []
-    for dirpath, dirnames, filenames in os.walk('/home/dmw/out'):
+    for dirpath, dirnames, filenames in os.walk('out'):
         for filename in filenames:
             if filename.endswith('.gz') or filename.endswith('.json'):
                 paths.append(os.path.join(dirpath, filename))
@@ -84,16 +84,25 @@ def process_one(stats, dct):
         user.save()
         link.save()
 
-    comment_id = db36(dct['id'])
+    if dct['parent_id'].startswith('t3_'):
+        parent_id = None
+    else:
+        parent_id = db36(dct['parent_id'])
+
     comment = models.Comment(id=comment_id,
                              subreddit_id=subreddit_id,
                              author=dct['author'],
                              body=dct['body'],
                              created=created,
-                             parent_id=db36(dct['parent_id']),
+                             parent_id=parent_id,
                              ups=dct['ups'],
                              downs=dct['downs'])
-    comment.save()
+    if comment.get_ancestry() is None:
+        print 'lool'
+        stats['comments'] -= 1
+        print dct['parent_id']
+    else:
+        comment.save()
 
 
 def process_set(stats, all_paths):
