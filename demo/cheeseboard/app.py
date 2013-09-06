@@ -1,26 +1,22 @@
 
-import datetime
-import random
 import sys
 import time
+import urllib
 
+import acid
+import acid.meta
 import bottle
 import wheezy.template.engine
 import wheezy.template.ext.core
 import wheezy.template.loader
 
-import cheeselib
+import models
 
 templates = wheezy.template.engine.Engine(
     loader=wheezy.template.loader.FileLoader(['templates']),
     extensions=[wheezy.template.ext.core.CoreExtension()])
-templates.global_vars.update({
-    'time': lambda t: str(datetime.datetime.fromtimestamp(t))
-})
 
-store = cheeselib.open_store()
-oldest_key, = next(store['comments'].keys())
-newest_key, = next(store['comments'].keys(reverse=True))
+store = models.init_store()
 
 
 def getint(name, default=None):
@@ -33,14 +29,13 @@ def getint(name, default=None):
 @bottle.route('/')
 def index():
     t0 = time.time()
-    if bottle.request.params.get('hi') == 'rand':
-        hi = random.randint(oldest_key, newest_key)
-    else:
-        hi = getint('hi')
-    posts = list(store['comments'].items(hi=hi, reverse=True, max=5))
-    highest_id = next(store['comments'].keys(reverse=True), None)
+    hi = getint('hi')
+    with store.begin():
+        posts = list(models.Post.iter(hi=hi, reverse=True, max=5))
+        highest_id = models.Post.find(reverse=True)
+        print list(models.Post.iter())
     t1 = time.time()
-
+    print posts
     older = None
     newer = None
     if posts:
@@ -50,13 +45,9 @@ def index():
         if posts[0][0] < highest_id:
             newer = '?hi=' + str(posts[0][0][0] + 5)
 
-    # Get reddits.
-    srids = set(c['subreddit_id'] for (cid, c) in posts)
-    reddits = {rid: store['reddits'].get(rid)['name'] for rid in srids}
-
     return templates.get_template('index.html').render({
+        'error': bottle.request.query.get('error'),
         'posts': posts,
-        'reddits': reddits,
         'older': older,
         'newer': newer,
         'msec': int((t1 - t0) * 1000)
@@ -68,29 +59,15 @@ def static(filename):
     return bottle.static_file(filename, root='static')
 
 
-@bottle.route('/users/<username>')
-def user(username):
-    posts = list(store['comments']['author'].items(username, max=5,
-    reverse=True))
-    srids = set(c['subreddit_id'] for (cid, c) in posts)
-    reddits = {rid: store['reddits'].get(rid)['name'] for rid in srids}
-    older = None
-    newer = None
-    t1 = t0 = 0
-    return templates.get_template('index.html').render({
-        'posts': posts,
-        'reddits': reddits,
-        'older': older,
-        'newer': newer,
-        'msec': int((t1 - t0) * 1000)
-    })
-
-
 @bottle.post('/newpost')
 def newpost():
-    post = dict(bottle.request.forms.iteritems())
-    post['created'] = time.time()
-    store['posts'].put(post)
+    post = models.Post(name=bottle.request.POST.get('name'),
+                       text=bottle.request.POST.get('text'))
+    try:
+        with store.begin(write=True):
+            post.save()
+    except acid.errors.ConstraintError, e:
+        return bottle.redirect('.?error=' + urllib.quote(str(e)))
     return bottle.redirect('.')
 
 

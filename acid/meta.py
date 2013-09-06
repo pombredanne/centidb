@@ -27,10 +27,12 @@ definition of database models using Python code.
 """
 
 from __future__ import absolute_import
+import functools
 import operator
 
 import acid
 import acid.encoders
+import acid.errors
 
 
 class Field(object):
@@ -76,6 +78,15 @@ class Time(Field):
     """
 
 
+def _check_constraint(func, model):
+    """on_update trigger that checks a constraint is correct. The metaclass
+    wraps this in a functools.partial() and adds to to the list of on_update
+    triggers for the model."""
+    if not func(model):
+        raise acid.errors.ConstraintError(name=func.func_name,
+            msg='Constraint %r failed' % (func.func_name,))
+
+
 class LazyIndexProperty(object):
     """Property that replaces itself with a acid.Index when it is first
     accessed."""
@@ -96,8 +107,9 @@ class ModelMeta(type):
         cls.setup_index_funcs(klass, bases, attrs)
         cls.setup_index_properties(klass, bases, attrs)
         cls.setup_field_properties(klass, bases, attrs)
-        cls.setup_constraints(klass, bases, attrs)
         cls.setup_encoder(klass, bases, attrs)
+        cls.setup_triggers(klass, bases, attrs)
+        cls.setup_constraints(klass, bases, attrs)
         return klass
 
     @classmethod
@@ -124,7 +136,7 @@ class ModelMeta(type):
         if key_func or not hasattr(klass, 'META_KEY_FUNC'):
             name = getattr(key_func, 'func_name', 'key')
             getter = operator.attrgetter('_key')
-            setattr(klass, name, property(getter))
+            setattr(klass, name, property(getter, doc=''))
 
     @classmethod
     def setup_index_funcs(cls, klass, bases, attrs):
@@ -145,12 +157,29 @@ class ModelMeta(type):
                     LazyIndexProperty(index_func.func_name))
 
     @classmethod
+    def setup_triggers(cls, klass, bases, attrs):
+        triggers = ('on_create', 'on_update', 'on_delete',
+                    'after_create', 'after_update', 'after_delete')
+        lists = {}
+        for trigger in triggers:
+            lst = list(getattr(klass, 'META_' + trigger.upper(), []))
+            lists[trigger] = lst
+
+        for key, value in attrs.iteritems():
+            for trigger in triggers:
+                if getattr(value, 'meta_' + trigger, None):
+                    lists[trigger].append(value)
+
+        for trigger in triggers:
+            setattr(klass, 'META_' + trigger.upper(), lists[trigger])
+
+    @classmethod
     def setup_constraints(cls, klass, bases, attrs):
-        constraints = list(getattr(klass, 'META_CONSTRAINTS', []))
         for key, value in attrs.iteritems():
             if getattr(value, 'meta_constraint', False):
-                constraints.append(value)
-        klass.META_CONSTRAINTS = constraints
+                wrapped = functools.partial(_check_constraint, value)
+                klass.META_ON_CREATE.append(wrapped)
+                klass.META_ON_UPDATE.append(wrapped)
 
     @classmethod
     def setup_field_properties(cls, klass, bases, attrs):
@@ -256,7 +285,7 @@ def constraint(func):
 
         @meta.constraint
         def is_age_valid(self):
-            return 0 < age < 150
+            return 0 < self.age < 150
     """
     func.meta_constraint = True
     return func
@@ -289,6 +318,7 @@ def on_update(func, klass=None):
             self.modified = datetime.datetime.utcnow()
     """
     assert klass is None, 'external triggers not supported yet.'
+    func.meta_on_create = True
     func.meta_on_update = True
     return func
 
@@ -322,6 +352,7 @@ def after_create(func, klass=None):
     """
     assert klass is None, 'external triggers not supported yet.'
     func.meta_after_create = True
+    func.meta_after_update = True
     return func
 
 
@@ -352,7 +383,7 @@ def after_delete(func, klass=None):
                 msg.delete()
     """
     assert klass is None, 'external triggers not supported yet.'
-    func.meta_on_delete = True
+    func.meta_after_delete = True
     return func
 
 
@@ -404,6 +435,8 @@ class BaseModel(object):
         """
         assert isinstance(store, acid.Store)
         cls.META_STORE = store
+        if hasattr(cls, 'META_COLLECTION'):
+            del cls.META_COLLECTION
 
     @classmethod
     def get(cls, key):
@@ -440,22 +473,30 @@ class BaseModel(object):
 
     def delete(self):
         """Delete the model if it has been saved."""
-        if self._key:
-            self.collection().delete(self._key)
+        if not self._key:
+            return
+        for func in self.META_ON_DELETE:
+            func(self)
+        self.collection().delete(self._key)
+        for func in self.META_AFTER_DELETE:
+            func(self)
 
-    def save(self, check_constraints=True):
+    def save(self):
         """Create or update the model in the database.
-
-            `check_constraints`:
-                If ``False``, then constraint checking is disabled. Useful for
-                importing e.g. old data.
         """
-        if check_constraints:
-            for func in self.META_CONSTRAINTS:
-                if not func(self):
-                    raise ValueError('constraint %r failed for %r'
-                                     % (func.func_name, self))
-        self._key = self.collection().put(self, key=self._key)
+        key = self._key
+        if key:
+            on_funcs = self.META_ON_UPDATE
+            after_funcs = self.META_AFTER_UPDATE
+        else:
+            on_funcs = self.META_ON_CREATE
+            after_funcs = self.META_AFTER_CREATE
+
+        for func in on_funcs:
+            func(self)
+        self._key = self.collection().put(self, key=key)
+        for func in after_funcs:
+            func(self)
 
     def __repr__(self):
         klass = self.__class__

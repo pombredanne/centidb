@@ -27,7 +27,7 @@ Declarative Interface
         @meta.constraint
         def sane_age(self):
             """Ensure the user's age is 1..149 if they provided it."""
-            return age is None or (0 < age < 150)
+            return self.age is None or (0 < self.age < 150)
 
 
     class Item(Base):

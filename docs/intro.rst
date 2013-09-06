@@ -223,13 +223,10 @@ Key functions
 -------------
 
 When instantiating :py:class:`Collection` you may provide a key function, which
-is responsible for producing record keys. The key function can accept either
-one or two parameters. In the first form (*key_func=*), only the record's value
-is passed, while in the second form (*txn_key_func=*) a reference to the active
-transaction is also passed.
-
-The key may be any supported primitive value, or a tuple of primitive values.
-For example, to assign a key based on the time in microseconds:
+is responsible for producing record keys. The key function accepts the record's
+value and returns the record's key. The key may be any supported primitive
+value, or a tuple of primitive values. For example, to assign a key based on
+the time in microseconds:
 
     ::
 

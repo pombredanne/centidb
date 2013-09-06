@@ -26,9 +26,11 @@ import itertools
 import operator
 import os
 import sys
+import threading
 import warnings
 
 from acid import encoders
+from acid import errors
 from acid import keylib
 
 __all__ = ['Store', 'Collection', 'Index', 'open']
@@ -177,10 +179,6 @@ class Index(object):
             match returned first, and end with the first naturally ordered
             match returned last.
 
-        `txn`:
-            Transaction to use, or ``None`` to indicate the default behaviour
-            of the storage engine.
-
         `max`:
             Maximum number of index records to return.
     """
@@ -193,7 +191,7 @@ class Index(object):
         self.func = func
         self.prefix = keylib.pack_int(self.store.prefix, info['idx'])
 
-    def _iter(self, txn, key, lo, hi, reverse, max, include):
+    def _iter(self, key, lo, hi, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
         """
         if lo is None:
@@ -220,83 +218,82 @@ class Index(object):
             else:
                 lo = keylib.Key(key).to_raw(self.prefix)
 
+        it = self.store._txn_context.get().iter(hi, reverse)
         if reverse:
-            it = (txn or self.engine).iter(hi, True)
             pred = lo.__le__
         else:
-            it = (txn or self.engine).iter(lo, False)
             pred = hi.__ge__ if include else hi.__gt__
         it = itertools.takewhile(pred, it)
         if max is not None:
             it = itertools.islice(it, max)
         for key, _ in it:
-            if not key.startswith(self.prefix):
+            lst = keylib.KeyList.from_raw(self.prefix, key)
+            if not lst:
                 break
-            yield keylib.KeyList.from_raw(self.prefix, key)
+            yield lst
 
-    def count(self, args=None, lo=None, hi=None, max=None, include=False,
-              txn=None):
+    def count(self, args=None, lo=None, hi=None, max=None, include=False):
         """Return a count of index entries matching the parameter
         specification."""
-        return sum(1 for _ in self._iter(txn, args, lo, hi, 0, max, include))
+        return sum(1 for _ in self._iter(args, lo, hi, 0, max, include))
 
     def pairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=False, txn=None):
+            include=False):
         """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record.
         
         `Note:` the yielded sequence is a list, not a tuple."""
-        return self._iter(txn, args, lo, hi, reverse, max, include)
+        return self._iter(args, lo, hi, reverse, max, include)
 
     def tups(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=False, txn=None):
+            include=False):
         """Yield all index tuples in the index, in tuple order. The index tuple
         is the part of the entry produced by the user's index function, i.e.
         the index's natural "value"."""
-        return itertools.imap(ITEMGETTER_0,
-            self.pairs(args, lo, hi, reverse, max, include, txn))
+        it = self._iter(args, lo, hi, reverse, max, include)
+        return itertools.imap(ITEMGETTER_0, it)
 
     def keys(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=False, txn=None):
+            include=False):
         """Yield all keys in the index, in tuple order."""
-        return itertools.imap(ITEMGETTER_1,
-            self.pairs(args, lo, hi, reverse, max, include, txn))
+        it = self._iter(args, lo, hi, reverse, max, include)
+        return itertools.imap(ITEMGETTER_1, it)
 
     def items(self, args=None, lo=None, hi=None, reverse=None, max=None,
-              include=False, txn=None):
+              include=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order."""
-        for _, key in self.pairs(args, lo, hi, reverse, max, include, txn):
-            obj = self.coll.get(key, txn=txn)
+        for _, key in self._iter(args, lo, hi, reverse, max, include):
+            obj = self.coll.get(key)
             if obj:
                 yield key, obj
             else:
                 warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
     def values(self, args=None, lo=None, hi=None, reverse=None, max=None,
-               include=False, txn=None):
+               include=False):
         """Yield all values referred to by the index, in tuple order."""
-        it = self.items(args, lo, hi, reverse, max, include, txn)
+        it = self.items(args, lo, hi, reverse, max, include)
         return itertools.imap(ITEMGETTER_1, it)
 
     def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
-             txn=None, default=None):
+             default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
-        it = self.values(args, lo, hi, reverse, None, include, txn)
+        it = self.values(args, lo, hi, reverse, None, include)
         return next(it, default)
 
-    def has(self, x, txn=None):
+    def has(self, x):
         """Return True if an entry with the exact tuple `x` exists in the
         index."""
         x = keylib.Key(x)
-        tup, _ = next(self.pairs(x, txn=txn), (None, None))
+        tup, _ = next(self.pairs(x), (None, None))
         return tup == x
 
-    def get(self, x, txn=None, default=None):
+    def get(self, x, default=None):
         """Return the first matching record from the index."""
-        for tup in self.items(lo=x, hi=x, include=True, txn=txn):
+        for tup in self.items(lo=x, hi=x, include=True):
             return tup[1]
         return default
 
@@ -315,22 +312,12 @@ class Collection(object):
             ASCII string used to identify the collection, aka. the key of the
             collection itself.
 
-        `key_func`, `txn_key_func`:
-            Key generator for records about to be saved. `key_func` takes one
-            argument, the record's value, and should return a tuple of
-            primitive values that will become the record's key.  If the
-            function returns a lone primitive value, it will be wrapped in a
-            1-tuple.
-
-            Alternatively, `txn_key_func` may be used to access the current
-            transaction during key assignment. It is invoked as
-            `txn_key_func(txn, value)`, where `txn`  is a reference to the
-            active transaction, or :py:class:`Store`'s engine if no transaction
-            was supplied.
-
-            If neither function is given, keys are assigned using a
-            transactional counter (like auto-increment in SQL). See
-            `counter_name`.
+        `key_func`:
+            Function invoked as `func(rec)` to produce a key for the record
+            value about to be saved. It should return a tuple that will become
+            the record's key. If the function returns a single value, it will
+            be wrapped in a 1-tuple. If no function is given, keys are assigned
+            using a counter (like auto-increment in SQL). See `counter_name`.
 
         `encoder`:
             :py:class:`acid.encoders.Encoder` used to serialize record values
@@ -339,25 +326,23 @@ class Collection(object):
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
             generating auto-incremented keys. If unspecified, defaults to
-            ``"key:<name>"``. Unused when `key_func` or `txn_key_func`
-            are specified.
+            ``"key:<name>"``. Unused when `key_func` is specified.
     """
-    def __init__(self, store, info, key_func=None, txn_key_func=None,
-                 encoder=None, counter_name=None):
+    def __init__(self, store, info, key_func=None, encoder=None,
+                 counter_name=None):
         """Create an instance; see class docstring."""
         self.store = store
         self.engine = store.engine
         self.info = info
         self.prefix = keylib.pack_int(self.store.prefix, info['idx'])
-        if not (key_func or txn_key_func):
+        if not key_func:
             counter_name = counter_name or ('key:%(name)s' % self.info)
-            txn_key_func = lambda txn, _: store.count(counter_name, txn=txn)
+            key_func = lambda _: store.count(counter_name)
             info['blind'] = True
         else:
             info.setdefault('blind', False)
 
         self.key_func = key_func
-        self.txn_key_func = txn_key_func
 
         self.encoder = encoder or encoders.PICKLE
         self.encoder_prefix = self.store.add_encoder(self.encoder)
@@ -493,7 +478,7 @@ class Collection(object):
     # -----------------------------------------------------------
     # _iter(, , , False): lokey=prefix, hikey=ng(prefix)
     #                     startpred=lokey, endpred=
-    def _iter(self, txn, key, lo, hi, prefix, reverse, max_, include, max_phys):
+    def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
         if key is not None:
             key = keylib.Key(key)
             if reverse:
@@ -529,7 +514,7 @@ class Collection(object):
             startpred = None
             endpred = hi and (hi.__ge__ if include else hi.__gt__)
 
-        it = (txn or self.engine).iter(startkey, reverse)
+        it = self.store._txn_context.get().iter(startkey, reverse)
         if max_phys is not None:
             it = itertools.islice(it, max_phys)
 
@@ -563,43 +548,43 @@ class Collection(object):
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
-              max=None, include=False, txn=None, raw=False):
+              max=None, include=False, raw=False):
         """Yield all `(key tuple, value)` tuples in key order."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
+        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         if raw:
             return it
         return ((key_, self.encoder.unpack(key_, data)) for _, key_, data in it)
 
     def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-             max=None, include=False, txn=None):
+             max=None, include=False):
         """Yield key tuples in key order."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
+        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         return itertools.imap(ITEMGETTER_1, it)
 
     def values(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-               max=None, include=False, txn=None, raw=False):
+               max=None, include=False, raw=False):
         """Yield record values in key order."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, max, include, None)
+        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         if raw:
             return itertools.imap(ITEMGETTER_2, it)
         return (self.encoder.unpack(key_, data) for _, key_, data in it)
 
     def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-             include=False, txn=None, raw=None, default=None):
+             include=False, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
-        it = self._iter(txn, key, lo, hi, prefix, reverse, None, include, None)
+        it = self._iter(key, lo, hi, prefix, reverse, None, include, None)
         for _, key_, data in it:
             if raw:
                 return data
             return self.encoder.unpack(key_, data)
         return default
 
-    def get(self, key, default=None, txn=None, raw=False):
+    def get(self, key, default=None, raw=False):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead."""
-        it = self._iter(txn, None, key, key, None, False, None, True, None)
+        it = self._iter(None, key, key, None, False, None, True, None)
         for _, key_, data in it:
             if raw:
                 return data
@@ -608,7 +593,7 @@ class Collection(object):
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
               max_bytes=None, max_keylen=None, preserve=True, packer=None,
-              txn=None, max_phys=None, grouper=None):
+              max_phys=None, grouper=None):
         """
         Search the key range *lo..hi* for individual records, combining them
         into a batches.
@@ -662,10 +647,6 @@ class Collection(object):
                 Encoding to use as compressor, defaults to
                 :py:attr:`acid.encoders.PLAIN`.
 
-            `txn`:
-                Transaction to use, or ``None`` to indicate the default
-                behaviour of the storage engine.
-
             `max_phys`:
                 Maximum number of physical keys to visit in any particular
                 call. A collection may be incrementally batched by repeatedly
@@ -683,9 +664,9 @@ class Collection(object):
         """
         assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
-        txn = txn or self.engine
+        txn = self.store._txn_context.get()
         packer = packer or encoders.PLAIN
-        it = self._iter(txn, None, lo, hi, prefix, False, None, True, max_phys)
+        it = self._iter(None, lo, hi, prefix, False, None, True, max_phys)
         groupval = None
         items = []
 
@@ -712,14 +693,14 @@ class Collection(object):
 
     def _write_batch(self, txn, items, packer):
         if items:
-            phys, data = self._prepare_batch(items, packer, txn)
+            phys, data = self._prepare_batch(items, packer)
             txn.put(phys, data)
             del items[:]
 
-    def _prepare_batch(self, items, packer, txn):
+    def _prepare_batch(self, items, packer):
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
-            packer_prefix = self.store.add_encoder(packer, txn=txn)
+            packer_prefix = self.store.add_encoder(packer)
         keytups = [key for key, _ in reversed(items)]
         phys = keylib.packs(self.prefix, keytups)
         out = bytearray()
@@ -736,37 +717,28 @@ class Collection(object):
             out.extend(packer.pack(concat))
         return phys, str(out)
 
-    def _split_batch(self, key, txn):
+    def _split_batch(self, key):
         """Find the batch `key` belongs to and split it, saving all records
         individually except for `key`."""
         assert False
-        it = self._iter(txn, key, None, None, None, None, None, None, None)
+        it = self._iter(key, None, None, None, None, None, None, None)
         keys, data = next(it, (None, None))
         assert len(keys) > 1 and key in keys, \
             'Physical key missing: %r' % (key,)
 
-        (txn or self.engine).delete(phys)
+        self.store._txn_context.get().delete(phys)
         objs = self.encoder.loads_many(self._decompress(data))
         for i, obj in enumerate(objs):
             this_key = keys[-(1 + i)]
             if this_key != key:
-                self.put(obj, txn, key=this_key)
+                self.put(obj, key=this_key)
 
-    def _assign_key(self, obj, txn):
-        if self.txn_key_func:
-            return self.txn_key_func(txn, obj)
-        return self.key_func(obj)
-
-    def put(self, rec, txn=None, packer=None, key=None, blind=False):
+    def put(self, rec, packer=None, key=None, blind=False):
         """Create or overwrite a record.
 
             `rec`:
                 The value to put; must be a value recognised by the
                 collection's `encoder`.
-
-            `txn`:
-                Transaction to use, or ``None`` to indicate the default
-                behaviour of the storage engine.
 
             `packer`:
                 Encoding to use as compressor, defaults to
@@ -789,18 +761,18 @@ class Collection(object):
                 obsolete keys when this is detected, however other index
                 methods will not.
         """
-        txn = txn or self.engine
+        txn = self.store._txn_context.get()
         if key is None:
-            key = self._assign_key(rec, txn)
+            key = self.key_func(rec)
         key = keylib.Key(key)
         packer = packer or encoders.PLAIN
         packer_prefix = self.store._encoder_prefix.get(packer)
         if not packer_prefix:
-            packer_prefix = self.store.add_encoder(packer, txn=txn)
+            packer_prefix = self.store.add_encoder(packer)
 
         if self.indices:
             if not (blind or self.info['blind']):
-                self.delete(key, txn=txn)
+                self.delete(key)
             for index_key in self._index_keys(key, rec):
                 txn.put(index_key, '')
 
@@ -808,34 +780,85 @@ class Collection(object):
                 packer_prefix + packer.pack(self.encoder.pack(rec)))
         return key
 
-    def delete(self, key, txn=None):
+    def delete(self, key):
         """Delete any existing record filed under `key`.
         """
-        it = self._iter(txn, None, key, None, None, None, None, True, None)
+        it = self._iter(key, None, None, None, None, True, None)
+        txn = self.store._txn_context.get()
         for batch, key_, data in it:
             if key != key_:
                 break
             obj = self.encoder.unpack(key, data)
             if self.indices:
                 for key in self._index_keys(key, obj):
-                    (txn or self.engine).delete(key)
+                    txn.delete(key)
             if batch:
-                self._split_batch(key, txn)
+                self._split_batch(key)
             else:
-                (txn or self.engine).delete(keylib.packs(self.prefix, key))
+                txn.delete(keylib.packs(self.prefix, key))
+
+
+class TxnContext(object):
+    """Abstraction for maintaining the local context's transaction. This
+    implementation uses TLS.
+    """
+    def __init__(self, engine):
+        self.engine = engine
+        self.local = threading.local()
+
+    def mode(self):
+        """Return a tristate indicating the active transaction mode: ``None`
+        means if no transaction is active, ``False`` if a read-only transaction
+        is active, or ``True`` if a write transaction is active."""
+        if hasattr(self.local, 'txn'):
+            return self.mode
+
+    def begin(self, write=False):
+        self.write = write
+        return self
+
+    def __enter__(self):
+        txn = getattr(self.local, 'txn', None)
+        if txn:
+            raise errors.TxnError('Transaction already active for this thread.')
+        txn = self.engine.begin(write=self.write)
+        setattr(self.local, 'txn', txn)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type:
+            self.local.txn.abort()
+        else:
+            self.local.txn.commit()
+        del self.local.txn
+
+    def get(self):
+        txn = getattr(self.local, 'txn', None)
+        if txn:
+            return txn
+        raise errors.TxnError('Transactions *must* be wrapped in a with: '
+                              'block to ensure proper destruction.')
+
 
 class Store(object):
     """Represents access to the underlying storage engine, and manages
     counters.
+
+        `txn_context`:
+            If not ``None``, override the default
+            :py:class:`acid.core.TxnContext` implementation to provide
+            request-local storage of the active database transaction. The
+            default implementation uses TLS.
 
         `prefix`:
             Prefix for all keys used by any associated object (record, index,
             counter, metadata). This allows the storage engine's key space to
             be shared amongst several users.
     """
-    def __init__(self, engine, prefix=''):
+    def __init__(self, engine, txn_context=None, prefix=''):
         self.engine = engine
         self.prefix = prefix
+        self._txn_context = txn_context or TxnContext(engine)
+        self.begin = self._txn_context.begin
         self._counter_key_cache = {}
         self._encoder_prefix = dict((e, keylib.pack_int('', 1 + i))
                                     for i, e in enumerate(encoders._ENCODERS))
@@ -846,19 +869,48 @@ class Store(object):
             encoder=encoders.KEY, key_func=lambda t: t[:3])
         self._colls = {}
 
-    def get_info2(self, kind, name, txn=None):
-        items = list(self._meta.items(prefix=(kind, name), txn=txn))
-        return dict((a, v) for (n, k, a,), (v,) in items)
+    def begin(self, write=False):
+        """Return a context manager that starts a database transaction when it
+        is entered.
 
-    def set_info2(self, kind, name, dct, txn=None):
-        for key, value in dct.iteritems():
-            self._meta.put(value, key=(kind, name, key), txn=txn)
+        ::
 
-    def check_info2(self, old, new):
-        for key, value in old.iteritems():
-            if new.setdefault(key, value) != value:
-                raise ValueError('attribute %r mismatch: %r vs %r' %\
-                                 (key, value, new[key]))
+            with store.begin(write=True):
+                store['people'].put('me')
+        """
+        return self._txn_context.begin()
+
+    def in_txn(self, func, write=False):
+        """Execute `func()` inside a transaction, and return its return value.
+        If a transaction is already active, `func()` runs inside the current
+        transaction."""
+        mode = self._txn_context.mode()
+        if mode is None:
+            with self._txn_context.begin():
+                return func()
+        elif mode == False and write == True:
+            raise errors.TxnError('attempted write in a read-only transaction')
+        else:
+            return func()
+
+    def get_info2(self, kind, name):
+        func = lambda: list(self._meta.items(prefix=(kind, name)))
+        return dict((a, v) for (n, k, a,), (v,) in self.in_txn(func))
+
+    def set_info2(self, kind, name, dct):
+        def _set_info_txn():
+            for key in list(self._meta.keys(prefix=(kind, name))):
+                self._meta.delete(key)
+            for key, value in dct.iteritems():
+                self._meta.put(value, key=(kind, name, key))
+        return self.in_txn(_set_info_txn)
+
+    def rename_collection(self, old, new):
+        if self.get_info2(KIND_TABLE, name):
+            raise errors.NameInUse('collection %r already exists.' % (new,))
+        coll = self[old]
+        info = self.get_info(KIND_TABLE, name)
+        info['name'] = new
 
     def add_collection(self, name, **kwargs):
         """Shorthand for `acid.Collection(self, **kwargs)`."""
@@ -866,7 +918,10 @@ class Store(object):
         encoder = kwargs.get('encoder', encoders.PICKLE)
         new = {'name': name, 'encoder': encoder.name}
         if old:
-            self.check_info2(old or {}, new)
+            for key, value in old.iteritems():
+                if new.setdefault(key, value) != value:
+                    raise errors.ConfigError('attribute %r: %r != %r' %\
+                                             (key, value, new[key]))
         else:
             new['idx'] = self.count('\x00collections_idx', init=10)
             self.set_info2(KIND_TABLE, name, new)
@@ -882,27 +937,26 @@ class Store(object):
             self._colls[name] = Collection(self, info, **kwargs)
             return self._colls[name]
 
-    def get_index_info(self, name, index_for, txn=None):
-        dct = self.get_info2(KIND_INDEX, name, txn=txn)
+    def get_index_info(self, name, index_for):
+        dct = self.get_info2(KIND_INDEX, name)
         if not dct:
             idx = self.count('\x00collections_idx', init=10)
             dct = {'idx': idx, 'index_for': index_for}
             self.set_info2(KIND_INDEX, name, dct)
         return dct
 
-    def add_encoder(self, encoder, txn=None):
+    def add_encoder(self, encoder):
         """Register an :py:class:`acid.encoders.Encoder` so that
         :py:class:`Collection` can find it during decompression/unpacking."""
         try:
             return self._encoder_prefix[encoder]
         except KeyError:
-            dct = self.get_info2(KIND_ENCODER, encoder.name, txn=txn)
+            dct = self.get_info2(KIND_ENCODER, encoder.name)
             idx = dct.get('idx')
             if not dct:
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
-                self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx},
-                               txn=txn)
+                self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx})
             self._encoder_prefix[encoder] = keylib.pack_int('', idx)
             self._prefix_encoder[keylib.pack_int('', idx)] = encoder
             return self._encoder_prefix[encoder]
@@ -916,9 +970,10 @@ class Store(object):
             it = self._meta.items(prefix=KIND_ENCODER)
             dct = dict((v, n) for (k, n, a), v in it if a == 'idx')
             idx = keylib.unpack_int(prefix)
-            raise ValueError('Missing encoder: %r / %d' % (dct.get(idx), idx))
+            raise errors.ConfigError('Missing encoder: %r / %d' %\
+                                     (dct.get(idx), idx))
 
-    def count(self, name, n=1, init=1, txn=None):
+    def count(self, name, n=1, init=1):
         """Increment a counter and return its previous value. The counter is
         created if it doesn't exist.
 
@@ -932,10 +987,6 @@ class Store(object):
 
             `init`:
                 Initial value to give counter if it doesn't exist.
-
-            `txn`:
-                Transaction to use, or ``None`` to indicate the default
-                behaviour of the storage engine.
         """
         try:
             key = self._counter_key_cache[name]
@@ -943,9 +994,9 @@ class Store(object):
             key = keylib.Key(KIND_COUNTER, name, None)
             self._counter_key_cache[name] = key
 
-        value, = self._meta.get(key, default=(init,), txn=txn)
+        value, = self._meta.get(key, default=(init,))
         if n:
-            self._meta.put(value + n, key=key, txn=txn)
+            self._meta.put(value + n, key=key)
         return 0L + value
 
 # Hack: disable speedups while testing or reading docstrings.
