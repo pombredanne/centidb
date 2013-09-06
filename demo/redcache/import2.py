@@ -8,105 +8,133 @@ import sys
 from operator import itemgetter
 from pprint import pprint
 
-import cheeselib
-
-
-store = cheeselib.open_store()
+import models
 
 
 def db36(s):
+    """Convert a Redis base36 ID to an integer, stripping any prefix present
+    beforehand."""
     if s[:3] in 't1_t2_t3_t4_t5_':
         s = s[3:]
     return int(s, 36)
 
 
-allpaths = glob.glob('/home/dmw/out/*json*')
-allpaths.sort(key=lambda s: int(s.split('/')[-1].split('.')[0]))
+def get_path_list():
+    paths = []
+    for dirpath, dirnames, filenames in os.walk('/home/dmw/out'):
+        for filename in filenames:
+            if filename.endswith('.gz') or filename.endswith('.json'):
+                paths.append(os.path.join(dirpath, filename))
 
-unique_cmts = 0
-proc = 0
+    def sort_key(path):
+        filename = os.path.basename(path)
+        return -int(filename.split('.', 1)[0])
+    paths.sort(key=sort_key)
+    return paths
 
-done = 0
-txn = None
 
-for path in allpaths:
-    digit = int(os.path.basename(path).split('.')[0])
-    if store['digits'].get(digit) is not None:
-        continue
+def process_one(stats, dct):
+    stats['all_comments'] += 1
+    created = int(dct['created_utc'])
 
-    if not (done % 20):
-        if txn:
-            txn.commit()
-            print 'commit', 'unique', unique_cmts, 'processed', proc
-        txn = store.engine.begin(write=True)
-    done += 1
+    comment_id = db36(dct['id'])
+    subreddit_id = db36(dct['subreddit_id'])
+    link_id = db36(dct['link_id'])
 
-    print 'loading', path
-    if path.endswith('.gz'):
-        js = json.loads(gzip.open(path).read())
-    else:
-        js = json.loads(file(path).read())
+    comment = models.Comment.get(comment_id)
+    if not comment:
+        stats['comments'] += 1
+        user = models.User.get(dct['author'])
+        if not user:
+            stats['users'] += 1
+            user = models.User(username=dct['author'],
+                               first_seen=created,
+                               last_seen=created,
+                               comments=0)
+        user.comments += 1
+        user.last_seen = max(user.last_seen, created)
 
-    for dct in js['data']['children']:
-        proc += 1
-        dct = dct['data']
-        created = int(dct['created_utc'])
+        reddit = models.Reddit.get(subreddit_id)
+        if not reddit:
+            stats['reddits'] += 1
+            reddit = models.Reddit(name=dct['subreddit'],
+                                   id=subreddit_id,
+                                   first_seen=created,
+                                   last_seen=created,
+                                   links=0,
+                                   comments=0)
+        reddit.last_seen = created
+        reddit.comments += 1
 
-        comment = store['comments'].get(db36(dct['id']), txn=txn)
-        if not comment:
-            unique_cmts += 1
-            user = store['users'].get(dct['author'], txn=txn)
-            user = user or {
-                'username': dct['author'],
-                'first_seen': created,
-                'last_seen': created,
-                'comments': 0,
-            }
-            user['comments'] += 1
-            user['last_seen'] = max(user['last_seen'], created)
+        link = models.Link.get(link_id)
+        if not link:
+            stats['links'] += 1
+            link = models.Link(id=link_id,
+                               subreddit_id=subreddit_id,
+                               title=dct['link_title'],
+                               first_seen=created,
+                               last_seen=created,
+                               comments=0)
+            reddit.links += 1
 
-            reddit = store['reddits'].get(db36(dct['subreddit_id'])) or {
-                'name': dct['subreddit'],
-                'id': db36(dct['subreddit_id']),
-                'first_seen': created,
-                'last_seen': created,
-                'links': 0,
-                'comments': 0,
-            }
-            reddit['last_seen'] = created
-            reddit['comments'] += 1
+        link.last_seen = created
+        link.comments += 1
 
-            link = store['links'].get(db36(dct['link_id']), txn=txn)
-            if not link:
-                link = {
-                    'id': db36(dct['link_id']),
-                    'subreddit_id': db36(dct['subreddit_id']),
-                    'title': dct['link_title'],
-                    'first_seen': created,
-                    'last_seen': created,
-                    'comments': 0,
-                }
-                reddit['links'] += 1
+        reddit.save()
+        user.save()
+        link.save()
 
-            link['last_seen'] = created
-            link['comments'] += 1
+    comment_id = db36(dct['id'])
+    comment = models.Comment(id=comment_id,
+                             subreddit_id=subreddit_id,
+                             author=dct['author'],
+                             body=dct['body'],
+                             created=created,
+                             parent_id=db36(dct['parent_id']),
+                             ups=dct['ups'],
+                             downs=dct['downs'])
+    comment.save()
 
-            store['reddits'].put(reddit, txn=txn)
-            store['users'].put(user, txn=txn)
-            store['links'].put(link, txn=txn)
 
-        comment = {
-            'id': db36(dct['id']),
-            'subreddit_id': db36(dct['subreddit_id']),
-            'author': dct['author'],
-            'body': dct['body'],
-            'created': created,
-            'parent_id': db36(dct['parent_id']),
-            'ups': dct['ups'],
-            'downs': dct['downs']
-        }
-        store['comments'].put(comment, txn=txn)
+def process_set(stats, all_paths):
+    while all_paths:
+        path = all_paths.pop()
+        digit = int(os.path.basename(path).split('.')[0])
+        if models.Digits.get(digit) is not None:
+            continue
 
-    store['digits'].put(digit, key=digit, txn=txn)
+        print 'Loading', path
+        if path.endswith('.gz'):
+            js = json.loads(gzip.open(path).read())
+        else:
+            js = json.loads(file(path).read())
 
-txn.commit()
+        for thing in js['data']['children']:
+            process_one(stats, thing['data'])
+
+        models.Digits(digits=digit).save()
+        stats['files'] += 1
+        if not (stats['files'] % 20):
+            break
+
+    statinfo = ', '.join('%s=%s' % k for k in sorted(stats.items()))
+    print('Commit ' + statinfo)
+
+
+def main():
+    store = models.init_store()
+    all_paths = get_path_list()
+
+    stats = {
+        'all_comments': 0,
+        'comments': 0,
+        'links': 0,
+        'reddits': 0,
+        'users': 0,
+        'files': 0
+    }
+    while all_paths:
+        store.in_txn(lambda: process_set(stats, all_paths), write=True)
+
+if __name__ == '__main__':
+    main()

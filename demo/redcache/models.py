@@ -3,13 +3,16 @@ import acid.meta
 
 
 def init_store():
-    Model.bind_store(acid.open('LmdbEngine',
-        path='/media/scratch/i3.lmdb',
+    global store
+    store = acid.open('LmdbEngine',
+        path='/media/scratch/t3.lmdb',
          map_size=1048576*1024*10,
          map_async=True,
          sync=False,
          metasync=False,
-         writemap=True))
+         writemap=True)
+    Model.bind_store(store)
+    return store
 
 
 class Model(acid.meta.Model):
@@ -17,10 +20,17 @@ class Model(acid.meta.Model):
     """
 
 
+class Digits(Model):
+    """Tracks import state."""
+    digits = acid.meta.Integer()
+
+    @acid.meta.key
+    def key(self):
+        return self.digits
+
+
 class User(Model):
     """A user account."""
-    META_COLLECTION_NAME = 'users'
-
     username = acid.meta.String()
     first_seen = acid.meta.Time()
     last_seen = acid.meta.Time()
@@ -33,8 +43,6 @@ class User(Model):
 
 class Reddit(Model):
     """A subreddit."""
-    META_COLLECTION_NAME = 'reddits'
-
     id = acid.meta.Integer()
     name = acid.meta.String()
     first_seen = acid.meta.Time()
@@ -61,8 +69,6 @@ class Reddit(Model):
 
 class Link(Model):
     """A link posted to a subreddit."""
-    META_COLLECTION_NAME = 'links'
-
     id = acid.meta.Integer()
     subreddit_id = acid.meta.Integer()
     title = acid.meta.String()
@@ -81,8 +87,6 @@ class Link(Model):
 
 class Comment(Model):
     """A comment posted to a link on a subreddit by a user."""
-    META_COLLECTION_NAME = 'comments'
-
     id = acid.meta.Integer()
     subreddit_id = acid.meta.Integer()
     link_id = acid.meta.Integer()
@@ -92,6 +96,10 @@ class Comment(Model):
     parent_id = acid.meta.Integer()
     ups = acid.meta.Integer()
     downs = acid.meta.Integer()
+
+    @acid.meta.key
+    def key(self):
+        return self.id
 
     @acid.meta.index
     def by_author_created(self):
