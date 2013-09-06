@@ -98,7 +98,13 @@ class Comment(Model):
     downs = acid.meta.Integer()
 
     def get_ancestry(self):
-        """Return the comment's ancestry."""
+        """Return the comment's ancestry as a list of comment IDs, from least
+        direct to most direct. Returns [1, 2] given a tree like:
+
+            Comment(id=1, parent_id=None)
+            Comment(id=2, parent_id=1)
+            Comment(id=3, parent_id=2)
+        """
         parents = []
         comment = self
         while comment.parent_id:
@@ -114,6 +120,22 @@ class Comment(Model):
 
     @acid.meta.key
     def key(self):
+        """Return the comment's key, which is a tuple like:
+
+            (link_id, oldestParent, olderParent, ..., parent, comment_id)
+
+        This causes the collection to be clustered by link_id, then recursively
+        on each level of the comment tree. Prefix queries on the link_id, or
+        any comment key, will return the comment itself and all its children.
+
+        ::
+
+            # Fetch all comments for link_id 123.
+            Comment.iter(prefix=(123,))
+
+            # Fetch comment and all its children.
+            Comment.iter(prefix=(123, 412, 1521, 12))
+        """
         ancestry = self.get_ancestry()
         assert ancestry is not None
         ancestry.insert(0, self.subreddit_id)
