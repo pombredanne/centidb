@@ -97,6 +97,10 @@ class Comment(Model):
     ups = acid.meta.Integer()
     downs = acid.meta.Integer()
 
+    def __repr__(self):
+        return '<Comment k=%s id=%d parent=%s>' %\
+                (self.key, self.id, self.parent_id)
+
     def get_ancestry(self):
         """Return the comment's ancestry as a list of comment IDs, from least
         direct to most direct. Returns [1, 2] given a tree like:
@@ -104,19 +108,22 @@ class Comment(Model):
             Comment(id=1, parent_id=None)
             Comment(id=2, parent_id=1)
             Comment(id=3, parent_id=2)
+
+        Returns ``None`` if the complete ancestry can't be reconstructed (i.e.
+        missing data).
         """
-        parents = []
-        comment = self
-        while comment.parent_id:
-            parents.append(comment.parent_id)
-            comment = self.by_id.get(comment.parent_id)
-            if comment:
-                assert comment.id != comment.parent_id
-                assert comment.parent_id != parents[-1]
-            if not comment:
+        ids = []
+        node = self
+        while node.parent_id:
+            ids.append(node.parent_id)
+            node = Comment.by_id.get(ids[-1])
+            if node:
+                assert node.id == ids[-1], 'got %s want %s' % (node.id, ids[-1])
+            else:
                 return
-        parents.reverse()
-        return parents
+            assert node.parent_id not in ids
+        ids.reverse()
+        return ids
 
     @acid.meta.key
     def key(self):

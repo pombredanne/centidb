@@ -98,9 +98,8 @@ def process_one(stats, dct):
                              ups=dct['ups'],
                              downs=dct['downs'])
     if comment.get_ancestry() is None:
-        print 'lool'
+        stats['orphans'] += 1
         stats['comments'] -= 1
-        print dct['parent_id']
     else:
         comment.save()
 
@@ -140,7 +139,8 @@ def main():
         'links': 0,
         'reddits': 0,
         'users': 0,
-        'files': 0
+        'files': 0,
+        'orphans': 0,
     }
     while all_paths:
         store.in_txn(lambda: process_set(stats, all_paths), write=True)
