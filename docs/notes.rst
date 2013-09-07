@@ -153,49 +153,5 @@ removed from the lifecycle of a typical request. For example:
 Futures
 +++++++
 
-Probably:
-
-1. Support inverted index keys nicely
-2. Avoid key decoding when only used for comparison
-3. Unique index constraints, or validation callbacks
-4. Index and collection type signatures (prevent writes using broken
-   configuration)
-5. putbatch()
-6. More future proof metadata format.
-7. Convert Index/Collection guts to visitor-style design, replace find/iter
-   methods with free functions implemented once.
-8. **join()** function: accept multiple indices producing keys in the same
-   order, return an iterator producing the union or intersection of those
-   indices.
-9. Index function versioning, either using bytecode hash or explicit strings.
-10. Refuse to operate unless all index functions provided.
-
-Maybe:
-
-1. "Pure keys" mode: when a collection's key is based entirely on the record
-   value (e.g. log line timestamp) or a common prefix, batches need only store
-   the highest and lowest member keys in their key, since member record keys
-   can be perfectly reconstructed. Lookup would expand varint offset array then
-   bisect+decode until desired member is found.
-2. Covered indices: store/compress large values within index records.
-3. Make indices work as :py:class:`Collection` observers, instead of hard-wired
-4. Convert :py:class:`Index` to reuse :py:class:`Collection`
-5. User-defined key blob types. Allocate a small range from the key encoding to
-   logic that looks up a name for the byte from metadata, then looks up that
-   name in a list of factories registered with the store.
-6. C++ library
-
-Probably not:
-
-1. Support "read-only" :py:class:`Index` object
-2. Minimalist validating+indexing network server module
-3. `Engine` or :py:class:`Collection` that implements caching on top of another
-4. `Engine` that distributes keyspace using configurable scheme
-5. :py:class:`Index` and :py:class:`Query` classes that integrate with richer
-   APIs, e.g. App Engine
-6. MVCC 'middleware' for non-transactional stores
-7. :py:class:`Index` and :py:class:`Collection` variants that store the index
-   in a single key. Would permit use with non-ordered stores, e.g. filesystem
-   dir with SHA1(key)
-8. Be generic enough to allow indices and constraints on purely in-memory
-   collections, without encoding overhead.
+Planned changes are tracked using `Github's issues list
+<https://github.com/dw/acid/issues?state=open>`_
