@@ -30,7 +30,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef HAVE_MEMSINK
 #include "memsink.h"
+#endif
 
 
 #define DEBUG(s, ...) fprintf(stderr, \
@@ -92,8 +94,10 @@ typedef struct {
     enum KeyFlags flags;
     // If KEY_SHARED, strong reference to source object.
     PyObject *source;
+#ifdef HAVE_MEMSINK
     // Linked list of consumers monitoring source.
     struct ms_node sink_node;
+#endif
     // In all cases, points to data.
     uint8_t *p;
 } Key;

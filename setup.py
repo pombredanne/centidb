@@ -26,6 +26,10 @@ import platform
 from setuptools import Extension
 from setuptools import setup
 
+try:
+    import memsink
+except ImportError:
+    memsink = None
 
 if hasattr(platform, 'python_implementation'):
     use_cpython = platform.python_implementation() == 'CPython'
@@ -33,6 +37,10 @@ else:
     use_cpython = True
 
 extra_compile_args = ['-std=c99']
+if memsink:
+    extra_compile_args += ['-DHAVE_MEMSINK',
+                           '-I' + os.path.dirname(memsink.__file__)]
+
 ext_modules = []
 if use_cpython:
     ext_modules = [

@@ -44,6 +44,7 @@ make_private_key(uint8_t *p, Py_ssize_t size)
     return self;
 }
 
+#ifdef HAVE_MEMSINK
 /**
  * Construct a KEY_SHARED Key from ...
  */
@@ -65,6 +66,7 @@ make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
     }
     return self;
 }
+#endif
 
 /**
  * Struct mem_sink invalidate() callback. Convert a KEY_PRIVATE instance into a
@@ -131,8 +133,10 @@ key_dealloc(Key *self)
 {
     switch(self->flags) {
     case KEY_SHARED:
+#ifdef HAVE_MEMSINK
         ms_cancel(self->source, (PyObject *)self);
         Py_DECREF(self->source);
+#endif
         break;
     case KEY_COPIED:
         free(self->p);
@@ -230,6 +234,7 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     raw += prefix_len;
     raw_len -= prefix_len;
 
+#ifdef HAVE_MEMSINK
     Key *out;
     if(source && ms_is_source(source)) {
         out = make_shared_key(source, (void *) raw, raw_len);
@@ -237,6 +242,9 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         out = make_private_key((void *) raw, raw_len);
     }
     return (PyObject *)out;
+#else
+    return (PyObject *)make_private_key((void *) raw, raw_len);
+#endif
 }
 
 /**
@@ -514,10 +522,13 @@ init_key_type(void)
         return NULL;
     }
 
+#ifdef HAVE_MEMSINK
+    MemSink_IMPORT;
     if(ms_init_sink(&KeyType, offsetof(Key, sink_node),
                     invalidate_shared_key)) {
         return NULL;
     }
+#endif
 
     return &KeyType;
 }
