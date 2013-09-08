@@ -342,10 +342,6 @@ _ms_init_type(PyTypeObject *type, PyObject *attr, size_t size)
     void *ptr;
     PyObject *capsule;
 
-    if(_ms_init()) {
-        return NULL;
-    }
-
     if(! ((ptr = malloc(size)))) {
         return NULL;
     }
@@ -373,6 +369,9 @@ ms_init_sink(PyTypeObject *type, Py_ssize_t node_offset,
              int (*invalidate)(PyObject *, PyObject *))
 {
     struct ms_sink *desc;
+    if(_ms_init()) {
+        return -1;
+    }
     if(! ((desc = _ms_init_type(type, _ms_sink_attr, sizeof *desc)))) {
         return -1;
     }
@@ -391,6 +390,9 @@ static UNUSED int
 ms_init_source(PyTypeObject *type, Py_ssize_t head_offset)
 {
     struct ms_source *desc;
+    if(_ms_init()) {
+        return -1;
+    }
     if(! ((desc = _ms_init_type(type, _ms_src_attr, sizeof *desc)))) {
         return -1;
     }
