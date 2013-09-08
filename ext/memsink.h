@@ -15,9 +15,9 @@
  */
 
 /**
- * Generic lazy-copying shared memory protocol for Python. This is crazy code,
- * a better solution is needed. This is headers-only so that only a single file
- * needs copied into a project to support the protocol.
+ * Generic copy-on-invalidate memory protocol for Python. This is code is
+ * insane, a better solution is needed. This is headers-only so only a single
+ * file needs copied into a project to support the protocol.
  *
  * See https://github.com/dw/acid/issues/23
  *
@@ -55,6 +55,7 @@
 
 #include <stdlib.h>
 
+// Silence unused warnings on gcc if possible.
 #ifdef __GNUC__
 #   define UNUSED __attribute__((unused))
 #else
@@ -76,11 +77,11 @@ static PyObject *_ms_sink_attr UNUSED;
  * offsetof(ThatStruct, this_field) must be passed to ms_init_sink().
  */
 struct ms_node {
-    // Borrowed reference to previous sink in list, or NULL to indicate
-    // head of list (in which case borrowed reference is stored directly in
-    // source object).
+    /** Borrowed reference to previous sink in list, or NULL to indicate
+     * head of list (in which case borrowed reference is stored directly in
+     * source object). */
     PyObject *prev;
-    // Borrowed reference to next sink in the list.
+    /** Borrowed reference to next sink in the list. */
     PyObject *next;
 };
 
@@ -142,16 +143,16 @@ _ms_get_desc(PyObject *obj, PyObject *attr, int magic)
     PyObject *capsule;
     void *desc;
 
-    if(! ((capsule == PyDict_GetItem(obj->ob_type->tp_dict, attr)))) {
-        return PyErr_Format(PyExc_TypeError, "Type lacks '%s' attribute.",
-                            PyString_AS_STRING(attr));
+    if(! ((capsule = PyDict_GetItem(obj->ob_type->tp_dict, attr)))) {
+        return PyErr_Format(PyExc_TypeError, "Type %s lacks '%s' attribute.",
+                            obj->ob_type->tp_name, PyString_AS_STRING(attr));
     }
 
     desc = PyCapsule_GetPointer(capsule, NULL);
     Py_DECREF(capsule);
     if(desc && (*(int *)desc) != magic) {
         return PyErr_Format(PyExc_TypeError,
-            "Type %s's '%s' magic is incorrect, got %08x, wanted %08x. "
+            "Type %s '%s' magic is incorrect, got %08x, wanted %08x. "
             "Probable memsink.h version mismatch.",
             obj->ob_type->tp_name, PyString_AS_STRING(attr),
             *(int *)desc, magic);
@@ -221,24 +222,44 @@ ms_notify(PyObject *src, PyObject **list_head)
 }
 
 /**
- * Default implementation of struct mem_source::listen().
+ * Fetch the struct ms_node from a sink, or return NULL and set an exception on
+ * error.
+ */
+static UNUSED struct ms_node *
+_ms_sink_node(PyObject *sink)
+{
+    struct ms_sink *desc = _MS_SINK_DESC(sink);
+    struct ms_node *node = NULL;
+    if(desc) {
+        node = _MS_FIELD_AT(sink, desc->node_offset);
+    }
+    return node;
+}
+
+/**
+ * Default implementation of struct mem_source::listen(). Push `sink` on the
+ * front of the list, updating the previous head if one existed.
  */
 static UNUSED int
 _ms_listen_impl(PyObject *src, PyObject *sink)
 {
     struct ms_source *msrc;
-    struct ms_sink *msink;
     struct ms_node *node;
     PyObject **head;
 
-    msrc = _MS_SRC_DESC(src);
-    msink = _MS_SINK_DESC(sink);
-    if(! (msrc && msink)) {
+    if(! (((msrc = _MS_SRC_DESC(src))) &&
+          ((node = _ms_sink_node(sink))))) {
         return -1;
     }
 
     head = _MS_FIELD_AT(src, msrc->head_offset);
-    node = _MS_FIELD_AT(sink, msink->node_offset);
+    if(*head) {
+        struct ms_node *headnode = _ms_sink_node(*head);
+        if(! headnode) {
+            return -1;
+        }
+        headnode->prev = sink;
+    }
     node->next = *head;
     node->prev = NULL;
     *head = sink;
@@ -251,56 +272,50 @@ _ms_listen_impl(PyObject *src, PyObject *sink)
 static UNUSED int
 _ms_cancel_impl(PyObject *src, PyObject *sink)
 {
-    struct ms_source *srcdesc;
-    struct ms_sink *sinkdesc, *prevdesc, *nextdesc;
-    struct ms_node *sinknode, *prevnode, *nextnode;
     PyObject **head;
+    struct ms_source *srcdesc;
+    struct ms_node *sinknode;
+    struct ms_node *prevnode = NULL;
+    struct ms_node *nextnode = NULL;
 
-    srcdesc = _MS_SRC_DESC(src);
-    sinkdesc = _MS_SINK_DESC(sink);
-    if(! (srcdesc && sinkdesc)) {
+    if(! ((srcdesc = _MS_SRC_DESC(src)))) {
         return -1;
     }
-
     head = _MS_FIELD_AT(src, srcdesc->head_offset);
-    sinknode = _MS_FIELD_AT(sink, sinkdesc->node_offset);
-    if(sinknode->next) {
-        if(! ((nextdesc = _MS_SINK_DESC(sinknode->next)))) {
-            return -1;
-        }
-        nextnode = _MS_FIELD_AT(node->next, nextdesc->node_offset);
+
+    if(! ((sinknode = _ms_sink_node(sink)))) {
+        return -1;
     }
-
-    if(node->prev) {
-        struct ms_sink *pdesc, *ndesc;
-        struct ms_node *pnode, *nnode;
-
-        prevdesc = _MS_SINK_DESC(node->prev);
-        if(node->next) {
-            ndesc = _MS_SINK_DESC(node->next);
-        }
-        if(! (pdesc && (ndesc || !node->next))) {
-            return -1;
-        }
-        pnode = _MS_FIELD_AT(node->prev, pdesc->node_offset);
-        pnode->next->
-        pnode->next = node->next;
-
-        if(node->next) {
-            nnode = _MS_FIELD_AT(node->next, ndesc->node_offset);
-        }
-        node-
+    if(sinknode->prev && !((prevnode = _ms_sink_node(sinknode->prev)))) {
+        return -1;
+    }
+    if(sinknode->next && !((nextnode = _ms_sink_node(sinknode->next)))) {
+        return -1;
+    }
+    if(nextnode) {
+        nextnode->prev = sinknode->prev;
+    }
+    if(prevnode) {
+        prevnode->next = sinknode->next;
     } else {
-        if(*head != node) {
+        if(*head != sink) {
             PyErr_SetString(PyExc_SystemError, "memsink.h list is corrupt.");
             return -1;
         }
-        *head = node->next;
+        *head = sinknode->next;
     }
 
-    node->prev = NULL;
-    node->next = NULL;
+    sinknode->prev = NULL;
+    sinknode->next = NULL;
     return 0;
+}
+
+/**
+ * Capsule destructor function.
+ */
+static UNUSED void _ms_capsule_destroy(PyObject *capsule)
+{
+    free(PyCapsule_GetPointer(capsule, NULL));
 }
 
 /**
@@ -320,12 +335,14 @@ _ms_init_type(PyTypeObject *type, PyObject *attr, size_t size)
         return NULL;
     }
 
-    if(! ((capsule = PyCapsule_New(ptr, NULL, free)))) {
+    if(! ((capsule = PyCapsule_New(ptr, NULL, _ms_capsule_destroy)))) {
         free(ptr);
         return NULL;
     }
 
-    int ret = PyDict_SetItem(type->tp_dict, attr, capsule);
+    if(PyDict_SetItem(type->tp_dict, attr, capsule)) {
+        ptr = NULL;
+    }
     Py_DECREF(capsule);
     return ptr;
 }
@@ -362,10 +379,10 @@ ms_init_source(PyTypeObject *type, Py_ssize_t head_offset)
     if(! ((desc = _ms_init_type(type, _ms_src_attr, sizeof *desc)))) {
         return -1;
     }
-    ms->magic = _MS_SRC_MAGIC;
-    ms->head_offset = head_offset;
-    ms->listen = _ms_listen_impl;
-    ms->cancel = _ms_cancel_impl;
+    desc->magic = _MS_SRC_MAGIC;
+    desc->head_offset = head_offset;
+    desc->listen = _ms_listen_impl;
+    desc->cancel = _ms_cancel_impl;
     return 0;
 }
 
