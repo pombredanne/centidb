@@ -166,6 +166,21 @@ _ms_get_desc(PyObject *obj, PyObject *attr, int magic)
 #define _MS_FIELD_AT(ptr, offset) ((void *) ((char *)(ptr)) + (offset))
 
 /**
+ * Return 1 if `source` supports the memsink protocol.
+ */
+static UNUSED int
+ms_is_source(PyObject *src)
+{
+    struct ms_source *desc = _MS_SRC_DESC(src);
+    int ret = 1;
+    if(! desc) {
+        PyErr_Clear();
+        ret = 0;
+    }
+    return ret;
+}
+
+/**
  * Tell `sink` when memory exported by `src` becomes invalid. `src` must be of
  * a type for which ms_init_source() has been invoked, `sink` must be of a type
  * for which ms_init_sink() has been invoked. Return 0 on success or -1 on
