@@ -66,13 +66,12 @@ make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
     }
     return self;
 }
-#endif
 
 /**
  * Struct mem_sink invalidate() callback. Convert a KEY_PRIVATE instance into a
  * KEY_COPIED instance.
  */
-int invalidate_shared_key(PyObject *source, PyObject *sink)
+static int invalidate_shared_key(PyObject *source, PyObject *sink)
 {
     Key *self = (Key *)sink;
     uint8_t *p = malloc(Py_SIZE(self));
@@ -87,6 +86,7 @@ int invalidate_shared_key(PyObject *source, PyObject *sink)
     self->source = NULL;
     return 0;
 }
+#endif
 
 /**
  * Construct a Key from a sequence.
