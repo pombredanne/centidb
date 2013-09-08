@@ -15,22 +15,67 @@
  */
 
 /**
- * Generic lazy-copying shared memory protocol for Python
+ * Generic lazy-copying shared memory protocol for Python. This is crazy code,
+ * a better solution is needed. This is headers-only so that only a single file
+ * needs copied into a project to support the protocol.
+ *
  * See https://github.com/dw/acid/issues/23
+ *
+ * Theory of operation:
+ *      1. SourceType represents some read-only chunk of memory, but that
+ *         memory may go away at any time.
+ *      2. SinkType represents some immutable view of that memory, so it
+ *         has no real need to copy or modify it.
+ *      3. SourceType and SinkType need to talk to each other to share this
+ *         memory safely.
+ *
+ *      4. Programmer inserts a 'PyObject *sink_head' field anywhere in
+ *         SourceType's PyObject struct.
+ *      5. After PyType_Ready(&SourceType), programmer calls
+ *         ms_init_source(&SourceType, offsetof(Source, sink_head)).
+ *      6. In SourceType's implementation, programmer inserts ms_notify(self)
+ *         anywhere its memory is about to become invalid.
+ *
+ *      7. Programmer inserts a 'struct ms_node sink_node' field anywhere in
+ *         SinkType's PyObject struct, and a "PyObject *source" field to track
+ *         the active SourceType, if any.
+ *      8. Programmer writes a 'my_invalidate()' function to handle
+ *         when SinkType is told SourceType's memory is about to go away.
+ *         Probably it wants to copy the memory, and Py_CLEAR(self->source).
+ *      9. After PyType_Ready(&SinkType), programmer calls
+ *         ms_init_sink(&SinkType, offsetof(Sink, sink_node), my_invalidate).
+ *      10. When SinkType is handed a piece of memory belonging to SourceType,
+ *          programmer inserts "ms_listen(self->source, self)".
+ *      11. In SinkType's PyTypeObject.tp_dealloc funcion, programmer inserts
+ *          "ms_cancel(self->source, self)".
  */
 
 #ifndef MEMSINK_H
 #define MEMSINK_H
 
-#define UNUSED __attribute__((unused))
-#define MEMSINK_MAGIC   0xCAFE0001
-#define MEMSOURCE_MAGIC 0xBABE0001
+#include <stdlib.h>
 
-static int memsink_initted UNUSED = 0;
-static PyObject *memsource_attr_str UNUSED;
-static PyObject *memsink_attr_str UNUSED;
+#ifdef __GNUC__
+#   define UNUSED __attribute__((unused))
+#else
+#   define UNUSED
+#endif
 
-struct mem_sink_list {
+#define _MS_SINK_MAGIC 0xCAF0
+#define _MS_SRC_MAGIC  0xCAF1
+
+/** Has _ms_init() run yet? */
+static int _ms_initted UNUSED = 0;
+/** Interned PyString "__memsource__" set by _ms_init(). */
+static PyObject *_ms_src_attr UNUSED;
+/** Interned PyString "__memsink__" set by _ms_init(). */
+static PyObject *_ms_sink_attr UNUSED;
+
+/**
+ * List node that must appear somewhere within a sink's PyObject structure.
+ * offsetof(ThatStruct, this_field) must be passed to ms_init_sink().
+ */
+struct ms_node {
     // Borrowed reference to previous sink in list, or NULL to indicate
     // head of list (in which case borrowed reference is stored directly in
     // source object).
@@ -39,146 +84,289 @@ struct mem_sink_list {
     PyObject *next;
 };
 
-struct mem_source {
-    // Changes when ABI changes.
-    unsigned long magic;
-    // Notify `sink` when `source` buffers expire.
-    int (*notify)(PyObject *source, PyObject *sink);
-    // Cancel notification of `sink` when `source` buffers expire.
-    int (*cancel)(PyObject *source, PyObject *sink);
+/**
+ * Internal source descriptor, heap-allocated and stored in a PyCapsule as the
+ * source type's __memsource__ attribute.
+ */
+struct ms_source {
+    /** Changes when ABI changes. */
+    int magic;
+    /** Offset of "PyObject *" list head in type's PyObject struct. */
+    Py_ssize_t head_offset;
+    /** Notify `sink` when `src` memory expires. */
+    int (*listen)(PyObject *src, PyObject *sink);
+    /** Cancel notification of `sink` when `src` memory expires. */
+    int (*cancel)(PyObject *src, PyObject *sink);
 };
 
-struct mem_sink {
-    // Changes when ABI changes.
-    unsigned long magic;
-    // PyObject offset where SinkList is stored.
-    Py_ssize_t list_offset;
-    // Invoked when source buffer is about to become invalid.
-    int (*invalidate)(PyObject *source, PyObject *sink);
+/**
+ * Internal sink descriptor, heap-allocated and stored in a PyCapsule as the
+ * sink type's __memsink__ attribute.
+ */
+struct ms_sink {
+    /** Changes when ABI changes. */
+    int magic;
+    /** Offset of "struct ms_node" stored in type's PyObject struct. */
+    Py_ssize_t node_offset;
+    /** Notification receiver invoked when src memory expires. */
+    int (*invalidate)(PyObject *src, PyObject *sink);
 };
 
-static UNUSED int memsink_init(void)
+/**
+ * Initialize the interned "__memsource__" and "__memsink__" string constants.
+ * Return 0 on sucess or -1 on error.
+ */
+static UNUSED int
+_ms_init(void)
 {
-    if(! memsink_initted) {
-        memsource_attr_str = PyString_InternFromString("__memsource__");
-        memsink_attr_str = PyString_InternFromString("__memsink__");
-        if(! (memsource_attr_str && memsink_attr_str)) {
+    if(! _ms_initted) {
+        _ms_src_attr = PyString_InternFromString("__memsource__");
+        _ms_sink_attr = PyString_InternFromString("__memsink__");
+        if(! (_ms_src_attr && _ms_sink_attr)) {
             return -1;
         }
+        _ms_initted = 1;
     }
-    memsink_initted = 1;
     return 0;
 }
 
-
-static UNUSED void *_memsink_get_desc(PyObject *obj, PyObject *attr,
-                                      long magic)
+/**
+ * Fetch a "__memsink__" or "__memsource__" descriptor from `obj`'s type.
+ * `attr` is the interned string attribute name, `magic` is the expected struct
+ * magic. Return a pointer on success, or return NULL and set an exception on
+ * error.
+ */
+static UNUSED void *
+_ms_get_desc(PyObject *obj, PyObject *attr, int magic)
 {
-    PyObject *capsule = PyDict_GetItem(obj->ob_type->tp_dict, attr);
-    if(! capsule) {
-        return NULL;
+    PyObject *capsule;
+    void *desc;
+
+    if(! ((capsule == PyDict_GetItem(obj->ob_type->tp_dict, attr)))) {
+        return PyErr_Format(PyExc_TypeError, "Type lacks '%s' attribute.",
+                            PyString_AS_STRING(attr));
     }
 
-    void *desc = PyCapsule_GetPointer(capsule, NULL);
+    desc = PyCapsule_GetPointer(capsule, NULL);
     Py_DECREF(capsule);
-    if(desc && (*(long *)desc) != magic) {
+    if(desc && (*(int *)desc) != magic) {
+        return PyErr_Format(PyExc_TypeError,
+            "Type %s's '%s' magic is incorrect, got %08x, wanted %08x. "
+            "Probable memsink.h version mismatch.",
+            obj->ob_type->tp_name, PyString_AS_STRING(attr),
+            *(int *)desc, magic);
         desc = NULL;
     }
     return desc;
 }
 
+#define _MS_SINK_DESC(sink) _ms_get_desc(sink, _ms_sink_attr, _MS_SINK_MAGIC)
+#define _MS_SRC_DESC(src) _ms_get_desc(src, _ms_src_attr, _MS_SRC_MAGIC)
+#define _MS_FIELD_AT(ptr, offset) ((void *) ((char *)(ptr)) + (offset))
 
-static UNUSED int memsource_notify(PyObject *source, PyObject *sink)
+/**
+ * Tell `sink` when memory exported by `src` becomes invalid. `src` must be of
+ * a type for which ms_init_source() has been invoked, `sink` must be of a type
+ * for which ms_init_sink() has been invoked. Return 0 on success or -1 on
+ * error.
+ */
+static UNUSED int
+ms_listen(PyObject *src, PyObject *sink)
 {
-    struct mem_source *ms = _memsink_get_desc(
-        source, memsource_attr_str, MEMSOURCE_MAGIC);
-    if(ms) {
-        return ms->notify(source, sink);
+    struct ms_source *desc;
+    if((desc = _MS_SRC_DESC(src))) {
+        return desc->listen(src, sink);
     }
     return -1;
-}
-
-
-static UNUSED int memsource_cancel(PyObject *source, PyObject *sink)
-{
-    struct mem_source *ms = _memsink_get_desc(
-        source, memsource_attr_str, MEMSOURCE_MAGIC);
-    if(ms) {
-        return ms->cancel(source, sink);
-    }
-    return -1;
-}
-
-
-static UNUSED struct mem_sink_list *memsink_get_list(PyObject *sink)
-{
-    struct mem_sink *ms = _memsink_get_desc(
-        sink, memsink_attr_str, MEMSINK_MAGIC);
-    if(ms) {
-        return (struct mem_sink_list *) (((char *) sink) + ms->list_offset);
-    }
-    return NULL;
 }
 
 /**
- * Decorate `type` to include the __memsink__ attribute. `list_offset` is the
- * offset into `type` where `struct mem_sink_list` occurs, and `invalidate` is
- * the callback function that disassociates instances from any shared memory.
+ * Cancel notification of `sink` when memory exported by `src` becomes invalid.
+ * `src` must be of a type for which ms_init_source() has been invoked, `sink`
+ * must be of a type for which ms_init_sink() has been invoked. Return 0 on
+ * success or -1 on error.
  */
-static UNUSED int memsink_type_init(PyTypeObject *type, Py_ssize_t list_offset,
-                                    int (*invalidate)(PyObject *, PyObject *))
+static UNUSED int
+ms_cancel(PyObject *src, PyObject *sink)
 {
-    static struct mem_sink mem_sink;
-    mem_sink.magic = MEMSINK_MAGIC;
-    mem_sink.list_offset = list_offset;
-    mem_sink.invalidate = invalidate;
+    struct ms_source *desc;
+    if((desc = _MS_SRC_DESC(src))) {
+        return desc->cancel(src, sink);
+    }
+    return -1;
+}
 
-    if(memsink_init()) {
+/**
+ * Notify subscribers to `src` that its memory is becoming invalid, and cancel
+ * their subscription. Return 0 on success or return -1 and set an exception on
+ * error.
+ */
+static UNUSED int
+ms_notify(PyObject *src, PyObject **list_head)
+{
+    PyObject *cur = *list_head;
+    while(cur) {
+        struct ms_sink *mcur;
+        struct ms_node *mnode;
+        if(! ((mcur = _MS_SINK_DESC(cur)))) {
+            return -1;
+        }
+        mnode = _MS_FIELD_AT(cur, mcur->node_offset);
+        mcur->invalidate(src, cur); // TODO how to handle -1?
+        cur = mnode->next;
+        mnode->prev = NULL;
+        mnode->next = NULL;
+    }
+    return 0;
+}
+
+/**
+ * Default implementation of struct mem_source::listen().
+ */
+static UNUSED int
+_ms_listen_impl(PyObject *src, PyObject *sink)
+{
+    struct ms_source *msrc;
+    struct ms_sink *msink;
+    struct ms_node *node;
+    PyObject **head;
+
+    msrc = _MS_SRC_DESC(src);
+    msink = _MS_SINK_DESC(sink);
+    if(! (msrc && msink)) {
         return -1;
     }
 
-    PyObject *capsule = PyCapsule_New(&mem_sink, NULL, NULL);
-    if(! capsule) {
+    head = _MS_FIELD_AT(src, msrc->head_offset);
+    node = _MS_FIELD_AT(sink, msink->node_offset);
+    node->next = *head;
+    node->prev = NULL;
+    *head = sink;
+    return 0;
+}
+
+/**
+ * Default implementation of struct mem_source::cancel().
+ */
+static UNUSED int
+_ms_cancel_impl(PyObject *src, PyObject *sink)
+{
+    struct ms_source *srcdesc;
+    struct ms_sink *sinkdesc, *prevdesc, *nextdesc;
+    struct ms_node *sinknode, *prevnode, *nextnode;
+    PyObject **head;
+
+    srcdesc = _MS_SRC_DESC(src);
+    sinkdesc = _MS_SINK_DESC(sink);
+    if(! (srcdesc && sinkdesc)) {
         return -1;
     }
 
-    int ret = PyDict_SetItem(type->tp_dict, memsink_attr_str, capsule);
+    head = _MS_FIELD_AT(src, srcdesc->head_offset);
+    sinknode = _MS_FIELD_AT(sink, sinkdesc->node_offset);
+    if(sinknode->next) {
+        if(! ((nextdesc = _MS_SINK_DESC(sinknode->next)))) {
+            return -1;
+        }
+        nextnode = _MS_FIELD_AT(node->next, nextdesc->node_offset);
+    }
+
+    if(node->prev) {
+        struct ms_sink *pdesc, *ndesc;
+        struct ms_node *pnode, *nnode;
+
+        prevdesc = _MS_SINK_DESC(node->prev);
+        if(node->next) {
+            ndesc = _MS_SINK_DESC(node->next);
+        }
+        if(! (pdesc && (ndesc || !node->next))) {
+            return -1;
+        }
+        pnode = _MS_FIELD_AT(node->prev, pdesc->node_offset);
+        pnode->next->
+        pnode->next = node->next;
+
+        if(node->next) {
+            nnode = _MS_FIELD_AT(node->next, ndesc->node_offset);
+        }
+        node-
+    } else {
+        if(*head != node) {
+            PyErr_SetString(PyExc_SystemError, "memsink.h list is corrupt.");
+            return -1;
+        }
+        *head = node->next;
+    }
+
+    node->prev = NULL;
+    node->next = NULL;
+    return 0;
+}
+
+/**
+ * Code shared between ms_init_sink() and ms_init_source().
+ */
+static UNUSED void *
+_ms_init_type(PyTypeObject *type, PyObject *attr, size_t size)
+{
+    void *ptr;
+    PyObject *capsule;
+
+    if(_ms_init()) {
+        return NULL;
+    }
+
+    if(! ((ptr = malloc(size)))) {
+        return NULL;
+    }
+
+    if(! ((capsule = PyCapsule_New(ptr, NULL, free)))) {
+        free(ptr);
+        return NULL;
+    }
+
+    int ret = PyDict_SetItem(type->tp_dict, attr, capsule);
     Py_DECREF(capsule);
-    return ret;
+    return ptr;
 }
 
-
-static UNUSED int _memsource_notify_impl(PyObject *source, PyObject *sink)
+/**
+ * Decorate `type` to include the __memsink__ attribute. `node_offset` is the
+ * offset into `type` where `struct ms_node` occurs, and `invalidate` is
+ * the callback function that disassociates instances from any shared memory.
+ * Return 0 on success or -1 on failure.
+ */
+static UNUSED int
+ms_init_sink(PyTypeObject *type, Py_ssize_t node_offset,
+             int (*invalidate)(PyObject *, PyObject *))
 {
-    
-}
-
-// Cancel notification of `sink` when `source` buffers expire.
-static UNUSED int _memsource_cancel_impl(PyObject *source, PyObject *sink)
-{
-
-}
-
-
-static UNUSED int memsource_type_init(PyTypeObject *type)
-{
-    static struct mem_source ms;
-    ms.magic = MEMSOURCE_MAGIC;
-    ms.notify = _memsource_notify_impl;
-    ms.cancel = _memsource_cancel_impl;
-
-    if(memsink_init()) {
+    struct ms_sink *desc;
+    if(! ((desc = _ms_init_type(type, _ms_sink_attr, sizeof *desc)))) {
         return -1;
     }
+    desc->magic = _MS_SINK_MAGIC;
+    desc->node_offset = node_offset;
+    desc->invalidate = invalidate;
+    return 0;
+}
 
-    PyObject *capsule = PyCapsule_New(&ms, NULL, NULL);
-    if(! capsule) {
+/**
+ * Decorate `type` to include the "__memsource__" attribute. `head_offset` is
+ * the offset of the "PyObject *ms_head" in the type's PyObject struct. Return
+ * 0 on success or return -1 and set an exception on failure.
+ */
+static UNUSED int
+ms_init_source(PyTypeObject *type, Py_ssize_t head_offset)
+{
+    struct ms_source *desc;
+    if(! ((desc = _ms_init_type(type, _ms_src_attr, sizeof *desc)))) {
         return -1;
     }
-
-    int ret = PyDict_SetItem(type->tp_dict, memsource_attr_str, capsule);
-    Py_DECREF(capsule);
-    return ret;
+    ms->magic = _MS_SRC_MAGIC;
+    ms->head_offset = head_offset;
+    ms->listen = _ms_listen_impl;
+    ms->cancel = _ms_cancel_impl;
+    return 0;
 }
 
 #endif /* !MEMSINK_H */
