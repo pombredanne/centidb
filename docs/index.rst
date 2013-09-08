@@ -2,8 +2,6 @@
 acid
 ####
 
-.. image:: images/blotter.png
-
 .. warning::
 
     This is a prototype, focusing on useful APIs and physical data layout. Many
