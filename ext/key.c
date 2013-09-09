@@ -15,6 +15,7 @@
  */
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "acid.h"
@@ -26,7 +27,7 @@ static PyTypeObject KeyIterType;
 
 
 /**
- * Construct a new Key instance from `p[0..size]` and return it.
+ * Construct a KEY_PRIVATE Key from `p[0..size]` and return it.
  */
 static Key *
 make_private_key(uint8_t *p, Py_ssize_t size)
@@ -42,6 +43,50 @@ make_private_key(uint8_t *p, Py_ssize_t size)
     }
     return self;
 }
+
+#ifdef HAVE_MEMSINK
+/**
+ * Construct a KEY_SHARED Key from ...
+ */
+static Key *
+make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
+{
+    Key *self = PyObject_NewVar(Key, &KeyType, 0);
+    if(self) {
+        if(ms_listen(source, (PyObject *) self)) {
+            PyObject_Del(self);
+            return NULL;
+        }
+        self->hash = -1;
+        self->flags = KEY_SHARED;
+        self->p = p;
+        Py_SIZE(self) = size;
+        self->source = source;
+        Py_INCREF(source);
+    }
+    return self;
+}
+
+/**
+ * Struct mem_sink invalidate() callback. Convert a KEY_PRIVATE instance into a
+ * KEY_COPIED instance.
+ */
+static int invalidate_shared_key(PyObject *source, PyObject *sink)
+{
+    Key *self = (Key *)sink;
+    uint8_t *p = malloc(Py_SIZE(self));
+    if(! p) {
+        return -1;
+    }
+    memcpy(p, self->p, Py_SIZE(self));
+    self->p = p;
+    self->flags = KEY_COPIED;
+    // Deref and forget the source object.
+    Py_DECREF(self->source);
+    self->source = NULL;
+    return 0;
+}
+#endif
 
 /**
  * Construct a Key from a sequence.
@@ -88,8 +133,10 @@ key_dealloc(Key *self)
 {
     switch(self->flags) {
     case KEY_SHARED:
+#ifdef HAVE_MEMSINK
+        ms_cancel(self->source, (PyObject *)self);
         Py_DECREF(self->source);
-        // TODO: unlink from notifier list.
+#endif
         break;
     case KEY_COPIED:
         free(self->p);
@@ -173,17 +220,31 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
     char *prefix;
     char *raw;
+    PyObject *source = NULL;
     Py_ssize_t prefix_len;
     Py_ssize_t raw_len;
 
-    if(! PyArg_ParseTuple(args, "s#s#", &prefix, &prefix_len, &raw, &raw_len)) {
+    if(! PyArg_ParseTuple(args, "s#s#|O", &prefix, &prefix_len,
+                          &raw, &raw_len, &source)) {
         return NULL;
     }
     if(raw_len < prefix_len || memcmp(prefix, raw, prefix_len)) {
         Py_RETURN_NONE;
     }
-    return (PyObject *) make_private_key((void *) raw + prefix_len,
-                                         raw_len - prefix_len);
+    raw += prefix_len;
+    raw_len -= prefix_len;
+
+#ifdef HAVE_MEMSINK
+    Key *out;
+    if(source && ms_is_source(source)) {
+        out = make_shared_key(source, (void *) raw, raw_len);
+    } else {
+        out = make_private_key((void *) raw, raw_len);
+    }
+    return (PyObject *)out;
+#else
+    return (PyObject *)make_private_key((void *) raw, raw_len);
+#endif
 }
 
 /**
@@ -418,7 +479,6 @@ key_item(Key *self, Py_ssize_t i)
     return read_element(&rdr);
 }
 
-
 static PySequenceMethods key_seq_methods = {
     .sq_length = (lenfunc) key_length,
     .sq_concat = (binaryfunc) key_concat,
@@ -461,6 +521,14 @@ init_key_type(void)
     if(PyType_Ready(&KeyType)) {
         return NULL;
     }
+
+#ifdef HAVE_MEMSINK
+    MemSink_IMPORT;
+    if(ms_init_sink(&KeyType, offsetof(Key, sink_node),
+                    invalidate_shared_key)) {
+        return NULL;
+    }
+#endif
 
     return &KeyType;
 }

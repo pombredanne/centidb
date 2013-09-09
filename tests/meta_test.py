@@ -47,11 +47,9 @@ class TestSave(TestBase, unittest.TestCase):
         with self.store.begin(write=True):
             mod = Model(name=u'Dave')
             mod.save()
-        print Model.by_name.info
-        pprint(self.store.engine.items)
         with self.store.begin():
-            print len(list(Model.by_name.keys()))
-            assert len(list(Model.by_name.keys(u'Dave')))
+            assert Model.by_name.get(u'Dave') is not None
+            assert len(list(Model.by_name.keys('Dave'))) == 1
 
 
 if __name__ == '__main__':
