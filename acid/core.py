@@ -81,25 +81,6 @@ def decode_offsets(s):
         out.append(out[-1] + i)
     return out, pos
 
-def next_greater(s):
-    """Given a bytestring `s`, return the most compact bytestring that is
-    greater than any value prefixed with `s`, but lower than any other value.
-
-    ::
-
-        >>> assert next_greater('') == '\\x00'
-        >>> assert next_greater('\\x00') == '\\x01'
-        >>> assert next_greater('\\xff') == '\\xff\\x00'
-        >>> assert next_greater('\\x00\\x00') == '\\x00\\x01')
-        >>> assert next_greater('\\x00\\xff') == '\\x01')
-        >>> assert next_greater('\\xff\\xff') == '\\x01')
-
-    """
-    assert s
-    # Based on the Plyvel `bytes_increment()` function.
-    s2 = s.rstrip('\xff')
-    return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
-
 
 def __kcmp(fn, o):
     return fn(o[1])
@@ -200,19 +181,19 @@ class Index(object):
             lo = keylib.Key(lo).to_raw(self.prefix)
 
         if hi is None:
-            hi = next_greater(self.prefix)
+            hi = keylib.next_greater(self.prefix)
             if not (key and reverse):
                 include = False
         else:
             # This is a broken mess. When doing reverse queries we must account
             # for the key tuple of the index key. next_greater() may fail if
             # the last byte of the index tuple is FF. Needs a better solution.
-            hi = next_greater(keylib.Key(hi).to_raw(self.prefix)) # TODO WTF
+            hi = keylib.next_greater(keylib.Key(hi).to_raw(self.prefix)) # TODO WTF
             assert hi
 
         if key is not None:
             if reverse:
-                hi = next_greater(keylib.Key(key).to_raw(self.prefix)) # TODO
+                hi = keylib.next_greater(keylib.Key(key).to_raw(self.prefix)) # TODO
                 assert hi
                 include = False
             else:
@@ -499,7 +480,7 @@ class Collection(object):
             lokey = lo.to_raw(self.prefix)
 
         if hi is None:
-            hikey = next_greater(prefix_s)
+            hikey = keylib.next_greater(prefix_s)
             include = False
         else:
             hi = keylib.Key(hi)
