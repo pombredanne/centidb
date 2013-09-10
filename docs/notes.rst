@@ -65,13 +65,14 @@ consideration.
 History
 +++++++
 
-While the idea is older, an implementation did not occur until 2011 after an
-abortive migration from App Engine. All alternatives included so much weirdness
-(Java? Erlang? Javascript? BSON?) that I canned the project in sheer
-displeasure, rendered unable to choose something as **simple as a database**,
-overwhelmed by false promises, fake distinctions, and overstated greatness in
-the endless PR veiled by marketing site designs, and driven by those for whom
-*elegance* is the choice of font on a Powerpoint slide.
+While the idea dates back to around 2009, an initial prototype wasn't attempted
+until 2011 following an abortive migration from App Engine. All alternatives
+included so much weirdness (Java? Erlang? Javascript? BSON?) that I canned the
+project in sheer displeasure, rendered unable to choose something as **simple
+as a database**, overwhelmed by false promises, fake distinctions, and
+overstated greatness in the endless PR veiled by marketing site designs, and
+driven by those for whom *elegance* is the choice of font on a Powerpoint
+slide.
 
 Storing data isn't hard: it has effectively been solved **since at least 1972**
 when the B-tree appeared, variants of which comprise the core of SQLite,
