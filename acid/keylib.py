@@ -49,6 +49,26 @@ UTCOFFSET_DIV = 15 * 60 # 15 minutes
 _tz_cache = {}
 
 
+def next_greater(s):
+    """Given a bytestring `s`, return the most compact bytestring that is
+    greater than any value prefixed with `s`, but lower than any other value.
+
+    ::
+
+        >>> assert next_greater('') == '\\x00'
+        >>> assert next_greater('\\x00') == '\\x01'
+        >>> assert next_greater('\\xff') == '\\xff\\x00'
+        >>> assert next_greater('\\x00\\x00') == '\\x00\\x01')
+        >>> assert next_greater('\\x00\\xff') == '\\x01')
+        >>> assert next_greater('\\xff\\xff') == '\\x01')
+
+    """
+    assert s
+    # Based on the Plyvel `bytes_increment()` function.
+    s2 = s.rstrip('\xff')
+    return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
+
+
 class Key(object):
     """Keys are immutable sequences used as indexes into an ordered collection.
     They behave like tuples, except that elements must be bytestrings, Unicode
@@ -107,6 +127,12 @@ class Key(object):
         return new
 
     __iadd__ = __add__
+
+    def next_greater(self):
+        """Return the next possible key that is lexigraphically larger than
+        this one. Note the returned Key is only useful to implement compares,
+        it may not decode to a valid value."""
+        return self.from_raw('', next_greater(self.packed[len(self.prefix):]))
 
     def to_raw(self, prefix):
         """Get the bytestring representing this Key, prefixed by `prefix`."""

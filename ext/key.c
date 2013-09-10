@@ -187,6 +187,36 @@ key_to_hex(Key *self, PyObject *args, PyObject *kwds)
 }
 
 /**
+ * Return the next possible key that is lexigraphically larger than this one.
+ * Note the returned Key is only useful to implement compares, it may not
+ * decode to a valid value.
+ */
+static PyObject *
+key_next_greater(Key *self, PyObject *args, PyObject *kwds)
+{
+    uint8_t *e = self->p + Py_SIZE(self);
+    uint8_t *l = NULL;
+
+    for(uint8_t *p = self->p; p < e; p++) {
+        if(*p != 0xff) {
+            l = p;
+        }
+    }
+
+    // All bytes are 0xff, should never happen.
+    if(! l) {
+        Py_RETURN_NONE;
+    }
+
+    Py_ssize_t goodlen = (l + 1) - self->p;
+    Key *key = make_private_key(self->p, goodlen);
+    if(key) {
+        key->p[goodlen - 1]++;
+    }
+    return (PyObject *)key;
+}
+
+/**
  * Convert a key in to_hex() representation back to a Key instance.
  */
 static PyObject *
@@ -490,6 +520,7 @@ static PyMethodDef key_methods[] = {
     {"from_raw",    (PyCFunction)key_from_raw, METH_VARARGS|METH_CLASS, ""},
     {"to_raw",      (PyCFunction)key_to_raw,   METH_VARARGS,            ""},
     {"to_hex",      (PyCFunction)key_to_hex,   METH_VARARGS|METH_KEYWORDS, ""},
+    {"next_greater",(PyCFunction)key_next_greater, METH_NOARGS, ""},
     {0,             0,                         0,                       0}
 };
 
