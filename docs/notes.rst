@@ -151,6 +151,43 @@ removed from the lifecycle of a typical request. For example:
   for paid and free users.
 
 
+Compared to SQL, there are of course numerous downsides to this approach,
+however they become less relevant as an application's complexity increases:
+
+* Ability to run ad-hoc reporting queries and reporting tools. In a regular
+  application, this capability is eventually lost as the application's data set
+  exceeds a single SQL database, and as performance constraints prevent running
+  large batch queries against production databases.
+
+* Ability to communicate with self-consistent database over the network for
+  free. This flexibility is more useful in the design phase than in a
+  production application. Once a data set exceeds a single SQL database,
+  consistency checking must be moved into the application layer, at which point
+  the only sane design is to query and modify the dataset using an application
+  layer RPC interface, to avoid risk of causing data inconsistencies.
+
+* Ability to run complex queries without forethought. This is another
+  early-phase benefit that degrades over time: once a data set exceeds a single
+  database, JOIN capability is lost, and long before that, most complex query
+  features must be abandoned as dataset size and request load increases (e.g.
+  table scans must be avoided).
+
+* Ability to separately load provision application and database. Depending on
+  the application, many data-independant aspects can be split off into separate
+  services, for example in a Flickr-style service, moving image thumbnailing
+  and resizing to a task queue.
+
+  For any slow data-dependant requests that must be exposed to the user, an SQL
+  database suffers the same inability to spread load: an application making a
+  complicated set of queries will generate load on both app server and database
+  server.
+
+* Ability to setup "free replication". For the time being this is a real
+  show-stopper, however a future version of Acid may supply primitives to
+  address it in a more scale-agnostic manner than possible with a traditional
+  SQL database.
+
+
 Futures
 +++++++
 
