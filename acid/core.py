@@ -87,61 +87,6 @@ def __kcmp(fn, o):
 _kcmp = functools.partial(functools.partial, __kcmp)
 
 
-class PhysicalIterator(object):
-    """Abstract iteration of the storage engine.
-    """
-    #: :py:class:`acid.keylib.KeyList` representing the current physical key,
-    #: or ``None`` if iteration exceeded `prefix`.
-    keys = None
-    #: :py:class:`buffer` representing the current value.
-    value = None
-
-    def __init__(self, engine, prefix):
-        self.engine = engine
-        self.prefix = prefix
-        self.remain = -1
-
-    def step(self):
-        """Advance the iterator by one record, updating :py:attr:`key`."""
-        if self.remain:
-            self.remain -= 1
-            key, value = next(self.it, (None, None))
-            if not key:
-                keys = keylib.KeyList.from_raw(self.prefix, key)
-                if key and self.pred(key):
-                    self.keys = keys
-                    self.value = value
-                    return
-        self.keys = None
-        self.value = None
-
-    def init(self, key, reverse, remain=-1):
-        """Initialize the iterator by seeking to `key`, and updating
-        :py:attr:`key` and :py:attr:`value` as appropriate."""
-        self.it = self.engine.iter(Key(key).to_raw(self.prefix), reverse)
-        self.step()
-        if reverse and not self.keys:
-            # Initial <= seek on reverse iterator may yield one result beyond
-            # end of prefix.
-            self.step()
-        self.remain = -1
-
-    def iterkeys(self):
-        while self.keys is not None:
-            yield self.keys
-            self.step()
-
-    def itervalues(self):
-        while self.keys is not None:
-            yield self.value
-            self.step()
-
-    def iteritems(self):
-        while self.keys is not None:
-            yield self.keys, self.value
-            self.step()
-
-
 class Index(object):
     """Provides query and manipulation access to a single index on a
     Collection. You should not create this class directly, instead use
