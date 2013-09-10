@@ -1,7 +1,5 @@
 
 import cStringIO
-import operator
-import os
 import pdb
 import shutil
 import time
@@ -15,141 +13,10 @@ import acid.core
 import acid.engines
 from acid import keylib
 
-try:
-    import plyvel
-except ImportError:
-    plyvel = None
-
-try:
-    import kyotocabinet
-except ImportError:
-    kyotocabinet = None
+import testlib
 
 
-
-def rm_rf(path):
-    if os.path.isfile(path):
-        os.unlink(path)
-    elif os.path.isdir(path):
-        shutil.rmtree(path)
-
-
-class CountingEngine(object):
-    def __init__(self, real_engine):
-        self.real_engine = real_engine
-        self.get_iter_returned = 0
-        self.delete_count = 0
-        self.delete_keys = set()
-        self.put_count = 0
-        self.put_keys = set()
-        self.get_count = 0
-        self.get_keys = set()
-        self.get_returned = 0
-        self.iter_keys = set()
-        self.iter_count = 0
-        self.iter_size = 0
-
-    def put(self, key, value):
-        self.put_count += 1
-        self.put_keys.add(key)
-        self.real_engine.put(key, value)
-
-    def get(self, key):
-        self.get_count += 1
-        self.get_keys.add(key)
-        s = self.real_engine.get(key)
-        self.get_returned += s is not None
-        self.get_iter_returned += s is not None
-        return s
-
-    def delete(self, key):
-        self.delete_count += 1
-        self.delete_keys.add(key)
-        self.real_engine.delete(key)
-
-    def iter(self, key, reverse):
-        self.iter_keys.add(key)
-        self.iter_count += 1
-        it = self.real_engine.iter(key, reverse)
-        for x in it:
-            yield x
-            self.iter_size += 1
-            self.get_iter_returned += 1
-
-
-#
-# Module reloads are necessary because KEY_ENCODER & co bind whatever
-# packs() & co happens to exist before we get a chance to interfere. It
-# also improves the chance of noticing any not-planned-for speedups related
-# side effects, rather than relying on explicit test coverage.
-# 
-# There are nicer approaches to this (e.g. make_key_encoder()), but these would
-# optimize for the uncommon case of running tests.
-#
-
-class PythonMixin:
-    """Reload modules with speedups disabled."""
-    @classmethod
-    def setUpClass(cls):
-        global acid
-        os.environ['ACID_NO_SPEEDUPS'] = '1'
-        acid.keylib = reload(acid.keylib)
-        acid.encoders = reload(acid.encoders)
-        acid.core = reload(acid.core)
-        acid = reload(acid)
-        getattr(cls, '_setUpClass', lambda: None)()
-
-class NativeMixin:
-    """Reload modules with speedups enabled."""
-    @classmethod
-    def setUpClass(cls):
-        global acid
-        os.environ.pop('ACID_NO_SPEEDUPS', None)
-        acid.keylib = reload(acid.keylib)
-        acid.encoders = reload(acid.encoders)
-        acid.core = reload(acid.core)
-        acid = reload(acid)
-        getattr(cls, '_setUpClass', lambda: None)()
-
-def register(enable=True, python=True, native=True):
-    def fn(klass):
-        if not enable:
-            return klass
-        if python:
-            name = 'Py' + klass.__name__
-            globals()[name] = type(name, (klass, PythonMixin, TestCase), {})
-        if native:
-            name = 'C' + klass.__name__
-            globals()[name] = type(name, (klass, NativeMixin, TestCase), {})
-        return klass
-    return fn
-
-
-def ddb():
-    pprint(list(db))
-
-def copy(it, dst):
-    for tup in it:
-        dst.put(*tup)
-
-
-def make_asserter(op, ops):
-    def ass(x, y, msg='', *a):
-        if msg:
-            if a:
-                msg %= a
-            msg = ' (%s)' % msg
-
-        f = '%r %s %r%s'
-        assert op(x, y), f % (x, ops, y, msg)
-    return ass
-
-lt = make_asserter(operator.lt, '<')
-eq = make_asserter(operator.eq, '==')
-le = make_asserter(operator.le, '<=')
-
-
-#@register()
+#@testlib.register()
 class IterTest:
     prefix = 'Y'
     KEYS = [[(k,)] for k in 'aa cc d dd de'.split()]
@@ -230,7 +97,7 @@ class IterTest:
         eq(self.REVERSE, self.riter())
 
 
-@register(native=False)
+@testlib.register(native=False)
 class SkiplistTest:
     def testFindLess(self):
         sl = acid.engines.SkipList()
@@ -246,155 +113,7 @@ class SkiplistTest:
         assert sl._findLess(update, 'dave3')[0] == 'dave2'
 
 
-@register(native=False)
-class SkipListTest:
-    def testDeleteDepth(self):
-        # Ensure 'shallowing' works correctly.
-        sl = acid.engines.SkipList()
-        keys = []
-        while sl.level < 4:
-            k = time.time()
-            keys.append(k)
-            sl.insert(k, k)
-
-        while keys:
-            assert sl.delete(keys.pop())
-        assert sl.level == 0, sl.level
-
-
-class EngineTestBase:
-    def testGetPutOverwrite(self):
-        assert self.e.get('dave') is None
-        self.e.put('dave', '')
-        self.assertEqual(self.e.get('dave'), '')
-        self.e.put('dave', '2')
-        self.assertEqual(self.e.get('dave'), '2')
-
-    def testDelete(self):
-        self.e.delete('dave')
-        assert self.e.get('dave') is None
-        self.e.put('dave', '')
-        self.assertEqual(self.e.get('dave'), '')
-        self.e.delete('dave')
-        self.assertEqual(self.e.get('dave'), None)
-
-    def testIterForwardEmpty(self):
-        assert list(self.e.iter('', False)) == []
-        assert list(self.e.iter('x', False)) == []
-
-    def testIterForwardFilled(self):
-        self.e.put('dave', '')
-        eq(list(self.e.iter('dave', False)), [('dave', '')])
-        eq(list(self.e.iter('davee', False)), [])
-
-    def testIterForwardBeyondNoExist(self):
-        self.e.put('aa', '')
-        self.e.put('bb', '')
-        eq([], list(self.e.iter('df', False)))
-
-    def testIterReverseEmpty(self):
-        # TODO: do we ever need to query from end of engine?
-        #eq(list(self.e.iter('', True)), [])
-        eq(list(self.e.iter('x', True)), [])
-
-    def testIterReverseAtEnd(self):
-        self.e.put('a', '')
-        self.e.put('b', '')
-        eq(list(self.e.iter('b', True)), [('b', ''), ('a', '')])
-
-    def testIterReversePastEnd(self):
-        self.e.put('a', '')
-        self.e.put('b', '')
-        eq(list(self.e.iter('c', True)), [('b', ''), ('a', '')])
-
-    def testIterReverseFilled(self):
-        self.e.put('dave', '')
-        eq(list(self.e.iter('davee', True)), [('dave', '')])
-
-    def testIterForwardMiddle(self):
-        self.e.put('a', '')
-        self.e.put('c', '')
-        self.e.put('d', '')
-        assert list(self.e.iter('b', False)) == [('c', ''), ('d', '')]
-        assert list(self.e.iter('c', False)) == [('c', ''), ('d', '')]
-
-    def testIterReverseMiddle(self):
-        self.e.put('a', '')
-        self.e.put('b', '')
-        self.e.put('d', '')
-        self.e.put('e', '')
-        eq(list(self.e.iter('c', True)),
-           [('d', ''), ('b', ''), ('a', '')])
-
-
-@register()
-class ListEngineTest(EngineTestBase):
-    def setUp(self):
-        self.e = acid.engines.ListEngine()
-
-
-@register()
-class SkiplistEngineTest(EngineTestBase):
-    def setUp(self):
-        self.e = acid.engines.SkiplistEngine()
-
-
-@register(enable=plyvel is not None)
-class PlyvelEngineTest(EngineTestBase):
-    @classmethod
-    def _setUpClass(cls):
-        rm_rf('test.ldb')
-        cls.e = acid.engines.PlyvelEngine(
-            name='test.ldb', create_if_missing=True)
-
-    def setUp(self):
-        for key, value in self.e.iter('', False):
-            self.e.delete(key)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.e = None
-        rm_rf('test.ldb')
-
-
-@register(enable=kyotocabinet is not None)
-class KyotoEngineTest(EngineTestBase):
-    @classmethod
-    def _setUpClass(cls):
-        if os.path.exists('test.kct'):
-            os.unlink('test.kct')
-        cls.e = acid.engines.KyotoEngine(path='test.kct')
-
-    def setUp(self):
-        for key, value in list(self.e.iter('', False)):
-            self.e.delete(key)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.e = None
-        os.unlink('test.kct')
-
-
-@register()
-class LmdbEngineTest(EngineTestBase):
-    @classmethod
-    def _setUpClass(cls):
-        rm_rf('test.lmdb')
-        import lmdb
-        cls.env = lmdb.open('test.lmdb')
-        cls.e = acid.engines.LmdbEngine(cls.env)
-
-    def setUp(self):
-        for key, value in list(self.e.iter('', False)):
-            self.e.delete(key)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.e = None
-        rm_rf('test.lmdb')
-
-
-@register()
+@testlib.register()
 class OneCollBoundsTest:
     def setUp(self):
         self.store = acid.open('ListEngine')
@@ -412,7 +131,7 @@ class OneCollBoundsTest:
         eq(self.keys, list(self.store['stuff'].keys()))
 
 
-@register()
+@testlib.register()
 class TwoCollBoundsTest(OneCollBoundsTest):
     def setUp(self):
         OneCollBoundsTest.setUp(self)
@@ -422,7 +141,7 @@ class TwoCollBoundsTest(OneCollBoundsTest):
         self.store['stuff2'].put('c')
 
 
-@register()
+@testlib.register()
 class ThreeCollBoundsTest(OneCollBoundsTest):
     def setUp(self):
         self.store = acid.open('ListEngine')
@@ -443,7 +162,7 @@ class ThreeCollBoundsTest(OneCollBoundsTest):
         self.store['stuff2'].put('c')
 
 
-@register()
+@testlib.register()
 class CollBasicTest:
     def setUp(self):
         self.e = acid.engines.ListEngine()
@@ -478,7 +197,7 @@ class CollBasicTest:
         eq([''], list(self.coll.values()))
 
 
-@register()
+@testlib.register()
 class IndexTest:
     def setUp(self):
         self.store = acid.open('ListEngine')
@@ -563,7 +282,7 @@ class Bag(object):
         vars(self).update(kwargs)
 
 
-@register()
+@testlib.register()
 class BatchTest:
     ITEMS = [
         ((1,), 'dave'),
@@ -586,7 +305,7 @@ class BatchTest:
         assert list(self.coll.items()) == self.ITEMS
 
 
-@register()
+@testlib.register()
 class CountTest:
     def setUp(self):
         self.e = CountingEngine(acid.engines.ListEngine())
@@ -618,26 +337,14 @@ class CountTest:
         assert txn.put_count == 1
 
 
-@register()
+@testlib.register()
 class ReopenBugTest:
+    """Ensure store metadata survives a round-trip."""
     def test1(self):
         engine = acid.engines.ListEngine()
         st1 = acid.Store(engine)
         st1.add_collection('dave')
         st2 = acid.Store(engine)
-
-
-def x():
-    db = plyvel.DB('test.ldb', create_if_missing=True)
-    store = storelib.Store(db)
-
-    feeds = storelib.Collection(store, 'feeds',
-        key_func=lambda _, feed: feed.url,
-        encoder=ThriftEncoder(iotypes.Feed))
-    feeds.add_index('id', lambda _, feed: [feed.id] if feed.id else [])
-
-    feed = iotypes.Feed(url='http://dave', title='mytitle', id=69)
-    feeds.put(feed)
 
 
 if __name__ == '__main__':

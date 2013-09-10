@@ -156,5 +156,21 @@ class LmdbEngineTest(EngineTestBase):
         rm_rf('test.lmdb')
 
 
+@testlib.register(native=False)
+class SkipListTest:
+    def testDeleteDepth(self):
+        # Ensure 'shallowing' works correctly.
+        sl = acid.engines.SkipList()
+        keys = []
+        while sl.level < 4:
+            k = time.time()
+            keys.append(k)
+            sl.insert(k, k)
+
+        while keys:
+            assert sl.delete(keys.pop())
+        assert sl.level == 0, sl.level
+
+
 if __name__ == '__main__':
     testlib.main()
