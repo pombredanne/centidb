@@ -6,6 +6,9 @@ import sys
 import unittest
 
 import acid
+import acid.encoders
+import acid.engines
+import acid.keylib
 
 
 def ddb():
@@ -92,28 +95,30 @@ class CountingEngine(object):
 # optimize for the uncommon case of running tests.
 #
 
+def _reload_acid():
+    global acid
+    acid.keylib = reload(acid.keylib)
+    acid.engines = reload(acid.engines)
+    acid.encoders = reload(acid.encoders)
+    acid.core = reload(acid.core)
+    acid = reload(acid)
+
+
 class PythonMixin:
     """Reload modules with speedups disabled."""
     @classmethod
     def setUpClass(cls):
-        global acid
         os.environ['ACID_NO_SPEEDUPS'] = '1'
-        acid.keylib = reload(acid.keylib)
-        acid.encoders = reload(acid.encoders)
-        acid.core = reload(acid.core)
-        acid = reload(acid)
+        _reload_acid()
         getattr(cls, '_setUpClass', lambda: None)()
+
 
 class NativeMixin:
     """Reload modules with speedups enabled."""
     @classmethod
     def setUpClass(cls):
-        global acid
         os.environ.pop('ACID_NO_SPEEDUPS', None)
-        acid.keylib = reload(acid.keylib)
-        acid.encoders = reload(acid.encoders)
-        acid.core = reload(acid.core)
-        acid = reload(acid)
+        _reload_acid()
         getattr(cls, '_setUpClass', lambda: None)()
 
 

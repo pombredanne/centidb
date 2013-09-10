@@ -3,10 +3,8 @@ import cStringIO
 import pdb
 import shutil
 import time
-import unittest
 
 from pprint import pprint
-from unittest import TestCase
 
 import acid
 import acid.core
@@ -348,4 +346,4 @@ class ReopenBugTest:
 
 
 if __name__ == '__main__':
-    unittest.main()
+    testlib.main()

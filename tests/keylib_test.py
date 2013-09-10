@@ -2,85 +2,21 @@
 import cStringIO
 import operator
 import os
-import unittest
 import uuid
 
 from datetime import datetime
 from pprint import pprint
-from unittest import TestCase
 
 import dateutil.tz
 from acid import keylib
 from acid import _keylib
 
-
-#
-# Module reloads are necessary because KEY_ENCODER & co bind whatever
-# packs() & co happens to exist before we get a chance to interfere. It
-# also improves the chance of noticing any not-planned-for speedups related
-# side effects, rather than relying on explicit test coverage.
-# 
-# There are nicer approaches to this (e.g. make_key_encoder()), but these would
-# optimize for the uncommon case of running tests.
-#
-
-class PythonMixin:
-    """Reload modules with speedups disabled."""
-    @classmethod
-    def setUpClass(cls):
-        global keylib
-        os.environ['ACID_NO_SPEEDUPS'] = '1'
-        keylib = reload(keylib)
-        keylib = reload(keylib)
-        getattr(cls, '_setUpClass', lambda: None)()
-
-class NativeMixin:
-    """Reload modules with speedups enabled."""
-    @classmethod
-    def setUpClass(cls):
-        global keylib
-        os.environ.pop('ACID_NO_SPEEDUPS', None)
-        keylib = reload(keylib)
-        keylib = reload(keylib)
-        getattr(cls, '_setUpClass', lambda: None)()
-
-def register(python=True, native=True):
-    def fn(klass):
-        if python:
-            name = 'Py' + klass.__name__
-            globals()[name] = type(name, (klass, PythonMixin, TestCase), {})
-        if native:
-            name = 'C' + klass.__name__
-            globals()[name] = type(name, (klass, NativeMixin, TestCase), {})
-        return klass
-    return fn
+import testlib
+from testlib import eq
+from testlib import lt
 
 
-def ddb():
-    pprint(list(db))
-
-def copy(it, dst):
-    for tup in it:
-        dst.put(*tup)
-
-
-def make_asserter(op, ops):
-    def ass(x, y, msg='', *a):
-        if msg:
-            if a:
-                msg %= a
-            msg = ' (%s)' % msg
-
-        f = '%r %s %r%s'
-        assert op(x, y), f % (x, ops, y, msg)
-    return ass
-
-lt = make_asserter(operator.lt, '<')
-eq = make_asserter(operator.eq, '==')
-le = make_asserter(operator.le, '<=')
-
-
-@register()
+@testlib.register()
 class KeysTest:
     SINGLE_VALS = [
         None,
@@ -120,7 +56,7 @@ class KeysTest:
 
 
 
-@register()
+@testlib.register()
 class StringEncodingTest:
     def do_test(self, k):
         packed = keylib.packs('', k)
@@ -148,7 +84,7 @@ class StringEncodingTest:
         self.do_test(('dave\x01',))
 
 
-@register()
+@testlib.register()
 class KeyTest:
     def test_already_key(self):
         eq(keylib.Key(), keylib.Key(keylib.Key()))
@@ -157,7 +93,7 @@ class KeyTest:
         eq(keylib.Key(""), keylib.Key(""))
 
 
-@register()
+@testlib.register()
 class EncodeIntTest:
     INTS = [0, 1, 240, 241, 2286, 2287, 2288,
             67823, 67824, 16777215, 16777216,
@@ -173,7 +109,7 @@ class EncodeIntTest:
             assert j == i, (i, j, s)
 
 
-@register()
+@testlib.register()
 class IntKeyTest:
     INTS = [-1, -239, -240, -241, -2285, -2286, -2287, 0, 1, 0xfffff]
 
@@ -188,7 +124,7 @@ class IntKeyTest:
                 raise
 
 
-@register(python=True)
+@testlib.register(python=True)
 class SameIntEncodingTest:
     def test1(self):
         for i in EncodeIntTest.INTS:
@@ -201,7 +137,7 @@ class SameIntEncodingTest:
                 raise
 
 
-@register()
+@testlib.register()
 class TupleTest:
     def assertOrder(self, tups):
         tups = map(keylib.Key, tups)
@@ -219,7 +155,7 @@ class TupleTest:
         pass
 
 
-@register()
+@testlib.register()
 class UuidTest:
     def testUuid(self):
         t = ('a', uuid.uuid4(), 'b')
@@ -227,7 +163,7 @@ class UuidTest:
         eq(t, keylib.unpack('', s))
 
 
-@register()
+@testlib.register()
 class Mod7BugTest:
     def test1(self):
         t = [('', 11, 'item')]
@@ -245,7 +181,7 @@ class Mod7BugTest:
         eq(keylib.unpacks('', p), t)
 
 
-@register(python=True)
+@testlib.register(python=True)
 class NativeTimeTest:
     def test_utc(self):
         tz = dateutil.tz.gettz('Etc/UTC')
@@ -287,7 +223,7 @@ class NativeTimeTest:
         eq(dn, dp)
 
 
-@register()
+@testlib.register()
 class TimeTest:
     def _now_truncate(self, tz=None):
         dt = datetime.now(tz)
@@ -321,7 +257,7 @@ class TimeTest:
         eq(dt, dt2)
 
 
-@register()
+@testlib.register()
 class SortTest:
     """Ensure a bunch of edge cases sort correctly.
     """
@@ -349,4 +285,4 @@ class SortTest:
 
 
 if __name__ == '__main__':
-    unittest.main()
+    testlib.main()
