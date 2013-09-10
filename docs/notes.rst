@@ -187,6 +187,12 @@ however they become less relevant as an application's complexity increases:
   address it in a more scale-agnostic manner than possible with a traditional
   SQL database.
 
+* Well understood approaches to schema migration. We can potentially do better
+  by avoiding SQL here, since adding or removing a field need not necessitate
+  touching every record. Some migrations can be "free of charge", while others,
+  such as adding an index, may more effort. See `ticket 52
+  <https://github.com/dw/acid/issues/52>`_
+
 
 Futures
 +++++++
