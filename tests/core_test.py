@@ -31,6 +31,7 @@ import acid.engines
 from acid import keylib
 
 import testlib
+from testlib import eq
 
 
 #@testlib.register()
@@ -134,6 +135,8 @@ class SkiplistTest:
 class OneCollBoundsTest:
     def setUp(self):
         self.store = acid.open('ListEngine')
+        self.txn = self.store.begin()
+        self.txn.__enter__()
         self.store.add_collection('stuff')
         self.keys = [
             self.store['stuff'].put('a'),
@@ -162,6 +165,8 @@ class TwoCollBoundsTest(OneCollBoundsTest):
 class ThreeCollBoundsTest(OneCollBoundsTest):
     def setUp(self):
         self.store = acid.open('ListEngine')
+        self.txn = self.store.begin()
+        self.txn.__enter__()
         self.store.add_collection('stuff')
         self.keys = [
             self.store['stuff'].put('a'),
@@ -184,6 +189,8 @@ class CollBasicTest:
     def setUp(self):
         self.e = acid.engines.ListEngine()
         self.store = acid.Store(self.e)
+        self.txn = self.store.begin()
+        self.txn.__enter__()
         self.coll = self.store.add_collection('coll1')
 
     def testGetNoExist(self):
@@ -219,6 +226,8 @@ class IndexTest:
     def setUp(self):
         self.store = acid.open('ListEngine')
         self.e = self.store.engine
+        self.t = self.store.begin()
+        self.t.__enter__()
         self.coll = self.store.add_collection('stuff')
         self.i = self.coll.add_index('idx', lambda obj: (69, obj))
 
@@ -310,6 +319,8 @@ class BatchTest:
     def setUp(self):
         self.e = acid.engines.ListEngine()
         self.store = acid.Store(self.e)
+        self.txn = self.store.begin()
+        self.txn.__enter__()
         self.coll = self.store.add_collection('people')
 
     def testBatch(self):
@@ -325,8 +336,10 @@ class BatchTest:
 @testlib.register()
 class CountTest:
     def setUp(self):
-        self.e = CountingEngine(acid.engines.ListEngine())
+        self.e = testlib.CountingEngine(acid.engines.ListEngine())
         self.store = acid.Store(self.e)
+        self.txn = self.store.begin()
+        self.txn.__enter__()
 
     def testNoExistNoCount(self):
         eq(10, self.store.count('test', n=0, init=10))
@@ -347,12 +360,6 @@ class CountTest:
         assert (self.e.get_count + self.e.iter_count) == 4
         assert self.e.put_count == 3
 
-    def testTxn(self):
-        txn = CountingEngine(self.e)
-        eq(10, self.store.count('test', init=10, txn=txn))
-        assert (txn.get_count + txn.iter_count) == 1
-        assert txn.put_count == 1
-
 
 @testlib.register()
 class ReopenBugTest:
@@ -360,8 +367,10 @@ class ReopenBugTest:
     def test1(self):
         engine = acid.engines.ListEngine()
         st1 = acid.Store(engine)
+        st1.begin().__enter__()
         st1.add_collection('dave')
         st2 = acid.Store(engine)
+        st2['dave']
 
 
 if __name__ == '__main__':

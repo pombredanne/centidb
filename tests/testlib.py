@@ -60,7 +60,7 @@ def rm_rf(path):
         shutil.rmtree(path)
 
 
-class CountingEngine(object):
+class CountingEngine(acid.engines.Engine):
     def __init__(self, real_engine):
         self.real_engine = real_engine
         self.get_iter_returned = 0
