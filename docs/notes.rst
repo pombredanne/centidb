@@ -77,10 +77,10 @@ slide.
 Storing data isn't hard: it has effectively been solved **since at least 1972**
 when the B-tree appeared, variants of which comprise the core of SQLite,
 MongoDB, and 90% of all DBMS wheel reinventions existing since. So this library
-is the product of frustration. On a recent project while experimenting with
-compression, I again partially implemented what this library should be: a small
-layer that implements indexing, and gently placates the use of Cold War era
-technology.
+is the product of frustration. While experimenting with compression for a hobby
+project in late 2012, I again partially implemented what this library should
+be: a small layer that implements indexing, and gently placates the use of Cold
+War era technology.
 
 
 Use cases
