@@ -1,8 +1,8 @@
 
-import unittest
-
 import acid
 import acid.meta
+
+import testlib
 
 
 class Model(acid.meta.Model):
@@ -23,7 +23,8 @@ class TestBase:
         Model.bind_store(self.store)
 
 
-class TestSave(TestBase, unittest.TestCase):
+@testlib.register()
+class TestSave(TestBase):
     def test_save(self):
         mod = Model(name=u'Dave')
         assert not mod.is_saved
@@ -53,4 +54,4 @@ class TestSave(TestBase, unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    testlib.main()
