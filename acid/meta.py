@@ -22,8 +22,9 @@ definition of database models using Python code.
 
     This is a work in progress! The examples here do not yet work perfectly,
     and the most interesting aspect is missing. A future version will use the
-    model definitions to maintain a compact encoding automatically. For now
-    this is just a curiosity.
+    model definitions to `automatically maintain a compact encoding
+    <https://github.com/dw/acid/issues/41>`_. For now this module is mainly a
+    curiosity.
 """
 
 from __future__ import absolute_import
