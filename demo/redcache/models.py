@@ -36,6 +36,10 @@ class User(Model):
     last_seen = acid.meta.Time()
     comments = acid.meta.Integer()
 
+    @acid.meta.key
+    def key(self):
+        return self.username
+
     @acid.meta.index
     def by_comments(self):
         return self.comments
