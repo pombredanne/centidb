@@ -28,7 +28,10 @@ from pprint import pprint
 
 import dateutil.tz
 from acid import keylib
-from acid import _keylib
+try:
+    from acid import _keylib
+except ImportError:
+    _keylib = None
 
 import testlib
 from testlib import eq
@@ -143,8 +146,9 @@ class IntKeyTest:
                 raise
 
 
-@testlib.register(python=True)
+@testlib.register(python=True, enable=_keylib is not None)
 class SameIntEncodingTest:
+    """Compare C extension's int representation with keylib.py's."""
     def test1(self):
         for i in EncodeIntTest.INTS:
             native = _keylib.packs('', i)
@@ -200,8 +204,9 @@ class Mod7BugTest:
         eq(keylib.unpacks('', p), t)
 
 
-@testlib.register(python=True)
+@testlib.register(python=True, enable=_keylib is not None)
 class NativeTimeTest:
+    """Compare C extension's time representation with keylib.py's."""
     def test_utc(self):
         tz = dateutil.tz.gettz('Etc/UTC')
         dt = datetime.now(tz)
