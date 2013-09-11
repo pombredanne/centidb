@@ -676,6 +676,7 @@ class Collection(object):
     def delete(self, key):
         """Delete any existing record filed under `key`.
         """
+        key = keylib.Key(key)
         it = self._iter(key, None, None, None, None, None, True, None)
         txn = self.store._txn_context.get()
         for batch, key_, data in it:

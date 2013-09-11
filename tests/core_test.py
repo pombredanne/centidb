@@ -375,12 +375,13 @@ class DeleteBugTest:
         with store.begin(write=True):
             stuff = store.add_collection('stuff')
             stuff.add_index('foop', lambda rec: 'foop')
-            stuff.put('temp')
+            key = stuff.put('temp')
             assert stuff.indices['foop'].find('foop') == 'temp'
             assert stuff.get(1) == 'temp'
             stuff.delete(1)
-            assert stuff.indices['foop'].find('foop') is None
             assert stuff.get(1) is None
+            i = stuff.indices['foop'].find('foop')
+            assert i is None, i
 
 
 if __name__ == '__main__':
