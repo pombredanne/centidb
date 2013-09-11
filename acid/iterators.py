@@ -126,7 +126,8 @@ class Iterator:
 
 
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
-    it = RangeIterator(obj.engine, obj.prefix)
+    txn = obj.store._txn_context.get()
+    it = RangeIterator(txn, obj.prefix)
     if lo:
         it.set_lo(lo, include)
     if hi:
