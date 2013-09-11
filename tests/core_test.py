@@ -367,5 +367,21 @@ class ReopenBugTest:
         st2['dave']
 
 
+@testlib.register()
+class DeleteBugTest:
+    """Ensure delete deletes everything it should when indices are present."""
+    def test1(self):
+        store = acid.open('ListEngine')
+        with store.begin(write=True):
+            stuff = store.add_collection('stuff')
+            stuff.add_index('foop', lambda rec: 'foop')
+            stuff.put('temp')
+            assert stuff.indices['foop'].find('foop') == 'temp'
+            assert stuff.get(1) == 'temp'
+            stuff.delete(1)
+            assert stuff.indices['foop'].find('foop') is None
+            assert stuff.get(1) is None
+
+
 if __name__ == '__main__':
     testlib.main()

@@ -683,8 +683,8 @@ class Collection(object):
                 break
             obj = self.encoder.unpack(key, data)
             if self.indices:
-                for key in self._index_keys(key, obj):
-                    txn.delete(key)
+                for key_ in self._index_keys(key, obj):
+                    txn.delete(key_)
             if batch:
                 self._split_batch(key)
             else:
