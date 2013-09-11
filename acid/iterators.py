@@ -29,6 +29,7 @@ class RangeIterator(object):
     hi = None
     lo_pred = bool
     hi_pred = bool
+    remain = -1
 
     def __init__(self, engine, prefix):
         self.engine = engine
@@ -42,6 +43,9 @@ class RangeIterator(object):
         self.hi = keylib.Key(key)
         self.hi_pred = getattr(self.hi, ('__gt__', '__ge__')[closed])
 
+    def set_max(self, max_):
+        self.remain = max_
+
     def set_exact(self, key):
         key = keylib.Key(key)
         self.lo = key
@@ -49,13 +53,15 @@ class RangeIterator(object):
         self.lo_pred = key.__le__
         self.hi_pred = key.__ge__
 
-    def _step(self):
+    def _step(self, n):
         """Step the iterator once, saving the new key and data. Returns True if
         the iterator is still within the bounds of the collection prefix,
         otherwise False."""
-        self.keys_raw, self.data = next(self.it, ('', ''))
-        self.keys = keylib.KeyList.from_raw(self.prefix, self.keys_raw)
-        return self.keys is not None
+        if self.remain or not n:
+            self.remain -= n
+            self.keys_raw, self.data = next(self.it, ('', ''))
+            self.keys = keylib.KeyList.from_raw(self.prefix, self.keys_raw)
+            return self.keys is not None
 
     def forward(self):
         if self.lo is None:
@@ -65,14 +71,14 @@ class RangeIterator(object):
         self.it = self.engine.iter(key, False)
         # Fetch the first key. If _step() returns false, then first key is
         # beyond collection prefix. Cease iteration.
-        go = self._step()
+        go = self._step(1)
 
         # When lo(closed=False), skip the start key.
         if go and not self.lo_pred(self.keys[0]):
-            go = self._step()
+            go = self._step(0)
         while go and self.hi_pred(self.keys[0]):
             yield self
-            go = self._step()
+            go = self._step(1)
 
     def reverse(self):
         if self.hi is None:
@@ -83,17 +89,17 @@ class RangeIterator(object):
         self.it = self.engine.iter(key, True)
         # We may have seeked to first record of next prefix, so skip first
         # returned result.
-        go = self._step()
+        go = self._step(1)
         if not go:
-            go = self._step()
+            go = self._step(0)
 
         # We should now be positioned on the first record >= self.hi. When
         # hi(closed=False), skip the first result.
         if go and not self.hi_pred(self.keys[0]):
-            go = self._step()
+            go = self._step(0)
         while go and self.lo_pred(self.keys[0]):
             yield self
-            go = self._step()
+            go = self._step(1)
 
 
 class PrefixIterator(RangeIterator):
@@ -119,30 +125,32 @@ class Iterator:
         pass
 
 
-def _iter(key, lo, hi, prefix, reverse, max_, include, max_phys):
+def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
+    it = RangeIterator(obj.engine, obj.prefix)
+    if lo:
+        it.set_lo(lo, closed=include)
+    if hi:
+        it.set_hi(hi, closed=include)
+    if prefix:
+        assert 0, 'prefix= not implemented yet.'
+    if max_:
+        it.set_max(max_)
     if key:
         it.set_exact(key)
-    elif prefix is not None:
-        it.set_prefix(prefix)
-    else:
-        if lo:
-            it.set_lo(lo)
-        if hi:
-            it.set_hi(hi)
+
     if reverse:
-        it.set_reverse(reverse)
+        if key:
+            it.set_hi(key, closed=True)
+        return it.reverse()
+    else:
+        if key:
+            it.set_lo(key, closed=True)
+        return it.forward()
 
 
 class PrefixIterator(RangeIterator):
     """Provides directional iteration of a range of keys with a set prefix.
     """
-
-
-
-def from_args(engine, coll_prefix, prefix, key, lo, hi, reverse, max, include):
-    if key is not None:
-        it = PrefixIterator(engine, coll_prefix)
-        it.set_prefix(prefix, reverse)
 
 
 class BatchRangeIterator(object):
