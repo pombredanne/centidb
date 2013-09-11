@@ -35,8 +35,8 @@ class Engine(object):
     """
 
     #: If present and not ``None``, indicates the `source object` responsible
-    #: for producing data in the buffers returned by this engine. This object
-    #: must implement the `Memsink Protocol
+    #: for producing data in the buffers returned by this engine. The source
+    #: object must implement the `Memsink Protocol
     #: <https://github.com/dw/acid/issues/23>`_. This allows
     #: :py:class:`acid.keylib.Key` and :py:class:`acid.structlib.Struct` to
     #: present the result to the user without performing any copies.
