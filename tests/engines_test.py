@@ -19,6 +19,7 @@ acid.engines tests.
 """
 
 import os
+import time
 
 import testlib
 from testlib import eq

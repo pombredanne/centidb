@@ -18,13 +18,6 @@
 core.py tests.
 """
 
-import cStringIO
-import pdb
-import shutil
-import time
-
-from pprint import pprint
-
 import acid
 import acid.core
 import acid.engines
