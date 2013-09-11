@@ -22,9 +22,28 @@ from __future__ import absolute_import
 from acid import keylib
 
 
+class Result(object):
+    """Interface for a single element from an iterator's result set. Iterator
+    classes do not return :py:class:`Result` instances, they only return
+    objects satisfying the same interface."""
+
+    #: :py:class:`acid.keylib.KeyList` instance describing the list of keys
+    #: decoded from the physical engine key.
+    keys = None
+
+    #: Object satisfying the :py:class:`buffer` interface that represents the
+    #: raw record data.
+
+
 class RangeIterator(object):
     """Provides bidirectional iteration of a range of keys.
+
+        `engine`:
+            :py:class:`acid.engines.Engine` instance to iterate.
+        `prefix`:
+            Bytestring prefix for all keys.
     """
+    # Various defaults set here to avoid necessity for repeat initialization.
     lo = None
     hi = None
     lo_pred = bool
@@ -36,17 +55,25 @@ class RangeIterator(object):
         self.prefix = prefix
 
     def set_lo(self, key, closed=True):
+        """Set the lower bound to `key`. If `closed` is ``True``, include the
+        lower bound in the result set, otherwise exclude it."""
         self.lo = keylib.Key(key)
         self.lo_pred = getattr(self.lo, ('__lt__', '__le__')[closed])
 
     def set_hi(self, key, closed=False):
+        """Set the upper bound to `key`. If `closed` is ``True``, include the
+        upper bound in the result set, otherwise exclude it."""
         self.hi = keylib.Key(key)
         self.hi_pred = getattr(self.hi, ('__gt__', '__ge__')[closed])
 
     def set_max(self, max_):
+        """Set the maximum size of the result set."""
+        assert max_ >= 0, 'Result set size must be >= 0'
         self.remain = max_
 
     def set_exact(self, key):
+        """Set the lower and upper bounds such that `key` is the only key
+        returned, if it exists."""
         key = keylib.Key(key)
         self.lo = key
         self.hi = key
@@ -64,6 +91,10 @@ class RangeIterator(object):
             return self.keys is not None
 
     def forward(self):
+        """Return an iterator yielding the result set from `lo`..`hi`. Each
+        iteration returns an object satisfying the :py:class:`Result`
+        interface. Note the `Result` object is reused, so references to it
+        should not be held."""
         if self.lo is None:
             key = self.prefix
         else:
@@ -81,6 +112,10 @@ class RangeIterator(object):
             go = self._step(1)
 
     def reverse(self):
+        """Return an iterator yielding the result set from `hi`..`lo`. Each
+        iteration returns an object satisfying the :py:class:`Result`
+        interface. Note the `Result` object is reused, so references to it
+        should not be held."""
         if self.hi is None:
             key = keylib.next_greater(self.prefix)
         else:
