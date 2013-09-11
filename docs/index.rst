@@ -19,6 +19,8 @@ allows read performance to be traded for storage efficiency, while still
 allowing transparent access to individual records. Arbitrary key ranges may be
 compressed and the batch size is configurable.
 
+`Github Repository <https://github.com/dw/acid/>`_
+
 .. toctree::
     intro
     core
