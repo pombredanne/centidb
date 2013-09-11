@@ -705,19 +705,16 @@ class TxnContext(object):
         """Return a tristate indicating the active transaction mode: ``None`
         means if no transaction is active, ``False`` if a read-only transaction
         is active, or ``True`` if a write transaction is active."""
-        if hasattr(self.local, 'txn'):
-            return self.mode
+        return getattr(self.local, 'write', None)
 
     def begin(self, write=False):
-        self.write = write
+        if getattr(self.local, 'mode', None) is not None:
+            raise errors.TxnError('Transaction already active for this thread.')
+        self.local.write = write
         return self
 
     def __enter__(self):
-        txn = getattr(self.local, 'txn', None)
-        if txn:
-            raise errors.TxnError('Transaction already active for this thread.')
-        txn = self.engine.begin(write=self.write)
-        setattr(self.local, 'txn', txn)
+        self.local.txn = self.engine.begin(write=self.local.write)
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type:
@@ -725,6 +722,7 @@ class TxnContext(object):
         else:
             self.local.txn.commit()
         del self.local.txn
+        del self.local.write
 
     def get(self):
         txn = getattr(self.local, 'txn', None)
