@@ -36,13 +36,14 @@ def dotestiter():
 
 try:
     import lz4
-    LZ4 = acid.Encoder('lz4', lz4.loads, lz4.dumps)
+    LZ4 = acid.encoders.Compressor('lz4', lz4.loads, lz4.dumps)
 except ImportError:
     LZ4 = None
 
 try:
     import snappy
-    SNAPPY = acid.Encoder('snappy', snappy.uncompress, snappy.compress)
+    SNAPPY = acid.encoders.Compressor('snappy',
+                snappy.uncompress, snappy.compress)
 except ImportError:
     SNAPPY = None
 
@@ -52,11 +53,13 @@ print '"Packer","Size","Count","Ratio","BatchSz","Gets/sec","Iters/sec","Iterrec
 def out(*args):
     print '"%s","%.2fkb","%d","%.2f","%d","%.2f","%.2f","%.2f"' % args
 
-def engine_count(engine):
-    return sum(1 for _ in engine.iter('', False))
+def store_count(store):
+    it = store._txn_context.get().iter('', False)
+    return sum(1 for _ in it)
 
-def engine_size(engine):
-    return sum(len(k) + len(v) for k, v in engine.iter('', False))
+def store_size(store):
+    it = store._txn_context.get().iter('', False)
+    return sum(len(k) + len(v) for k, v in it)
 
 
 for packer in acid.encoders.ZLIB, SNAPPY, LZ4:
@@ -68,24 +71,25 @@ for packer in acid.encoders.ZLIB, SNAPPY, LZ4:
         if os.path.exists(TMP_PATH):
             shutil.rmtree(TMP_PATH)
         st = acid.open('LmdbEngine', path=TMP_PATH, map_size=1048576*1024)
-        co = st.add_collection('people',
-            encoder=acid.encoders.make_json_encoder(sort_keys=True))
+        with st.begin(write=True):
+            co = st.add_collection('people',
+                encoder=acid.encoders.make_json_encoder(sort_keys=True))
 
-        keys = [co.put(rec) for rec in recs]
-        random.shuffle(keys)
-        nextkey = iter(itertools.cycle(keys)).next
+            keys = [co.put(rec) for rec in recs]
+            random.shuffle(keys)
+            nextkey = iter(itertools.cycle(keys)).next
 
-        before = engine_size(st.engine)
-        itemcount = engine_count(st.engine)
+            before = store_size(st)
+            itemcount = store_count(st)
 
-        if bsize == 1:
+            if bsize == 1:
+                iterrecs, te = dotestiter()
+                out('plain', before / 1024., itemcount, 1, 1, dotestget(), te, iterrecs)
+            co.batch(max_recs=bsize, packer=packer)
+
+            itemcount = store_count(st)
+            after = store_count(st)
+
             iterrecs, te = dotestiter()
-            out('plain', before / 1024., itemcount, 1, 1, dotestget(), te, iterrecs)
-        co.batch(max_recs=bsize, packer=packer)
-
-        itemcount = engine_count(st.engine)
-        after = engine_size(st.engine)
-
-        iterrecs, te = dotestiter()
-        out(packer.name, after / 1024., itemcount, float(before) / after,
-            bsize, dotestget(), te, iterrecs)
+            out(packer.name, after / 1024., itemcount, float(before) / after,
+                bsize, dotestget(), te, iterrecs)
