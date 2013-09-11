@@ -32,16 +32,10 @@ Index Class
     :members:
 
 
+.. key-class:
+
 Key Class
 +++++++++
 
 .. autoclass:: acid.keylib.Key
    :members:
-
-
-
-PhysicalIterator Class
-++++++++++++++++++++++
-
-.. autoclass:: acid.core.PhysicalIterator
-    :members:

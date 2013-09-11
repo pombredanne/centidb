@@ -26,6 +26,7 @@ compressed and the batch size is configurable.
     engines
     errors
     encoders
+    internals
     cookbook
     notes
     format
