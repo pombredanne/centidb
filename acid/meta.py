@@ -453,11 +453,12 @@ class BaseModel(object):
         return cls.collection().find(key, lo, hi, reverse, include)
 
     @classmethod
-    def iter(cls, key=None, lo=None, hi=None, reverse=None, max=None,
-             include=False):
+    def iter(cls, key=None, lo=None, hi=None, prefix=None, reverse=None,
+             max=None, include=False, raw=False):
         """Yield matching models in key order; see
         :py:meth:`acid.Store.values`."""
-        return cls.collection().values(key, lo, hi, reverse, max, include)
+        coll = cls.collection()
+        return coll.values(key, lo, hi, prefix, reverse, max, include)
 
     def __init__(self, _rec=None, _key=None, **kwargs):
         self._key = _key
