@@ -138,8 +138,11 @@ class Key(object):
         it may not decode to a valid value."""
         return self.from_raw('', next_greater(self.packed[len(self.prefix):]))
 
-    def to_raw(self, prefix=''):
-        """Get the bytestring representing this Key, prefixed by `prefix`."""
+    def to_raw(self, prefix=None):
+        """Get the bytestring representing this Key, optionally prefixed by
+        `prefix`."""
+        if prefix is None:
+            prefix = ''
         if self.prefix != prefix:
             self.packed = prefix + self.packed[len(self.prefix):]
             self.prefix = prefix
@@ -148,7 +151,7 @@ class Key(object):
     def to_hex(self, secret=None):
         """Return :py:func:`to_raw('') <to_raw>` encoded in hex. `secret` is
         currently unused."""
-        return self.to_raw('').encode('hex')
+        return self.to_raw().encode('hex')
 
     def __iter__(self):
         if self.args is None:
