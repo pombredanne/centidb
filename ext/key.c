@@ -155,9 +155,9 @@ key_dealloc(Key *self)
 static PyObject *
 key_to_raw(Key *self, PyObject *args)
 {
-    uint8_t *prefix;
-    Py_ssize_t prefix_len;
-    if(! PyArg_ParseTuple(args, "s#", &prefix, &prefix_len)) {
+    uint8_t *prefix = "";
+    Py_ssize_t prefix_len = 0;
+    if(! PyArg_ParseTuple(args, "|s#", &prefix, &prefix_len)) {
         return NULL;
     }
 

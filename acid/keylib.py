@@ -138,7 +138,7 @@ class Key(object):
         it may not decode to a valid value."""
         return self.from_raw('', next_greater(self.packed[len(self.prefix):]))
 
-    def to_raw(self, prefix):
+    def to_raw(self, prefix=''):
         """Get the bytestring representing this Key, prefixed by `prefix`."""
         if self.prefix != prefix:
             self.packed = prefix + self.packed[len(self.prefix):]
