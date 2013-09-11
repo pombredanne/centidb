@@ -498,6 +498,7 @@ class BaseModel(object):
         self._key = self.collection().put(self, key=key)
         for func in after_funcs:
             func(self)
+        return self._key
 
     def __repr__(self):
         klass = self.__class__
