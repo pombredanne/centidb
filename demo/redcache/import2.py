@@ -112,10 +112,15 @@ def process_set(stats, all_paths):
             continue
 
         print 'Loading', path
-        if path.endswith('.gz'):
-            js = json.loads(gzip.open(path).read())
-        else:
-            js = json.loads(file(path).read())
+        try:
+            if path.endswith('.gz'):
+                js = json.loads(gzip.open(path).read())
+            else:
+                js = json.loads(file(path).read())
+        except Exception, e:
+            print "Can't load %r: %s" % (path, e)
+            stats['io_error'] += 1
+            continue
 
         for thing in js['data']['children']:
             process_one(stats, thing['data'])
@@ -136,6 +141,7 @@ def main():
     stats = {
         'all_comments': 0,
         'comments': 0,
+        'io_error': 0,
         'links': 0,
         'reddits': 0,
         'users': 0,
