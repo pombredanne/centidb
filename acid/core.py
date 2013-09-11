@@ -782,7 +782,7 @@ class Store(object):
         if mode is None:
             with self._txn_context.begin(write=write):
                 return func()
-        elif mode == False and write == True:
+        elif write and not mode:
             raise errors.TxnError('attempted write in a read-only transaction')
         else:
             return func()
