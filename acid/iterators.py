@@ -128,15 +128,15 @@ class Iterator:
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
     it = RangeIterator(obj.engine, obj.prefix)
     if lo:
-        it.set_lo(lo, closed=include)
+        it.set_lo(lo, include)
     if hi:
-        it.set_hi(hi, closed=include)
+        it.set_hi(hi, include)
     if prefix:
         assert 0, 'prefix= not implemented yet.'
     if max_:
         it.set_max(max_)
-    if key:
-        it.set_exact(key)
+    #if key:
+        #it.set_exact(key)
 
     if reverse:
         if key:

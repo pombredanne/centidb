@@ -31,6 +31,7 @@ import warnings
 
 from acid import encoders
 from acid import errors
+from acid import iterators
 from acid import keylib
 
 __all__ = ['Store', 'Collection', 'Index', 'open']
@@ -120,43 +121,8 @@ class Index(object):
     def _iter(self, key, lo, hi, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
         """
-        if lo is None:
-            lo = self.prefix
-        else:
-            lo = keylib.Key(lo).to_raw(self.prefix)
-
-        if hi is None:
-            hi = keylib.next_greater(self.prefix)
-            if not (key and reverse):
-                include = False
-        else:
-            # This is a broken mess. When doing reverse queries we must account
-            # for the key tuple of the index key. next_greater() may fail if
-            # the last byte of the index tuple is FF. Needs a better solution.
-            hi = keylib.next_greater(keylib.Key(hi).to_raw(self.prefix)) # TODO WTF
-            assert hi
-
-        if key is not None:
-            if reverse:
-                hi = keylib.next_greater(keylib.Key(key).to_raw(self.prefix)) # TODO
-                assert hi
-                include = False
-            else:
-                lo = keylib.Key(key).to_raw(self.prefix)
-
-        it = self.store._txn_context.get().iter(hi, reverse)
-        if reverse:
-            pred = lo.__le__
-        else:
-            pred = hi.__ge__ if include else hi.__gt__
-        it = itertools.takewhile(pred, it)
-        if max is not None:
-            it = itertools.islice(it, max)
-        for key, _ in it:
-            lst = keylib.KeyList.from_raw(self.prefix, key)
-            if not lst:
-                break
-            yield lst
+        return iterators.from_args(self, key, lo, hi, None,
+                                   reverse, max, include)
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False):
         """Return a count of index entries matching the parameter
@@ -164,13 +130,14 @@ class Index(object):
         return sum(1 for _ in self._iter(args, lo, hi, 0, max, include))
 
     def pairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=False):
+              include=False):
         """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record.
         
         `Note:` the yielded sequence is a list, not a tuple."""
-        return self._iter(args, lo, hi, reverse, max, include)
+        it = self._iter(args, lo, hi, reverse, max, include)
+        return (e.keys for e in it)
 
     def tups(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=False):
@@ -178,19 +145,20 @@ class Index(object):
         is the part of the entry produced by the user's index function, i.e.
         the index's natural "value"."""
         it = self._iter(args, lo, hi, reverse, max, include)
-        return itertools.imap(ITEMGETTER_0, it)
+        return (e.keys[0] for e in it)
 
     def keys(self, args=None, lo=None, hi=None, reverse=None, max=None,
             include=False):
         """Yield all keys in the index, in tuple order."""
         it = self._iter(args, lo, hi, reverse, max, include)
-        return itertools.imap(ITEMGETTER_1, it)
+        return (e.keys[1] for e in it)
 
     def items(self, args=None, lo=None, hi=None, reverse=None, max=None,
               include=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order."""
-        for _, key in self._iter(args, lo, hi, reverse, max, include):
+        for e in self._iter(args, lo, hi, reverse, max, include):
+            key = e.keys[1]
             obj = self.coll.get(key)
             if obj:
                 yield key, obj
@@ -709,7 +677,7 @@ class Collection(object):
     def delete(self, key):
         """Delete any existing record filed under `key`.
         """
-        it = self._iter(key, None, None, None, None, True, None)
+        it = self._iter(key, None, None, None, None, None, True, None)
         txn = self.store._txn_context.get()
         for batch, key_, data in it:
             if key != key_:

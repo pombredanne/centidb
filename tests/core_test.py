@@ -288,7 +288,8 @@ class IndexTest:
         eq('dave', self.i.find())
         eq('dave2', self.i.find(reverse=True))
         eq('dave2', self.i.find((69, 'dave2')))
-        eq('dave2', self.i.find(hi=(69, 'dave2'), reverse=True))
+        # open
+        eq('dave', self.i.find(hi=(69, 'dave2'), reverse=True))
 
     # get
     def testGet(self):
