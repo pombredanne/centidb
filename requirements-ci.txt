@@ -1,3 +1,2 @@
 lmdb
 python-dateutil
-sphinxcontrib-fulltoc
