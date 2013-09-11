@@ -33,6 +33,7 @@ class Result(object):
 
     #: Object satisfying the :py:class:`buffer` interface that represents the
     #: raw record data.
+    data = None
 
 
 class RangeIterator(object):
