@@ -382,7 +382,8 @@ class Collection(object):
                 lo = key
 
         if prefix:
-            prefix_s = keylib.Key(prefix).to_raw(self.prefix)
+            prefix = keylib.Key(prefix)
+            prefix_s = prefix.to_raw(self.prefix)
         else:
             prefix_s = self.prefix
 
