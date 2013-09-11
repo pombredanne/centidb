@@ -1,3 +1,3 @@
 
-<a href="https://travis-ci.org/dw/acid"><img src="http://api.travis-ci.org/dw/acid.png"></a>
+[![Build Status](https://travis-ci.org/dw/acid.png)](https://travis-ci.org/dw/acid)
 
