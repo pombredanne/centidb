@@ -112,7 +112,6 @@ class Index(object):
     def __init__(self, coll, info, func):
         self.coll = coll
         self.store = coll.store
-        self.engine = self.store.engine
         self.info = info
         #: The index function.
         self.func = func
