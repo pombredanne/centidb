@@ -186,6 +186,7 @@ class Index(object):
 
     def get(self, x, default=None):
         """Return the first matching record from the index."""
+        x = keylib.Key(x)
         for tup in self.items(lo=x, hi=x, include=True):
             return tup[1]
         return default
