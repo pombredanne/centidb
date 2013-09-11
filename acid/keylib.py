@@ -205,7 +205,7 @@ class KeyList(object):
         `prefix` does not match the actual prefix in `packed`, return ``None``.
 
         If `source` is not ``None``, `packed` must be a :py:class:`buffer` and
-        `source` should be a *source object* implmementing the `Memsink
+        `source` should be a *source object* implementing the `Memsink
         Protocol <https://github.com/dw/acid/issues/23>`_."""
         return unpacks(prefix, packed)
 
