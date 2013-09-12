@@ -122,7 +122,7 @@ removed from the lifecycle of a typical request. For example:
 * No need to establish a DBMS connection using the network layer.
 * No need to serialize the query.
 * No need to context switch to the DBMS.
-* No need to deserialize the query.
+* No need to parse/deserialize the query.
 * While there are more results, no need to endlessly serialize/context
   switch/deserialize the results.
 
@@ -149,6 +149,12 @@ removed from the lifecycle of a typical request. For example:
   a dedicated hardware thread to implement group commit. Similarly it is
   possible to prioritize work for the thread, e.g. by having separate queues
   for paid and free users.
+
+* Finer control over record clustering, and the possibility of avoiding some
+  indices, since random lookups are more efficient. Given a key format `(A, B,
+  C)`, iterating `(A, B, C)`, `(A, B+1, C)`, `(A, B+2, C)`, ... is
+  computationally more efficient, and vastly more storage efficient than an
+  explicit index on `(A, B)`.
 
 
 Compared to SQL, there are of course numerous downsides to this approach,
