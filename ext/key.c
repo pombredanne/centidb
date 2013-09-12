@@ -155,7 +155,7 @@ key_dealloc(Key *self)
 static PyObject *
 key_to_raw(Key *self, PyObject *args)
 {
-    uint8_t *prefix = "";
+    uint8_t *prefix = NULL;
     Py_ssize_t prefix_len = 0;
     if(! PyArg_ParseTuple(args, "|z#", &prefix, &prefix_len)) {
         return NULL;
@@ -483,36 +483,65 @@ key_concat(Key *self, PyObject *other)
 }
 
 /**
- * Fetch the `i`th item from the Key.
+ * Fetch a slice of the Key.
  */
 static PyObject *
-key_item(Key *self, Py_ssize_t i)
+key_subscript(Key *self, PyObject *key)
 {
-    struct reader rdr = {self->p, self->p + Py_SIZE(self)};
-    int eof = rdr.p == rdr.e;
-
-    if(i < 0) {
-        // TODO: can this be made more efficient?
-        Py_ssize_t len = key_length(self);
-        i = len - i;
-        eof |= i < 0;
-    }
-    while(i-- && !eof) {
-        if(skip_element(&rdr, &eof)) {
+    if(PySlice_Check(key)) {
+        // TODO: make this more efficient
+        PyObject *tup = PySequence_Tuple((PyObject *) self);
+        PyObject *slice = NULL;
+        PyObject *newkey = NULL;
+        if(tup) {
+            PyMappingMethods *funcs = tup->ob_type->tp_as_mapping;
+            slice = funcs->mp_subscript((PyObject *) tup, key);
+            Py_DECREF(tup);
+        }
+        if(slice) {
+            newkey = key_new(&KeyType, slice, NULL);
+            Py_DECREF(slice);
+        }
+        return newkey;
+    } else {
+        // Fetch the `i`th item from the Key.
+        Py_ssize_t i = PyNumber_AsSsize_t(key, PyExc_OverflowError);
+        if(i == -1 && PyErr_Occurred()) {
             return NULL;
         }
+        struct reader rdr = {self->p, self->p + Py_SIZE(self)};
+        int eof = rdr.p == rdr.e;
+
+        if(i < 0) {
+            // TODO: make this more efficient
+            Py_ssize_t len = key_length(self);
+            i += len;
+            eof |= i < 0;
+        }
+        while(i-- && !eof) {
+            if(skip_element(&rdr, &eof)) {
+                return NULL;
+            }
+        }
+        if(eof) {
+            PyErr_SetString(PyExc_IndexError, "Key index out of range");
+            return NULL;
+        }
+        return read_element(&rdr);
     }
-    if(eof) {
-        PyErr_SetString(PyExc_IndexError, "Key index out of range");
-        return NULL;
-    }
-    return read_element(&rdr);
 }
+
 
 static PySequenceMethods key_seq_methods = {
     .sq_length = (lenfunc) key_length,
     .sq_concat = (binaryfunc) key_concat,
-    .sq_item = (ssizeargfunc) key_item,
+    //.sq_item = (ssizeargfunc) key_item,
+};
+
+/** Needed to implement slicing. */
+static PyMappingMethods key_mapping_methods = {
+    .mp_length = (lenfunc) key_length,
+    .mp_subscript = (binaryfunc) key_subscript
 };
 
 static PyMethodDef key_methods[] = {
@@ -538,7 +567,8 @@ static PyTypeObject KeyType = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "acid._keylib.Key",
     .tp_methods = key_methods,
-    .tp_as_sequence = &key_seq_methods
+    .tp_as_sequence = &key_seq_methods,
+    .tp_as_mapping = &key_mapping_methods
 };
 
 
