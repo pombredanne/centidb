@@ -25,6 +25,7 @@
 {%- endif %}
 
 {%- macro relbar() %}
+{% if 0 %}
     <div class="related">
       <h3>{{ _('Navigation') }}</h3>
       <ul>
@@ -43,6 +44,7 @@
         {%- block relbaritems %} {% endblock %}
       </ul>
     </div>
+{% endif %}
 {%- endmacro %}
 
 {%- macro sidebar() %}
