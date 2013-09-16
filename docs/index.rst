@@ -51,7 +51,10 @@ flexibility of an in-process database.
         <https://code.google.com/p/leveldb/>`_, `Kyoto Cabinet
         <http://fallabs.com/kyotocabinet/>`_, and a basic in-memory skiplist
         engine are supported by default. Additional engines may be supported by
-        implementing a single Python class.
+        implementing a single Python class. Significant effort is being made to
+        integrate efficiently with LMDB, so that in certain configurations, no
+        memory copies need occur for the majority of reads within a
+        transaction.
 
     :ref:`Configurable Record Encoding <record-encoder>`
 
@@ -59,7 +62,10 @@ flexibility of an in-process database.
         <http://docs.python.org/2/library/pickle.html>`_, and `Thrift
         <http://thrift.apache.org/>`_ record encodings are supported by
         default. Additional encodings may be supported by instantiating a
-        single Python class.
+        single Python class. Decoding can be disabled during reads, allowing
+        the storage encoding to be aligned directly with whatever output a
+        server generates (e.g. JSON), without necessitating a pointless
+        decode/re-encode step.
 
 
 .. raw:: html
