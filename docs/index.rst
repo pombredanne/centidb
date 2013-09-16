@@ -52,7 +52,7 @@ Features:
 
         Similar to a regular DBMS, the storage engine may contain multiple
         collections. Each collection is assigned a short (usually 1 byte) key
-        prefix, and may have its own encoding, compresison strategy, and index
+        prefix, and may have its own encoding, compression strategy, and index
         functions defined.
 
     :ref:`Configurable Database Engine <engines>`
