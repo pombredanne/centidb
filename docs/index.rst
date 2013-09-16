@@ -1,16 +1,20 @@
 
-acid
+Acid
 ####
-
-.. warning::
-
-    This is a prototype, focusing primarily on physical data layout. Many parts
-    are missing, slow, broken and/or very nasty.
 
 **Acid** enhances any ordered-map style database engine to provide something
 like an *SQLite for NoSQL*, a sweet spot between the ease of managing data with
 an external DBMS, and the high performance and flexibility of an in-process
-database. Features:
+database.
+
+.. raw:: html
+
+    <div style="color: #7f0000">
+    This is a prototype, primarily focused on physical data layout. Many parts
+    are missing, slow, broken and/or very nasty.
+    </div>
+
+Features:
 
     :ref:`Secondary Index Management <indices>`
 
