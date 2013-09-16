@@ -1,6 +1,8 @@
 
 .. currentmodule:: acid.meta
 
+.. _meta:
+
 Declarative Interface
 #####################
 

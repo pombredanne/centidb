@@ -195,6 +195,8 @@ supported combinations.
          (acid.Key(2L,), ('Willow', 'girl'))]
 
 
+.. _keys:
+
 Keys & Indices
 ++++++++++++++
 
@@ -294,6 +296,7 @@ auto-incrementing keys should be used sparingly. Example:
 integer was wrapped in a 1-tuple.
 
 
+.. _indices:
 
 Indices
 -------
@@ -363,8 +366,16 @@ Note that custom compressors must always be re-registered with
 library will raise exceptions when a compressed record is encountered.
 
 
+.. _batch-compression:
+
 Batch compression
 +++++++++++++++++
+
+Batch compression allows read performance to be traded for storage efficiency,
+while still allowing transparent access to individual records. Arbitrary key
+ranges may be compressed and the batch size is configurable. Batches may be as
+small as a single record, and use any compression algorithm available to
+Python.
 
 Batch compression is supported by way of :py:meth:`Collection.batch`: this is
 where a range of records *have their values concatenated* before being passed
