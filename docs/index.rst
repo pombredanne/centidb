@@ -48,6 +48,13 @@ Features:
         transparently maintains a compact record encoding, and provides a
         convenient ORM-like storage interface familiar to many developers.
 
+    :ref:`One Engine, Many Collections <intro>`
+
+        Similar to a regular DBMS, the storage engine may contain multiple
+        collections. Each collection is assigned a short (usually 1 byte) key
+        prefix, and may have its own encoding, compresison strategy, and index
+        functions defined.
+
     :ref:`Configurable Database Engine <engines>`
 
         `LMDB <http://symas.com/mdb/>`_, `LevelDB
