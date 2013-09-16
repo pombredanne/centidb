@@ -9,26 +9,27 @@ acid
 
 `Github Repository <https://github.com/dw/acid/>`_
 
-**Acid** simplifies use of ordered-map style database engines, providing an
-*SQLite equivalent for NoSQL*, a sweet spot somewhere between the conceptual
-ease of managing data using an external DBMS, and the performance and
+**Acid** enhanced use of ordered-map style database engines, providing
+something like an *SQLite equivalent for NoSQL*, a sweet spot between the ease
+of managing data with an external DBMS, and the high performance and extreme
 flexibility of an in-process database.
 
     :ref:`Secondary Index Management <indices>`
 
-        Secondary indices can be expressed directly as simple Python functions.
+        Secondary indices may be expressed as simple Python functions.
         Corresponding index records are automatically updated as records are
-        added, deleted, and modified from a collection.
+        added, modified, and deleted from a collection. Single-record lookups,
+        and forward and reverse prefix and range queries are supported on both
+        primary key and secondary indices.
 
     :ref:`Order-preserving Tuple Encoding <keys>`
 
         Key and index values are expressed as Python tuples, which are written
         to the database using a space-efficient, reversible encoding that
-        preserves the tuple's original order. By exposing the engine's order to
-        the user, complex clustering hierarchies can be expressed directly
-        without resorting to designing a custom key encoding, error-prone
-        string manipulation, or unnecessary secondary indices to work around
-        limitations of the database model.
+        preserves the tuple's order. By exposing the engine's order to the
+        user, complex clustering hierarchies can be expressed without resorting
+        to custom encodings, error-prone string manipulation, or unnecessary
+        indices to work around limitations of the database model.
 
     :ref:`Transparent Batch Compression <batch-compression>`
 
