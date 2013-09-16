@@ -50,17 +50,3 @@ BatchRangeIterator
 
 .. autoclass:: acid.iterators.BatchRangeIterator
     :members:
-
-
-PrefixIterator
---------------
-
-.. autoclass:: acid.iterators.PrefixIterator
-    :members:
-
-BatchPrefixIterator
--------------------
-
-.. autoclass:: acid.iterators.BatchPrefixIterator
-    :members:
-
