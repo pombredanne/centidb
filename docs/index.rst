@@ -10,7 +10,7 @@ acid
 **Acid** enhances any ordered-map style database engine to provide something
 like an *SQLite for NoSQL*, a sweet spot between the ease of managing data with
 an external DBMS, and the high performance and flexibility of an in-process
-database.
+database. Features:
 
     :ref:`Secondary Index Management <indices>`
 
