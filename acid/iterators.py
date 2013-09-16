@@ -164,29 +164,29 @@ class RangeIterator(object):
 
 
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
+    """This function is a stand-in until the core.py API is refurbished."""
     txn = obj.store._txn_context.get()
     it = RangeIterator(txn, obj.prefix)
-    if lo:
-        it.set_lo(lo, include)
-    if hi:
-        it.set_hi(hi, include)
+
     if prefix:
-        assert 0, 'prefix= not implemented yet.'
+        it.set_prefix(prefix)
+    elif key:
+        if reverse:
+            it.set_hi(key, closed=True)
+        else:
+            it.set_lo(key, closed=True)
+    else:
+        if lo:
+            it.set_lo(lo, include)
+        if hi:
+            it.set_hi(hi, include)
+
     if max_:
         it.set_max(max_)
     #if key:
         #it.set_exact(key)
 
     if reverse:
-        if key:
-            it.set_hi(key, closed=True)
         return it.reverse()
     else:
-        if key:
-            it.set_lo(key, closed=True)
         return it.forward()
-
-
-def batch_from_args(obj, key, lo, hi, prefix, reverse, max_, include, max_phys):
-    return _from_args()
-
