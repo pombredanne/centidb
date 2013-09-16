@@ -7,8 +7,6 @@ acid
     This is a prototype, focusing primarily on physical data layout. Many parts
     are missing, slow, broken and/or very nasty.
 
-`Github Repository <https://github.com/dw/acid/>`_
-
 **Acid** enhances any ordered-map style database engine to provide something
 like an *SQLite equivalent for NoSQL*, a sweet spot between the ease of
 managing data with an external DBMS, and the high performance and extreme
