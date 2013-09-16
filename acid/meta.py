@@ -426,8 +426,23 @@ class BaseModel(object):
         return cls.META_COLLECTION
 
     @classmethod
+    def _meta_reset(cls):
+        """Clear any cached Store-specific state from this class and all
+        subclasses."""
+        stack = [cls]
+        while stack:
+            klass = stack.pop()
+            klass.META_COLLECTION = None
+            for key, value in vars(klass).iteritems():
+                if isinstance(value, acid.Index):
+                    lazy = LazyIndexProperty(value.func.func_name)
+                    setattr(klass, key, lazy)
+            stack += klass.__subclasses__()
+
+    @classmethod
     def bind_store(cls, store):
-        """Bind this class and all subclasses to a :py:class:`acid.Store`.
+        """Bind this class and all subclasses to a :py:class:`acid.Store`,
+        clearing any cached references to the previous store, if any.
 
         ::
 
@@ -436,8 +451,7 @@ class BaseModel(object):
         """
         assert isinstance(store, acid.Store)
         cls.META_STORE = store
-        if hasattr(cls, 'META_COLLECTION'):
-            del cls.META_COLLECTION
+        cls._meta_reset()
 
     @classmethod
     def get(cls, key):
