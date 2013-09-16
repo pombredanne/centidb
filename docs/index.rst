@@ -8,9 +8,9 @@ acid
     are missing, slow, broken and/or very nasty.
 
 **Acid** enhances any ordered-map style database engine to provide something
-like an *SQLite equivalent for NoSQL*, a sweet spot between the ease of
-managing data with an external DBMS, and the high performance and flexibility
-of an in-process database.
+like an *SQLite for NoSQL*, a sweet spot between the ease of managing data with
+an external DBMS, and the high performance and flexibility of an in-process
+database.
 
     :ref:`Secondary Index Management <indices>`
 
