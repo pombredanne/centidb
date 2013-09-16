@@ -67,6 +67,13 @@ class RangeIterator(object):
         self.hi = keylib.Key(key)
         self.hi_pred = getattr(self.hi, ('__gt__', '__ge__')[closed])
 
+    def set_prefix(self, key):
+        """Provides directional iteration of a range of keys with a set prefix.
+        """
+        key = keylib.Key(key)
+        self.set_lo(key, True)
+        self.set_hi(key.next_greater(), False)
+
     def set_max(self, max_):
         """Set the maximum size of the result set."""
         assert max_ >= 0, 'Result set size must be >= 0'
@@ -81,15 +88,15 @@ class RangeIterator(object):
         self.lo_pred = key.__le__
         self.hi_pred = key.__ge__
 
-    def _step(self, n):
+    def _step(self):
         """Step the iterator once, saving the new key and data. Returns True if
         the iterator is still within the bounds of the collection prefix,
         otherwise False."""
-        if self.remain or not n:
-            self.remain -= n
-            self.keys_raw, self.data = next(self.it, ('', ''))
-            self.keys = keylib.KeyList.from_raw(self.prefix, self.keys_raw)
-            return self.keys is not None
+        keys_raw, self.data = next(self.it, ('', ''))
+        keys = keylib.KeyList.from_raw(self.prefix, keys_raw)
+        self.keys = keys
+        return keys is not None
+
 
     def forward(self):
         """Return an iterator yielding the result set from `lo`..`hi`. Each
@@ -107,10 +114,13 @@ class RangeIterator(object):
 
         # When lo(closed=False), skip the start key.
         if go and not self.lo_pred(self.keys[0]):
-            go = self._step(0)
-        while go and self.hi_pred(self.keys[0]):
+            go = self._step()
+
+        remain = self._remain
+        while go and remain and self.hi_pred(self.keys[0]):
             yield self
-            go = self._step(1)
+            remain -= 1
+            go = self._step()
 
     def reverse(self):
         """Return an iterator yielding the result set from `hi`..`lo`. Each
@@ -127,23 +137,18 @@ class RangeIterator(object):
         # returned result.
         go = self._step(1)
         if not go:
-            go = self._step(0)
+            go = self._step()
 
         # We should now be positioned on the first record >= self.hi. When
         # hi(closed=False), skip the first result.
         if go and not self.hi_pred(self.keys[0]):
-            go = self._step(0)
-        while go and self.lo_pred(self.keys[0]):
+            go = self._step()
+
+        remain = self._remain
+        while go and remain and self.lo_pred(self.keys[0]):
             yield self
-            go = self._step(1)
-
-
-class PrefixIterator(RangeIterator):
-    def set_prefix(self, key):
-        self.set_lo(key, True)
-        self.set_hi(key.next_greater(), False)
-
-
+            remain -= 1
+            go = self._step()
 
 class Iterator:
     def set_exact():
