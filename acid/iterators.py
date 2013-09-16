@@ -98,16 +98,15 @@ class RangeIterator(object):
         self.keys = keys
         return keys is not None
 
-
     def forward(self):
-        """Return an iterator yielding the result set from `lo`..`hi`. Each
-        iteration returns an object satisfying the :py:class:`Result`
-        interface. Note the `Result` object is reused, so references to it
+        """Begin yielding objects satisfying the :py:class:`Result` interface,
+        from `lo`..`hi`. Note the yielded object is reused, so references to it
         should not be held."""
         if self.lo is None:
             key = self.prefix
         else:
             key = self.lo.to_raw(self.prefix)
+
         self.it = self.engine.iter(key, False)
         # Fetch the first key. If _step() returns false, then first key is
         # beyond collection prefix. Cease iteration.
@@ -124,9 +123,8 @@ class RangeIterator(object):
             go = self._step()
 
     def reverse(self):
-        """Return an iterator yielding the result set from `hi`..`lo`. Each
-        iteration returns an object satisfying the :py:class:`Result`
-        interface. Note the `Result` object is reused, so references to it
+        """Begin yielding objects satisfying the :py:class:`Result` interface,
+        from `hi`..`lo`. Note the yielded object is reused, so references to it
         should not be held."""
         if self.hi is None:
             key = keylib.next_greater(self.prefix)
