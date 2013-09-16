@@ -150,9 +150,6 @@ class RangeIterator(object):
             remain -= 1
             go = self._step()
 
-class Iterator:
-    def set_exact():
-        pass
 
     def set_prefix(self, key):
         key = keylib.Key(key)
@@ -190,16 +187,6 @@ def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
         return it.forward()
 
 
-class PrefixIterator(RangeIterator):
-    """Provides directional iteration of a range of keys with a set prefix.
-    """
-
-
-class BatchRangeIterator(object):
-    """Provides bidirectional iteration of a range of keys, treating >1-length
-    keys as batch records."""
-
-
-class BatchPrefixIterator(object):
-    """PrefixIterator equivalent for batch records."""
+def batch_from_args(obj, key, lo, hi, prefix, reverse, max_, include, max_phys):
+    return _from_args()
 
