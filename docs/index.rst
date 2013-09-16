@@ -9,9 +9,9 @@ acid
 
 `Github Repository <https://github.com/dw/acid/>`_
 
-**Acid** enhanced use of ordered-map style database engines, providing
-something like an *SQLite equivalent for NoSQL*, a sweet spot between the ease
-of managing data with an external DBMS, and the high performance and extreme
+**Acid** enhances any ordered-map style database engine to provide something
+like an *SQLite equivalent for NoSQL*, a sweet spot between the ease of
+managing data with an external DBMS, and the high performance and extreme
 flexibility of an in-process database.
 
     :ref:`Secondary Index Management <indices>`
