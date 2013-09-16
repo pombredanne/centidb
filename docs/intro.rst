@@ -1,6 +1,8 @@
 
 .. currentmodule:: acid
 
+.. _intro:
+
 Introduction
 ############
 
