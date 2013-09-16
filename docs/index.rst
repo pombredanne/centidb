@@ -10,9 +10,9 @@ acid
 `Github Repository <https://github.com/dw/acid/>`_
 
 **Acid** is a toolkit to simplify use of ordered-map style database engines,
-providing an *SQLite equivalent for NoSQL* by occupying a sweet spot somewhere
-between the conceptual ease of managing data using an SQL database, and the
-performance and flexibility of an in-process database.
+providing an *SQLite equivalent for NoSQL* aiming to occupy a sweet spot
+somewhere between the conceptual ease of managing data using an SQL database,
+and the performance and flexibility of an in-process database.
 
     :ref:`Secondary Index Management <indices>`
 
