@@ -15,10 +15,10 @@ of an in-process database.
     :ref:`Secondary Index Management <indices>`
 
         Secondary indices may be expressed as Python functions, with
-        corresponding index entries automatically maintained as records are
-        added, modified, or deleted from a collection. Single record lookups,
-        prefix, and range queries are supported on both primary keys and
-        secondary indices, iterating forward or in reverse.
+        corresponding index entries automatically maintained as the records in
+        a collection change. Single lookups, prefix, and range queries are
+        supported on both primary keys and secondary indices, iterating forward
+        or in reverse.
 
     :ref:`Order-preserving Tuple Encoding <keys>`
 
