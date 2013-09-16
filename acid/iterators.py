@@ -110,13 +110,13 @@ class RangeIterator(object):
         self.it = self.engine.iter(key, False)
         # Fetch the first key. If _step() returns false, then first key is
         # beyond collection prefix. Cease iteration.
-        go = self._step(1)
+        go = self._step()
 
         # When lo(closed=False), skip the start key.
         if go and not self.lo_pred(self.keys[0]):
             go = self._step()
 
-        remain = self._remain
+        remain = self.remain
         while go and remain and self.hi_pred(self.keys[0]):
             yield self
             remain -= 1
