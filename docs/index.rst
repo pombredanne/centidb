@@ -22,27 +22,27 @@ of an in-process database.
 
     :ref:`Order-preserving Tuple Encoding <keys>`
 
-        Keys and index entries are expressed as Python tuples, which are
-        written to the database using a space-efficient, reversible encoding
-        that preserves the tuple's order. By exposing the engine's order to the
-        user, complex clustering hierarchies can be expressed without resorting
-        to custom encodings, error-prone string manipulation, or unnecessary
-        indices to work around limitations of the database model.
+        Keys and index entries are expressed as tuples, which are written to
+        the engine using a compact, reversible encoding that preserves the
+        tuple's order. By exposing the engine's order to the user, complex
+        clustering hierarchies can be expressed without resorting to custom
+        encodings, error-prone string manipulation, or unnecessary indices to
+        work around limitations of the database model.
 
     :ref:`Batch Record Compression <batch-compression>`
 
-        Lookup efficiency may be incrementally traded for storage efficiency,
+        Lookup efficiency may be traded for storage efficiency incrementally,
         by controlling the batch size or by only compressing infrequently
         accessed subsets of a collection. For many applications a combination
-        of clustering and compression allows 3x-5x improvement in storage
+        of clustering and compression allows 3x-5x+ improvement in storage
         efficiency, while still providing read performance exceeding that of an
         external DBMS.
 
     :ref:`Declarative Interface <meta>`
 
         A :py:class:`Model <acid.meta.Model>` class is provided that
-        transparently maintains a space-efficient record encoding, and provides
-        a convenient ORM-like storage interface familiar to many developers.
+        transparently maintains a compact record encoding, and provides a
+        convenient ORM-like storage interface familiar to many developers.
 
     :ref:`Configurable Database Engine <engines>`
 
