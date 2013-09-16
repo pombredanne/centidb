@@ -4,8 +4,8 @@ acid
 
 .. warning::
 
-    This is a prototype, focusing on useful APIs and physical data layout. Many
-    parts are missing, slow, broken and/or very nasty.
+    This is a prototype, focusing primarily on physical data layout. Many parts
+    are missing, slow, broken and/or very nasty.
 
 `Github Repository <https://github.com/dw/acid/>`_
 
