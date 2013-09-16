@@ -7,6 +7,8 @@ Encoders
 
 
 
+.. _record-encoder:
+
 Encoder Interface
 +++++++++++++++++
 

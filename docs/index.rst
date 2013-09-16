@@ -9,10 +9,10 @@ acid
 
 `Github Repository <https://github.com/dw/acid/>`_
 
-**Acid** is a toolkit to simplify use of ordered-map style database engines,
-providing an *SQLite equivalent for NoSQL* aiming to occupy a sweet spot
-somewhere between the conceptual ease of managing data using an SQL database,
-and the performance and flexibility of an in-process database.
+**Acid** simplifies use of ordered-map style database engines, providing an
+*SQLite equivalent for NoSQL*, a sweet spot somewhere between the conceptual
+ease of managing data using an external DBMS, and the performance and
+flexibility of an in-process database.
 
     :ref:`Secondary Index Management <indices>`
 
@@ -45,9 +45,21 @@ and the performance and flexibility of an in-process database.
         transparently maintains a space-efficient record encoding, and provides
         a convenient ORM-like storage interface familiar to many developers.
 
-    :ref:`Configurable Value Encoding <intro>`
+    :ref:`Configurable Database Engine <engines>`
 
-        No restrictions are made on record types or encodings,
+        `LMDB <http://symas.com/mdb/>`_, `LevelDB
+        <https://code.google.com/p/leveldb/>`_, `Kyoto Cabinet
+        <http://fallabs.com/kyotocabinet/>`_, and a basic in-memory skiplist
+        engine are supported by default. Additional engines may be supported by
+        implementing a single Python class.
+
+    :ref:`Configurable Record Encoding <record-encoder>`
+
+        `JSON <http://json.org/>`_, `MsgPack <http://msgpack.org/>`_, `Pickle
+        <http://docs.python.org/2/library/pickle.html>`_, and `Thrift
+        <http://thrift.apache.org/>`_ record encodings are supported by
+        default. Additional encodings may be supported by instantiating a
+        single Python class.
 
 
 .. raw:: html
@@ -55,6 +67,7 @@ and the performance and flexibility of an in-process database.
     <div style="display: none">
 
 .. toctree::
+    :maxdepth: 1
 
     intro
     core
@@ -67,7 +80,6 @@ and the performance and flexibility of an in-process database.
     notes
     format
     perf
-    :maxdepth: 1
 
 .. raw:: html
 

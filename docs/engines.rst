@@ -2,6 +2,8 @@
 Engines
 #######
 
+.. _engines:
+
 Engine Interface
 ++++++++++++++++
 
