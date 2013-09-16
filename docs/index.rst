@@ -16,9 +16,9 @@ performance and flexibility of an in-process database.
 
     :ref:`Secondary Index Management <indices>`
 
-        Secondary indices can be defined on data directly in Python syntax.
-        Indices are automatically updated as records are added, deleted, and
-        modified from the main collection.
+        Secondary indices can be expressed directly as simple Python functions.
+        Corresponding index records are automatically updated as records are
+        added, deleted, and modified from a collection.
 
     :ref:`Order-preserving Tuple Encoding <keys>`
 
