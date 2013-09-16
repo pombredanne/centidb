@@ -19,6 +19,7 @@ Iterator implementations.
 """
 
 from __future__ import absolute_import
+import bisect
 from acid import keylib
 
 
@@ -152,10 +153,19 @@ class RangeIterator(object):
             go = self._step()
 
 
-    def set_prefix(self, key):
-        key = keylib.Key(key)
-        self.set_lo(key, True)
-        self.set_hi(key.open_prefix())
+class BatchRangeIterator(RangeIterator):
+    """Provides bidirectional iteration of a range of keys, treating >1-length
+    keys as batch records."""
+    max_phys = -1
+
+    def set_max_phys(self, max_phys):
+        self.max_phys = max_phys
+
+    def _step(self):
+        go = RangeIterator._step(self)
+        if go and len(self.keys) > 1:
+            raise NotImplementedError('batch iteration not supported yet.')
+        return go
 
 
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
