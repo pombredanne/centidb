@@ -133,9 +133,10 @@ class RangeIterator(object):
             key = self.hi.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, True)
+
         # We may have seeked to first record of next prefix, so skip first
         # returned result.
-        go = self._step(1)
+        go = self._step()
         if not go:
             go = self._step()
 
@@ -144,7 +145,7 @@ class RangeIterator(object):
         if go and not self.hi_pred(self.keys[0]):
             go = self._step()
 
-        remain = self._remain
+        remain = self.remain
         while go and remain and self.lo_pred(self.keys[0]):
             yield self
             remain -= 1
@@ -155,12 +156,6 @@ class RangeIterator(object):
         key = keylib.Key(key)
         self.set_lo(key, True)
         self.set_hi(key.open_prefix())
-
-    def set_max():
-        pass
-
-    def set_reverse():
-        pass
 
 
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
