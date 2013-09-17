@@ -460,11 +460,13 @@ class BaseModel(object):
         return cls.collection().get(key)
 
     @classmethod
-    def find(cls, key=None, lo=None, hi=None, reverse=None, include=False):
+    def find(cls, key=None, lo=None, hi=None, prefix=None, reverse=None,
+             include=False, raw=False):
         """Fetch the first matching instance; see
         :py:meth:`acid.Collection.find`.
         """
-        return cls.collection().find(key, lo, hi, reverse, include)
+        coll = cls.collection()
+        return coll.find(key, lo, hi, prefix, reverse, include, raw)
 
     @classmethod
     def iter(cls, key=None, lo=None, hi=None, prefix=None, reverse=None,
