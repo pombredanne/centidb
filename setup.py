@@ -23,8 +23,8 @@ import os
 import sys
 import platform
 
-from setuptools import Extension
-from setuptools import setup
+from distutils.core import Extension
+from distutils.core import setup
 
 try:
     import memsink
@@ -64,7 +64,6 @@ setup(
     author_email =  'dw@botanicus.net',
     license =       'Apache 2',
     url =           'http://github.com/dw/acid/',
-    zip_safe =      False,
     packages =      ['acid'],
     ext_package =   'acid',
     ext_modules =   ext_modules
