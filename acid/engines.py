@@ -439,6 +439,10 @@ class LmdbEngine(object):
             If `env` and `txn` are ``None``, pass these keyword arguments to
             create a new :py:class:`lmdb.Environment`.
     """
+    # Deletion counter. If this increases, cursors have become invalidated and
+    # must be reinitialized. This is a temporary workaround for an LMDB bug.
+    _deletes = 0
+
     def __init__(self, env=None, txn=None, db=None, **kwargs):
         if not (env or txn):
             import lmdb
@@ -448,11 +452,15 @@ class LmdbEngine(object):
         self.db = db
         self.get = (txn or env).get
         self.put = (txn or env).put
-        self.delete = (txn or env).delete
+        self._delete = (txn or env).delete
         self.cursor = (txn or env).cursor
 
     def close(self):
         self.env.close()
+
+    def delete(self, key):
+        self._deletes += 1
+        return self._delete(key)
 
     def begin(self, write=False, db=None):
         """Start a transaction. Only valid if `txn` was not passed to the
@@ -471,4 +479,20 @@ class LmdbEngine(object):
         self.txn.commit()
 
     def iter(self, k, reverse):
-        return self.cursor(db=self.db)._iter_from(k, reverse)
+        # Workaround LMDB bug where deletion from page cursor currently points
+        # to causes asplosion.
+        it = self.cursor(db=self.db)._iter_from(k, reverse)
+        while True:
+            deletes = self._deletes
+            while deletes == self._deletes:
+                pair = next(it)
+                yield pair
+            oldkey = pair[0]
+            it = self.cursor(db=self.db)._iter_from(oldkey, reverse)
+            pair = next(it)
+            if reverse:
+                while pair[0] >= oldkey:
+                    pair = next(it)
+            else:
+                while pair[0] <= oldkey:
+                    pair = next(it)
