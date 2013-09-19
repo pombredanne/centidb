@@ -360,6 +360,65 @@ class KyotoEngine(Engine):
             return itertools.chain((tup,), it) if tup else it
 
 
+class TraceEngine(object):
+    """Storage engine that wraps another to provide a complete trace of
+    interactions between Acid and the external engine. Used for debugging and
+    producing crash reports.
+
+        `engine`:
+            :py:class:`lmdb.engines.Engine` to wrap.
+
+        `trace_path`:
+            String filesystem path to *overwrite* with a new trace log.
+    """
+    def __init__(self, engine, trace_path=None, _fp=None):
+        assert trace_path is not None or _fp is not None
+        self.engine = engine
+        self.trace_path = None
+        self.fp = _fp
+        if _fp is None:
+            self.fp = open(trace_path, 'w', 1)
+
+    def _trace(self, op, *args):
+        line = '%s %s\n' % (op, ' '.join(str(a).encode('hex') for a in args))
+        self.fp.write(line)
+
+    def close(self):
+        self._trace('close')
+        self.engine.close()
+
+    def get(self, key):
+        self._trace('get', key)
+        v = self.engine.get(key)
+        self._trace('got', v)
+        return v
+
+    def put(self, key, value):
+        self._trace('put', key, value)
+        return self.engine.put(key, value)
+
+    def delete(self, key):
+        self._trace('delete', key)
+        return self.engine.delete(key)
+
+    def abort(self):
+        self._trace('abort')
+        return self.engine.abort()
+
+    def commit(self):
+        self._trace('commit')
+        return self.engine.commit()
+
+    def iter(self, k, reverse):
+        self._trace('iter', k, reverse)
+        it = self.engine.iter(k, reverse)
+        while True:
+            self._trace('fetch')
+            key, value = next(it)
+            self._trace('yield', key, value)
+            yield key, value
+
+
 class LmdbEngine(object):
     """Storage engine that uses the OpenLDAP `"Lightning" MDB
     <http://symas.com/mdb/>`_ library via the `py-lmdb

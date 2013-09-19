@@ -44,3 +44,9 @@ KyotoEngine
 
 .. autoclass:: acid.engines.KyotoEngine
     :members:
+
+
+TraceEngine
++++++++++++
+
+.. autoclass:: acid.engines.TraceEngine

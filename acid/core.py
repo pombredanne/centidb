@@ -47,7 +47,7 @@ KIND_COUNTER = 3
 KIND_STRUCT = 4
 
 
-def open(engine, **kwargs):
+def open(engine, trace_path=None, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
     `engine(**kwargs)` and wrap the result in a :py:class:`Store`. `engine`
     can either be a name from :py:mod:`acid.engines` or a fully qualified
@@ -60,12 +60,20 @@ def open(engine, **kwargs):
 
         >>> # Uses mymodule.BlarghEngine
         >>> acid.open('mymodule.BlarghEngine')
+
+    If `trace_path` is specified, then the underlying engine is wrapped in a
+    :py:class:`acid.engines.TraceEngine` to produce a complete log of
+    interactions with the external engine, written to `trace_path`.
     """
     if '.' not in engine:
         engine = 'acid.engines.' + engine
     modname, _, classname = engine.rpartition('.')
     __import__(modname)
-    return Store(getattr(sys.modules[modname], classname)(**kwargs))
+    engine = getattr(sys.modules[modname], classname)(**kwargs)
+    if trace_path is not None:
+        import acid.engines
+        engine = acid.engines.TraceEngine(engine, trace_path=trace_path)
+    return Store(engine)
 
 def decode_offsets(s):
     """Given a string, decode an array of offsets at the start of the string. A
