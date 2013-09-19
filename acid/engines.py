@@ -371,8 +371,12 @@ class TraceEngine(object):
         `trace_path`:
             String filesystem path to *overwrite* with a new trace log.
     """
+    _counter = 0
+
     def __init__(self, engine, trace_path=None, _fp=None):
         assert trace_path is not None or _fp is not None
+        TraceEngine._counter += 1
+        self.idx = TraceEngine._counter
         self.engine = engine
         self.trace_path = None
         self.fp = _fp
@@ -380,8 +384,8 @@ class TraceEngine(object):
             self.fp = open(trace_path, 'w', 1)
 
     def _trace(self, op, *args):
-        line = '%s %s\n' % (op, ' '.join(str(a).encode('hex') for a in args))
-        self.fp.write(line)
+        args = ' '.join(str(a).encode('hex') for a in args)
+        self.fp.write('%s %s %s\n' % (self.idx, op, args))
 
     def close(self):
         self._trace('close')
@@ -404,6 +408,11 @@ class TraceEngine(object):
     def abort(self):
         self._trace('abort')
         return self.engine.abort()
+
+    def begin(self, write=False):
+        self._trace('begin', write)
+        txn = self.engine.begin(write)
+        return TraceEngine(txn, _fp=self.fp)
 
     def commit(self):
         self._trace('commit')
