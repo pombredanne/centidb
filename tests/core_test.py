@@ -35,7 +35,7 @@ class IterTest:
     REVERSE = ITEMS[::-1]
 
     def _encode(self, s):
-        return keylib.packs(self.prefix, s)
+        return keylib.packs(s, self.prefix)
 
     def setUp(self):
         self.e = acid.engines.ListEngine()

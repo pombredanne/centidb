@@ -242,11 +242,11 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
  */
 static PyObject *py_pack_int(PyObject *self, PyObject *args)
 {
-    char *prefix;
-    Py_ssize_t prefix_len;
+    char *prefix = "";
+    Py_ssize_t prefix_len = 0;
     uint64_t v;
 
-    if(! PyArg_ParseTuple(args, "s#K", (char **) &prefix, &prefix_len, &v)) {
+    if(! PyArg_ParseTuple(args, "K|s#", &v, (char **) &prefix, &prefix_len)) {
         return NULL;
     }
 
@@ -450,23 +450,25 @@ static int write_tuple(struct writer *wtr, PyObject *tup)
  */
 static PyObject *py_packs(PyObject *self, PyObject *args)
 {
-    uint8_t *prefix = NULL;
-    Py_ssize_t prefix_size;
+    uint8_t *prefix = "";
+    Py_ssize_t prefix_size = 0;
 
     Py_ssize_t arg_count = PyTuple_GET_SIZE(args);
-    if(arg_count != 2) {
+    if(arg_count < 1) {
         PyErr_SetString(PyExc_TypeError,
-            "packs() takes exactly 2 arguments.");
+            "packs() takes at least 1 argument.");
         return NULL;
     }
 
-    PyObject *py_prefix = PyTuple_GET_ITEM(args, 0);
-    if(Py_TYPE(py_prefix) != &PyString_Type) {
-        PyErr_SetString(PyExc_TypeError, "packs() prefix must be str.");
-        return NULL;
+    if(arg_count > 1) {
+        PyObject *py_prefix = PyTuple_GET_ITEM(args, 1);
+        if(Py_TYPE(py_prefix) != &PyString_Type) {
+            PyErr_SetString(PyExc_TypeError, "packs() prefix must be str.");
+            return NULL;
+        }
+        prefix = (uint8_t *) PyString_AS_STRING(py_prefix);
+        prefix_size = PyString_GET_SIZE(py_prefix);
     }
-    prefix = (uint8_t *) PyString_AS_STRING(py_prefix);
-    prefix_size = PyString_GET_SIZE(py_prefix);
 
     struct writer wtr;
     if(! writer_init(&wtr, 20)) {
@@ -479,7 +481,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
         }
     }
 
-    PyObject *tups = PyTuple_GET_ITEM(args, 1);
+    PyObject *tups = PyTuple_GET_ITEM(args, 0);
     PyTypeObject *type = Py_TYPE(tups);
 
     int ret = 1;
@@ -849,13 +851,13 @@ skip_element(struct reader *rdr, int *eof)
  */
 static PyObject *py_unpack(PyObject *self, PyObject *args)
 {
-    uint8_t *prefix;
+    uint8_t *prefix = "";
     uint8_t *s;
     Py_ssize_t s_len;
-    Py_ssize_t prefix_len;
+    Py_ssize_t prefix_len = 0;
 
-    if(! PyArg_ParseTuple(args, "s#s#", (char **) &prefix, &prefix_len,
-                                        (char **) &s, &s_len)) {
+    if(! PyArg_ParseTuple(args, "s#|s#", (char **) &s, &s_len,
+                                         (char **) &prefix, &prefix_len)) {
         return NULL;
     }
 
@@ -874,13 +876,13 @@ static PyObject *py_unpack(PyObject *self, PyObject *args)
  */
 static PyObject *py_unpacks(PyObject *self, PyObject *args)
 {
-    uint8_t *prefix;
+    uint8_t *prefix = "";
     uint8_t *s;
-    Py_ssize_t prefix_len;
+    Py_ssize_t prefix_len = 0;
     Py_ssize_t s_len;
 
-    if(! PyArg_ParseTuple(args, "s#s#", (char **) &prefix, &prefix_len,
-                                        (char **) &s, &s_len)) {
+    if(! PyArg_ParseTuple(args, "s#|s#", (char **) &s, &s_len,
+                                         (char **) &prefix, &prefix_len)) {
         return NULL;
     }
 

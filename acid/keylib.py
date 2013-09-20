@@ -101,7 +101,7 @@ class Key(object):
         self = object.__new__(cls)
         self.prefix = ''
         self.args = args or None
-        self.packed = packs('', args) if args else ''
+        self.packed = packs(args) if args else ''
         return self
 
     def __init__(self, *args):
@@ -111,10 +111,10 @@ class Key(object):
     def from_hex(cls, hex_, secret=None):
         """Construct a Key from its raw form wrapped in hex. `secret` is
         currently unused."""
-        return self.from_raw('', hex_.decode('hex'))
+        return self.from_raw(hex_.decode('hex'))
 
     @classmethod
-    def from_raw(cls, prefix, packed, source=None):
+    def from_raw(cls, packed, prefix=None, source=None):
         """Construct a Key from its raw form, skipping the bytestring `prefix`
         at the start.
 
@@ -122,14 +122,14 @@ class Key(object):
         `source` should be a *source object* implementing the `Memsink Protocol
         <https://github.com/dw/acid/issues/23>`_."""
         self = cls()
-        self.prefix = prefix
+        self.prefix = prefix or ''
         self.packed = str(packed)
         return self
 
     def __add__(self, extra):
         new = Key()
         new.prefix = self.prefix
-        new.packed = packs(self.packed, extra)
+        new.packed = packs(extra, self.packed)
         return new
 
     __iadd__ = __add__
@@ -138,7 +138,7 @@ class Key(object):
         """Return the next possible key that is lexigraphically larger than
         this one. Note the returned Key is only useful to implement compares,
         it may not decode to a valid value."""
-        return self.from_raw('', next_greater(self.packed[len(self.prefix):]))
+        return self.from_raw(next_greater(self.packed[len(self.prefix):]))
 
     def to_raw(self, prefix=None):
         """Get the bytestring representing this Key, optionally prefixed by
@@ -157,24 +157,24 @@ class Key(object):
 
     def __iter__(self):
         if self.args is None:
-            self.args = unpack(self.prefix, self.packed)
+            self.args = unpacks(self.packed, self.prefix, True)
         return iter(self.args)
 
     def __getitem__(self, i):
         try:
             return self.args[i]
         except TypeError:
-            self.args = unpack(self.prefix, self.packed)
+            self.args = unpacks(self.packed, self.prefix, True)
             return self.args[i]
 
     def __hash__(self):
         if self.args is None:
-            self.args = unpack(self.prefix, self.packed)
+            self.args = unpacks(self.prefix, self.packed, True)
         return hash(self.args)
 
     def __len__(self):
         if self.args is None:
-            self.args = unpack(self.prefix, self.packed)
+            self.args = unpacks(self.packed, self.prefix, True)
         return len(self.args)
 
     def __le__(self, other):
@@ -200,7 +200,7 @@ class Key(object):
 
     def __repr__(self):
         if self.args is None:
-            self.args = unpack(self.prefix, self.packed)
+            self.args = unpacks(self.packed, self.prefix, True)
         return 'acid.Key%r' % (self.args,)
 
 
@@ -208,7 +208,7 @@ class KeyList(object):
     """Represents a potentially lazy-decoded list of :py:class:`Key` objects.
     """
     @classmethod
-    def from_raw(cls, prefix, packed, source=None):
+    def from_raw(cls, packed, prefix=None, source=None):
         """Produce a :py:class:`KeyList` from the buffer or bytestring
         `packed`, ignoring `prefix` bytes at the start of the string. If
         `prefix` does not match the actual prefix in `packed`, return ``None``.
@@ -216,7 +216,7 @@ class KeyList(object):
         If `source` is not ``None``, `packed` must be a :py:class:`buffer` and
         `source` should be a *source object* implementing the `Memsink
         Protocol <https://github.com/dw/acid/issues/23>`_."""
-        return unpacks(prefix, packed)
+        return unpacks(packed, prefix)
 
 
 class FixedOffsetZone(datetime.tzinfo):
@@ -505,11 +505,11 @@ def read_time(kind, inp, pos, length):
     return datetime.datetime.fromtimestamp(msec / 1000.0, tz), pos
 
 
-def pack_int(prefix, i):
+def pack_int(i, prefix=None):
     """Invoke :py:func:`write_int(i, ba) <write_int>` using a temporary
     :py:class:`bytearray` initialized to contain `prefix`, returning the result
     as a bytestring."""
-    ba = bytearray(prefix)
+    ba = bytearray(prefix or '')
     write_int(i, ba.append, 0)
     return str(ba)
 
@@ -523,7 +523,7 @@ def unpack_int(s):
 
 GOOD_TYPES = (tuple, Key)
 
-def packs(prefix, tups):
+def packs(tups, prefix=None):
     """Encode a list of tuples of primitive values to a bytestring that
     preserves a meaningful lexicographical sort order.
 
@@ -558,7 +558,7 @@ def packs(prefix, tups):
         >>> packs([1])    # Treated like packs([(1,)])
         >>> packs([(1,)]) # Treated like packs([(1,)])
     """
-    ba = bytearray(prefix)
+    ba = bytearray(prefix or '')
     w = ba.append
 
     if type(tups) is not list:
@@ -603,7 +603,7 @@ def packs(prefix, tups):
 pack = packs
 
 
-def unpacks(prefix, s, first=False):
+def unpacks(s, prefix=None, first=False):
     """Decode a bytestring produced by :py:func:`keylib.packs`, returning the
     list of tuples the string represents.
 
@@ -617,6 +617,8 @@ def unpacks(prefix, s, first=False):
             immediately. Note the return value is the tuple, not a list
             containing the tuple.
     """
+    if not prefix:
+        prefix = ''
     if not s.startswith(prefix):
         return
 
@@ -665,8 +667,8 @@ def unpacks(prefix, s, first=False):
     return tups[0] if first else tups
 
 
-def unpack(prefix, s):
-    return unpacks(prefix, s, True)
+def unpack(s, prefix=None):
+    return unpacks(s, prefix, True)
 
 
 # Hack: disable speedups while testing or reading docstrings.

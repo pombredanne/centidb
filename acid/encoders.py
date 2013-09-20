@@ -180,8 +180,8 @@ def make_thrift_encoder(klass, factory=None):
 
 
 #: Encode Python tuples using keylib.packs()/keylib.unpacks().
-KEY = RecordEncoder('key', lambda key, value: acid.keylib.unpack('', value),
-                    functools.partial(acid.keylib.packs, ''))
+KEY = RecordEncoder('key', lambda key, value: acid.keylib.unpack(value),
+                    acid.keylib.packs)
 
 def _pickle_unpack(key, value):
     """cPickle.loads() can't reading from a buffer directly, however for

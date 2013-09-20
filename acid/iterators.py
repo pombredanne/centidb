@@ -94,7 +94,7 @@ class RangeIterator(object):
         the iterator is still within the bounds of the collection prefix,
         otherwise False."""
         keys_raw, self.data = next(self.it, ('', ''))
-        keys = keylib.KeyList.from_raw(self.prefix, keys_raw)
+        keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
         self.keys = keys
         return keys is not None
 

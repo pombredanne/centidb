@@ -123,7 +123,7 @@ class Index(object):
         self.info = info
         #: The index function.
         self.func = func
-        self.prefix = keylib.pack_int(self.store.prefix, info['idx'])
+        self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
 
     def _iter(self, key, lo, hi, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
@@ -236,7 +236,7 @@ class Collection(object):
         self.store = store
         self.engine = store.engine
         self.info = info
-        self.prefix = keylib.pack_int(self.store.prefix, info['idx'])
+        self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
         if not key_func:
             counter_name = counter_name or ('key:%(name)s' % self.info)
             key_func = lambda _: store.count(counter_name)
@@ -339,7 +339,7 @@ class Collection(object):
         if tup and tup[0][:len(prefix_s)] == prefix_s:
             it = itertools.chain((tup,), it)
         for key, value in it:
-            keys = keylib.unpacks(prefix_s, key)
+            keys = keylib.unpacks(key, prefix_s)
             if not keys:
                 return
 
@@ -447,7 +447,7 @@ class Collection(object):
                 if type(lst) is not list:
                     lst = [lst]
                 for idx_key in lst:
-                    idx_keys.append(keylib.packs(idx.prefix, [idx_key, key]))
+                    idx_keys.append(keylib.packs([idx_key, key], idx.prefix))
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
@@ -605,7 +605,7 @@ class Collection(object):
         if not packer_prefix:
             packer_prefix = self.store.add_encoder(packer)
         keytups = [key for key, _ in reversed(items)]
-        phys = keylib.packs(self.prefix, keytups)
+        phys = keylib.packs(keytups, self.prefix)
         out = bytearray()
 
         if len(items) == 1:
@@ -699,7 +699,7 @@ class Collection(object):
             if batch:
                 self._split_batch(key)
             else:
-                txn.delete(keylib.packs(self.prefix, key))
+                txn.delete(keylib.packs(key, self.prefix))
 
 
 class TxnContext(object):
@@ -762,9 +762,9 @@ class Store(object):
         self._txn_context = txn_context or TxnContext(engine)
         self.begin = self._txn_context.begin
         self._counter_key_cache = {}
-        self._encoder_prefix = dict((e, keylib.pack_int('', 1 + i))
+        self._encoder_prefix = dict((e, keylib.pack_int(1 + i))
                                     for i, e in enumerate(encoders._ENCODERS))
-        self._prefix_encoder = dict((keylib.pack_int('', 1 + i), e)
+        self._prefix_encoder = dict((keylib.pack_int(1 + i), e)
                                     for i, e in enumerate(encoders._ENCODERS))
         # ((kind, name, attr), value)
         self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
@@ -859,8 +859,8 @@ class Store(object):
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
                 self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx})
-            self._encoder_prefix[encoder] = keylib.pack_int('', idx)
-            self._prefix_encoder[keylib.pack_int('', idx)] = encoder
+            self._encoder_prefix[encoder] = keylib.pack_int(idx)
+            self._prefix_encoder[keylib.pack_int(idx)] = encoder
             return self._encoder_prefix[encoder]
 
     def get_encoder(self, prefix):

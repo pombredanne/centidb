@@ -248,14 +248,14 @@ key_from_hex(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 static PyObject *
 key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
-    char *prefix;
+    char *prefix = "";
     char *raw;
     PyObject *source = NULL;
-    Py_ssize_t prefix_len;
+    Py_ssize_t prefix_len = 0;
     Py_ssize_t raw_len;
 
-    if(! PyArg_ParseTuple(args, "s#s#|O", &prefix, &prefix_len,
-                          &raw, &raw_len, &source)) {
+    if(! PyArg_ParseTuple(args, "s#|s#O", &raw, &raw_len,
+                          &prefix, &prefix_len, &source)) {
         return NULL;
     }
     if(raw_len < prefix_len || memcmp(prefix, raw, prefix_len)) {
