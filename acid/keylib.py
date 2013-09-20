@@ -72,7 +72,7 @@ def next_greater(s):
 class Key(object):
     """Keys are immutable sequences used as indexes into an ordered collection.
     They behave like tuples, except that elements must be bytestrings, Unicode
-    strings, signed integers, ``True``, ``False``,
+    strings, signed integers, ``None``, ``True``, ``False``,
     :py:class:`datetime.datetime` instances, or :py:class:`uuid.UUID`
     instances.
 
@@ -86,6 +86,8 @@ class Key(object):
     may borrow it from another object. Since Keys can be constructed directly
     from an encoded representation in a shared buffer, it is possible to work
     with a Key as if it were a plain tuple without ever copying or decoding it.
+
+    The internal encoding is described in :ref:`key-encoding`.
     """
     __slots__ = ['args', 'prefix', 'packed']
 

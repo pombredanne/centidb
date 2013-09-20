@@ -7,6 +7,8 @@ This documents any Acid-specific representations data uses inside the
 storage engine.
 
 
+.. _key-encoding:
+
 Key encoding
 ++++++++++++
 
