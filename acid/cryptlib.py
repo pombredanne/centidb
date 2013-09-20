@@ -37,23 +37,29 @@ def wrap(secret, data):
     mac = hmac.new(key, None, hashlib.sha256)
     mac.update(salt)
     mac.update(body)
-    return ''.join([mac.digest()[:4], salt, body]).encode('hex')
+    return encode(''.join([mac.digest()[:4], salt, body]))
+
+
+def encode(s):
+    return base64.urlsafe_b64encode(s).rstrip('=')
+
+
+def decode(s):
+    rem = len(s) % 4
+    if rem:
+        s += '=' * rem
+    try:
+        return base64.urlsafe_b64decode(s)
+    except (TypeError, ValueError):
+        return
 
 
 def unwrap(secret, data):
     if not AES:
         _import_crypto()
 
-    rem = len(data) % 4
-    if rem:
-        data += '=' * rem
-
-    try:
-        raw = data.decode('hex')
-    except (TypeError, ValueError):
-        return
-
-    if len(raw) < 9:
+    raw = decode(data)
+    if (not raw) or len(raw) < 9:
         return
 
     salt = raw[4:8]

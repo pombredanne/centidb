@@ -20,6 +20,7 @@ SQLite4-like tuple serialization.
 
 from __future__ import absolute_import
 
+import base64
 import calendar
 import datetime
 import itertools
@@ -109,15 +110,22 @@ class Key(object):
     def __init__(self, *args):
         pass
 
-    @classmethod
-    def from_hex(cls, hex_, secret=None):
-        """Construct a Key from its raw form wrapped in hex. `secret` is
+    def to_str(self, secret=None):
+        """Return :py:func:`to_raw('') <to_raw>` encoded in hex. `secret` is
         currently unused."""
         if secret:
-            raw = cryptlib.unwrap(secret, self.to_raw())
+            return cryptlib.wrap(secret, self.to_raw())
+        return cryptlib.encode(self.to_raw())
+
+    @classmethod
+    def from_str(cls, s, secret=None):
+        """Construct a Key from its raw form wrapped in URL-safe base64.
+        `secret` is currently unused."""
+        if secret:
+            raw = cryptlib.unwrap(secret, s)
             if raw:
-                return self.from_raw(raw)
-        return self.from_raw(hex_.decode('hex'))
+                return cls.from_raw(raw)
+        return cls.from_raw(cryptlib.decode(s))
 
     @classmethod
     def from_raw(cls, packed, prefix=None, source=None):
@@ -155,13 +163,6 @@ class Key(object):
             self.packed = prefix + self.packed[len(self.prefix):]
             self.prefix = prefix
         return self.packed
-
-    def to_hex(self, secret=None):
-        """Return :py:func:`to_raw('') <to_raw>` encoded in hex. `secret` is
-        currently unused."""
-        if secret:
-            return cryptlib.wrap(secret, self.to_raw())
-        return self.to_raw().encode('hex')
 
     def __iter__(self):
         if self.args is None:
