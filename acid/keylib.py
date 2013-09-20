@@ -111,16 +111,19 @@ class Key(object):
         pass
 
     def to_str(self, secret=None):
-        """Return :py:func:`to_raw('') <to_raw>` encoded in hex. `secret` is
-        currently unused."""
+        """Return :py:func:`to_raw('') <to_raw>` encoded as URL-safe base64. If
+        `secret` is provided, additionally encrypt and authenticate the value
+        so the raw key cannot be easily observed or modified."""
         if secret:
             return cryptlib.wrap(secret, self.to_raw())
         return cryptlib.encode(self.to_raw())
 
     @classmethod
     def from_str(cls, s, secret=None):
-        """Construct a Key from its raw form wrapped in URL-safe base64.
-        `secret` is currently unused."""
+        """Construct a Key from its raw form wrapped in URL-safe base64. If
+        `secret` is provided, additionally authenticate and decrypt the value
+        using the same `secret` provided to :py:meth:`to_str`. Return ``None``
+        if the key cannot be decoded."""
         if secret:
             raw = cryptlib.unwrap(secret, s)
             if raw:
