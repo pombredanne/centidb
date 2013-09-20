@@ -370,6 +370,66 @@ class TraceEngine(object):
 
         `trace_path`:
             String filesystem path to *overwrite* with a new trace log.
+
+    Each line written to `trace_path` contains the following fields separated
+    by a single space character, with the line itself terminated by a single
+    newline character.
+
+    Fields:
+
+        * Monotonically incrementing transaction count. Initial value is `1`
+          for operations performed against the main :py:class:`Engine` class.
+
+        * String operation identifier.
+
+        * Optionally a hex-encoded string `key`. Possibly the empty
+          string.
+
+        * Optionally a hex-encoded string `value`. Possibly the empty string.
+
+    Valid operation identifiers:
+
+        ``close``:
+            The engine or transaction was closed.
+
+        ``get``:
+            :py:meth:`Engine.get` is about to be invoked for `key`.
+
+        ``got``:
+            :py:meth:`Engine.get` was invoked, and returned `value`.
+            Value may be the string ``None`` if no record was returned.
+
+        ``put``:
+            :py:meth:`Engine.put` is about to be invoked with `key` and
+            `value`.
+
+        ``delete``:
+            :py:meth:`Engine.delete` is about to be invoked with `key`.
+
+        ``abort``:
+            :py:meth:`Engine.abort` is about to be invoked.
+
+        ``begin``:
+            :py:meth:`Engine.begin` is about to be invoked. `key` may be
+            the string ``True`` if a write transaction was requested,
+            otherwise ``False``.
+
+        ``commit``:
+            :py:meth:`Engine.commit` is about to be invoked.
+
+        ``iter``:
+            :py:meth:`Engine.iter` is about to be invoked for `key`. If
+            `value` is ``True``, then reverse iteration was requested,
+            otherwise ``False``.
+
+        ``fetch``:
+            The next element is about to be retrieved from an iterator
+            returned by :py:meth:`Engine.iter`.
+
+        ``yield``:
+            The element retrieved by the last ``fetch`` is about to be
+            yielded; ``key`` and ``value`` are the key and value returned
+            by the engine.
     """
     _counter = 0
 
