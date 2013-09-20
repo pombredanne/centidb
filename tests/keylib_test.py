@@ -205,7 +205,7 @@ class Mod7BugTest:
 
 
 @testlib.register(python=True, enable=_keylib is not None)
-class NativeTimeTest:
+class NativeNextGreaterTest:
     """Compare C extension's next_greater() to keylib.py's."""
     KEYS = [
         (1, 2, 3),
@@ -215,7 +215,7 @@ class NativeTimeTest:
         (uuid.UUID(bytes='\xff' * 16),)
     ]
 
-    def test1(self):
+    def test_1(self):
         for key in self.KEYS:
             kp = keylib.Key(key)
             kc = _keylib.Key(key)
