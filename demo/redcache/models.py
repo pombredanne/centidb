@@ -5,12 +5,13 @@ import acid.meta
 def init_store():
     global store
     store = acid.open('LmdbEngine',
-        path='/media/scratch/t3.lmdb',
-         map_size=1048576*1024*10,
-         map_async=True,
-         sync=False,
-         metasync=False,
-         writemap=True)
+        trace_path='trace.out',
+        path='/media/scratch/t4.lmdb',
+        map_size=1048576*1024*3,
+        map_async=True,
+        sync=False,
+        metasync=False,
+        writemap=False)
     Model.bind_store(store)
     return store
 
@@ -105,53 +106,45 @@ class Comment(Model):
         return '<Comment k=%s id=%d parent=%s>' %\
                 (self.key, self.id, self.parent_id)
 
-    def get_ancestry(self):
-        """Return the comment's ancestry as a list of comment IDs, from least
-        direct to most direct. Returns [1, 2] given a tree like:
-
-            Comment(id=1, parent_id=None)
-            Comment(id=2, parent_id=1)
-            Comment(id=3, parent_id=2)
-
-        Returns ``None`` if the complete ancestry can't be reconstructed (i.e.
-        missing data).
-        """
-        ids = []
-        node = self
-        while node.parent_id:
-            ids.append(node.parent_id)
-            node = Comment.by_id.get(ids[-1])
-            if node:
-                assert node.id == ids[-1], 'got %s want %s' % (node.id, ids[-1])
-            else:
-                return
-            assert node.parent_id not in ids
-        ids.reverse()
-        return ids
+    def get_parent(self):
+        assert self.parent_id
+        return self.by_id.get(self.parent_id)
 
     @acid.meta.key
     def key(self):
         """Return the comment's key, which is a tuple like:
 
-            (link_id, oldestParent, olderParent, ..., parent, comment_id)
+            (link_id, idx1, idx2, ..., idxN)
 
-        This causes the collection to be clustered by link_id, then recursively
-        on each level of the comment tree. Prefix queries on the link_id, or
-        any comment key, will return the comment itself and all its children.
+        `idxN` at each level begins at 1, with the next higher integer assigned
+        for that level during insert. This causes the collection to be
+        clustered by link_id, then recursively on each level of the comment
+        tree. Prefix queries on the link_id, or any comment key, will
+        return the comment itself and all its children.
 
         ::
 
             # Fetch all comments for link_id 123.
             Comment.iter(prefix=(123,))
 
-            # Fetch comment and all its children.
-            Comment.iter(prefix=(123, 412, 1521, 12))
+            # Fetch link_id 123's first comment and all its child comments.
+            Comment.iter(prefix=(123, 1))
         """
-        ancestry = self.get_ancestry()
-        assert ancestry is not None
-        ancestry.insert(0, self.subreddit_id)
-        ancestry.append(self.id)
-        return tuple(ancestry)
+        if self.parent_id:
+            parent = Comment.by_id.get(self.parent_id)
+            assert parent is not None
+            eldest = Comment.find(prefix=parent.key, reverse=True)
+            if eldest and len(eldest.key) == len(parent.key):
+                return parent.key + (1,)
+            else:
+                t = tuple(parent.key)
+                return t[:-1] + (t[-1] + 1,)
+        else:
+            eldest = Comment.find(prefix=self.link_id, reverse=True)
+            if eldest:
+                return (self.link_id, eldest.key[1] + 1)
+            else:
+                return (self.link_id, 1)
 
     @acid.meta.index
     def by_id(self):
