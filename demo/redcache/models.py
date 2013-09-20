@@ -5,7 +5,7 @@ import acid.meta
 def init_store():
     global store
     store = acid.open('LmdbEngine',
-        trace_path='trace.out',
+        #trace_path='trace.out',
         path='/media/scratch/t4.lmdb',
         map_size=1048576*1024*3,
         map_async=True,

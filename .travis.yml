@@ -6,7 +6,7 @@ python:
 
 install:
   - pip install -r requirements-ci.txt --use-mirrors
-  - python setup.py develop
+  - pip install -e .
 
 script: ./runtests.sh
 

@@ -88,7 +88,7 @@ def process_one(stats, dct):
                              parent_id=parent_id,
                              ups=dct['ups'],
                              downs=dct['downs'])
-    if parent_id and not models.Comment.get_parent():
+    if parent_id and not comment.get_parent():
         stats['orphans'] += 1
         stats['comments'] -= 1
     else:
