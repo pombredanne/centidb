@@ -450,7 +450,7 @@ static int write_tuple(struct writer *wtr, PyObject *tup)
  */
 static PyObject *py_packs(PyObject *self, PyObject *args)
 {
-    uint8_t *prefix = "";
+    uint8_t *prefix = (uint8_t *) "";
     Py_ssize_t prefix_size = 0;
 
     Py_ssize_t arg_count = PyTuple_GET_SIZE(args);
@@ -851,7 +851,7 @@ skip_element(struct reader *rdr, int *eof)
  */
 static PyObject *py_unpack(PyObject *self, PyObject *args)
 {
-    uint8_t *prefix = "";
+    uint8_t *prefix = (uint8_t *) "";
     uint8_t *s;
     Py_ssize_t s_len;
     Py_ssize_t prefix_len = 0;
@@ -876,7 +876,7 @@ static PyObject *py_unpack(PyObject *self, PyObject *args)
  */
 static PyObject *py_unpacks(PyObject *self, PyObject *args)
 {
-    uint8_t *prefix = "";
+    uint8_t *prefix = (uint8_t *) "";
     uint8_t *s;
     Py_ssize_t prefix_len = 0;
     Py_ssize_t s_len;
