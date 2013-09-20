@@ -136,7 +136,8 @@ class Key(object):
         at the start. If `source` is not ``None``, `packed` must be a
         :py:class:`buffer` and `source` should be a *source object*
         implementing the `Memsink Protocol
-        <https://github.com/dw/acid/issues/23>`_."""
+        <https://github.com/dw/acid/issues/23>`_. Return ``None`` if the prefix
+        does not match."""
         self = cls()
         self.prefix = prefix or ''
         self.packed = str(packed)
