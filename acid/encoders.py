@@ -122,7 +122,12 @@ def make_json_encoder(separators=',:', **kwargs):
     constructor."""
     import json
     encoder = json.JSONEncoder(separators=separators, **kwargs)
-    decoder = json.JSONDecoder().decode
+    try:
+        import ujson
+        decoder = ujson.loads
+    except ImportError:
+        decoder = json.JSONDecoder().decode
+
     decode = lambda key, data: decoder(str(data))
     return RecordEncoder('json', decode, encoder.encode)
 
