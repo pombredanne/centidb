@@ -1,4 +1,7 @@
 
+import pdb
+
+import bz2
 import glob
 import gzip
 import json
@@ -17,20 +20,6 @@ def db36(s):
     if s[:3] in 't1_t2_t3_t4_t5_':
         s = s[3:]
     return int(s, 36)
-
-
-def get_path_list():
-    paths = []
-    for dirpath, dirnames, filenames in os.walk('out'):
-        for filename in filenames:
-            if filename.endswith('.gz') or filename.endswith('.json'):
-                paths.append(os.path.join(dirpath, filename))
-
-    def sort_key(path):
-        filename = os.path.basename(path)
-        return -int(filename.split('.', 1)[0])
-    paths.sort(key=sort_key)
-    return paths
 
 
 def process_one(stats, dct):
@@ -56,6 +45,7 @@ def process_one(stats, dct):
 
         reddit = models.Reddit.get(subreddit_id)
         if not reddit:
+
             stats['reddits'] += 1
             reddit = models.Reddit(name=dct['subreddit'],
                                    id=subreddit_id,
@@ -94,49 +84,37 @@ def process_one(stats, dct):
                              author=dct['author'],
                              body=dct['body'],
                              created=created,
+                             link_id=link_id,
                              parent_id=parent_id,
                              ups=dct['ups'],
                              downs=dct['downs'])
-    if comment.get_ancestry() is None:
+    if parent_id and not models.Comment.get_parent():
         stats['orphans'] += 1
         stats['comments'] -= 1
     else:
         comment.save()
 
 
-def process_set(stats, all_paths):
-    while all_paths:
-        path = all_paths.pop()
-        digit = int(os.path.basename(path).split('.')[0])
-        if models.Digits.get(digit) is not None:
-            continue
-
-        print 'Loading', path
-        try:
-            if path.endswith('.gz'):
-                js = json.loads(gzip.open(path).read())
-            else:
-                js = json.loads(file(path).read())
-        except Exception, e:
-            print "Can't load %r: %s" % (path, e)
-            stats['io_error'] += 1
-            continue
-
-        for thing in js['data']['children']:
-            process_one(stats, thing['data'])
-
-        models.Digits(digits=digit).save()
-        stats['files'] += 1
-        if not (stats['files'] % 20):
+def process_set(stats, fp):
+    for idx, line in enumerate(iter(fp.readline, None), 1):
+        if line == '':
+            return False
+        process_one(stats, json.loads(line))
+        if not (idx % 500):
             break
 
-    statinfo = ', '.join('%s=%s' % k for k in sorted(stats.items()))
-    print('Commit ' + statinfo)
+    if 1 or not (stats['comments'] % 500):
+        statinfo = ', '.join('%s=%s' % k for k in sorted(stats.items()))
+        print('Commit ' + statinfo)
+    return True
 
+
+fp = None
 
 def main():
     store = models.init_store()
-    all_paths = get_path_list()
+    #fp = bz2.BZ2File('/home/data/dedupped-1-comment-per-line.json.bz2', 'r', 1048576 * 10)
+    fp = bz2.BZ2File('/home/data/top4e4.json.bz2', 'r', 1048576 * 10)
 
     stats = {
         'all_comments': 0,
@@ -148,8 +126,9 @@ def main():
         'files': 0,
         'orphans': 0,
     }
-    while all_paths:
-        store.in_txn(lambda: process_set(stats, all_paths), write=True)
+    more = True
+    while more:
+        more = store.in_txn(lambda: process_set(stats, fp), write=True)
 
 if __name__ == '__main__':
     main()
