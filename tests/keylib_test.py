@@ -206,6 +206,24 @@ class Mod7BugTest:
 
 @testlib.register(python=True, enable=_keylib is not None)
 class NativeTimeTest:
+    """Compare C extension's next_greater() to keylib.py's."""
+    KEYS = [
+        (1, 2, 3),
+        (1, 2, 'dave'),
+        (1, 240),
+        (1, 239),
+        (uuid.UUID(bytes='\xff' * 16),)
+    ]
+
+    def test1(self):
+        for key in self.KEYS:
+            kp = keylib.Key(key)
+            kc = _keylib.Key(key)
+            assert kp.next_greater().to_raw('') == kc.next_greater().to_raw('')
+
+
+@testlib.register(python=True, enable=_keylib is not None)
+class NativeTimeTest:
     """Compare C extension's time representation with keylib.py's."""
     def test_utc(self):
         tz = dateutil.tz.gettz('Etc/UTC')
