@@ -28,6 +28,8 @@ import sys
 import time
 import uuid
 
+from acid import cryptlib
+
 
 __all__ = ['Key', 'invert', 'unpacks', 'packs', 'unpack_int', 'pack_int']
 
@@ -111,6 +113,10 @@ class Key(object):
     def from_hex(cls, hex_, secret=None):
         """Construct a Key from its raw form wrapped in hex. `secret` is
         currently unused."""
+        if secret:
+            raw = cryptlib.unwrap(secret, self.to_raw())
+            if raw:
+                return self.from_raw(raw)
         return self.from_raw(hex_.decode('hex'))
 
     @classmethod
@@ -153,6 +159,8 @@ class Key(object):
     def to_hex(self, secret=None):
         """Return :py:func:`to_raw('') <to_raw>` encoded in hex. `secret` is
         currently unused."""
+        if secret:
+            return cryptlib.wrap(secret, self.to_raw())
         return self.to_raw().encode('hex')
 
     def __iter__(self):
