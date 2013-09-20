@@ -133,10 +133,9 @@ class Key(object):
     @classmethod
     def from_raw(cls, packed, prefix=None, source=None):
         """Construct a Key from its raw form, skipping the bytestring `prefix`
-        at the start.
-
-        If `source` is not ``None``, `packed` must be a :py:class:`buffer` and
-        `source` should be a *source object* implementing the `Memsink Protocol
+        at the start. If `source` is not ``None``, `packed` must be a
+        :py:class:`buffer` and `source` should be a *source object*
+        implementing the `Memsink Protocol
         <https://github.com/dw/acid/issues/23>`_."""
         self = cls()
         self.prefix = prefix or ''
