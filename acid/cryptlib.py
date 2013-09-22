@@ -28,13 +28,17 @@ def wrap(secret, data):
     if not AES:
         _import_crypto()
 
-    salt = struct.pack('>L', zlib.crc32(data) & 0xffffffff)
+    salth = hashlib.sha1()
+    salth.update(data)
+    salth.update(secret)
+    salt = salth.digest()[:4]
+
     key = KDF.PBKDF2(secret, salt, 32, 1)
     counter = Counter.new(128, initial_value=0)
     cipher = AES.new(key, AES.MODE_CTR, counter=counter)
     body = cipher.encrypt(data)
 
-    mac = hmac.new(key, None, hashlib.sha256)
+    mac = hmac.new(key, None, hashlib.sha1)
     mac.update(salt)
     mac.update(body)
     return encode(''.join([mac.digest()[:4], salt, body]))
@@ -65,11 +69,17 @@ def unwrap(secret, data):
     salt = raw[4:8]
     key = KDF.PBKDF2(secret, salt, 32, 1)
 
-    mac = hmac.new(key, None, hashlib.sha256)
+    mac = hmac.new(key, None, hashlib.sha1)
     mac.update(raw[4:])
     if mac.digest()[:4] != raw[:4]:
         return
 
     counter = Counter.new(128, initial_value=0)
     cipher = AES.new(key, AES.MODE_CTR, counter=counter)
-    return cipher.decrypt(raw[8:])
+    body = cipher.decrypt(raw[8:])
+
+    salth = hashlib.sha1()
+    salth.update(body)
+    salth.update(secret)
+    if salth.digest()[:4] == salt:
+        return body
