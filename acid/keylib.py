@@ -124,11 +124,19 @@ class Key(object):
         `secret` is provided, additionally authenticate and decrypt the value
         using the same `secret` provided to :py:meth:`to_str`. Return ``None``
         if the key cannot be decoded."""
-        if secret:
-            raw = cryptlib.unwrap(secret, s)
-            if raw:
-                return cls.from_raw(raw)
-        return cls.from_raw(cryptlib.decode(s))
+        try:
+            key = None
+            if secret:
+                raw = cryptlib.unwrap(secret, s)
+                if not raw:
+                    return
+                key = cls.from_raw(raw)
+            else:
+                key = cls.from_raw(cryptlib.decode(s))
+            len(key) # Trigger full decoding.
+            return key
+        except ValueError:
+            return None
 
     @classmethod
     def from_raw(cls, packed, prefix=None, source=None):
