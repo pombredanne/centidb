@@ -320,5 +320,14 @@ class SortTest:
                 raise
 
 
+@testlib.register(python=True, enable=_keylib is not None)
+class CompletePrefixTest:
+    """Ensure unpacks() behaviour matches when prefix == s."""
+
+    def test1(self):
+        s = keylib.packs((1, 2, 3, 4))
+        assert keylib.unpacks(s, s) == _keylib.unpacks(s, s)
+
+
 if __name__ == '__main__':
     testlib.main()
