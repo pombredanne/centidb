@@ -916,6 +916,13 @@ static PyObject *py_unpacks(PyObject *self, PyObject *args)
             lpos++;
         }
     }
+    // Match (required) Python unpacks() behaviour of producing a single empty
+    // tuple if entire prefix matched entire key. This can/should eventually go
+    // away when batch iterator prefix query is rewritten.
+    if(! lpos) {
+        PyList_SET_ITEM(tups, lpos++, PyTuple_New(0));
+    }
+
     PyTuple_GET_SIZE(tups) = lpos;
     return tups;
 }
