@@ -153,17 +153,51 @@ class RangeIterator(object):
 
 class BatchRangeIterator(RangeIterator):
     """Provides bidirectional iteration of a range of keys, treating >1-length
-    keys as batch records."""
+    keys as batch records.
+
+        `engine`:
+            :py:class:`acid.engines.Engine` instance to iterate.
+
+        `prefix`:
+            Bytestring prefix for all keys.
+
+        `get_compressor`:
+            Function invoked as `get_compressor(prefix)` where prefix is a
+            1-length bytestring containing the compressor's prefix. The
+            function should return a :py:class:`acid.encoders.Compressor`
+            instance.
+    """
     max_phys = -1
+    index = 0
+
+    def __init__(self, engine, prefix, get_compressor):
+        RangeIterator.__init__(self, engine, prefix)
+        self.get_compressor = get_compressor
 
     def set_max_phys(self, max_phys):
         self.max_phys = max_phys
 
+    def _decompress(self, data):
+        compressor = self.get_compressor(data[0])
+        return compressor.unpack(buffer(data, 1))
+
     def _step(self):
-        go = RangeIterator._step(self)
-        if go and len(self.keys) > 1:
-            raise NotImplementedError('batch iteration not supported yet.')
-        return go
+        index = self.index
+        if index:
+            index -= 1
+        else:
+            go = RangeIterator._step(self)
+            if not go:
+                return False
+            lenk = len(self.keys)
+            if lenk == 1: # Single record.
+                self.offsets, self.dstart = decode_offsets(value)
+                self.data = self._decompress(data)
+            index = lenk - 1
+
+        self.key = self.keys[index]
+        self.index = index
+        return True
 
 
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
