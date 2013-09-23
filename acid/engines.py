@@ -174,15 +174,18 @@ class SkipList(object):
 
     def insert(self, searchKey, value):
         """Insert `searchKey` into the list with `value`. If `searchKey`
-        already exists, its previous value is overwritten."""
+        already exists, its previous value is returned, otherwise ``None`` is
+        returned."""
         assert searchKey is not None
         update = self._update[:]
         node = self._findLess(update, searchKey)
         prev = node
         node = node[3]
         if node[0] == searchKey:
+            old = node[1]
             node[1] = value
         else:
+            old = None
             lvl = self._randomLevel()
             self.level = max(self.level, lvl)
             node = self._makeNode(lvl, searchKey, value)
@@ -194,6 +197,7 @@ class SkipList(object):
                 self.tail = node
             else:
                 node[3][2] = node
+        return None
 
     def delete(self, searchKey):
         """Delete `searchKey` from the list, returning ``True`` if it
@@ -245,6 +249,7 @@ class SkiplistEngine(Engine):
         self.sl = SkipList(maxsize)
         self.get = self.sl.search
         self.put = self.sl.insert
+        self.replace = self.sl.insert
         self.delete = self.sl.delete
         self.iter = self.sl.items
 
