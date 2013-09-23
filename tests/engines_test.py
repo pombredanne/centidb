@@ -53,6 +53,12 @@ class EngineTestBase:
         self.e.put('dave', '2')
         self.assertEqual(self.e.get('dave'), '2')
 
+    def testReplace(self):
+        old = self.e.replace('dave', '')
+        assert old is None
+        old = self.e.replace('dave', '2')
+        assert old == '', [old]
+
     def testDelete(self):
         self.e.delete('dave')
         assert self.e.get('dave') is None
@@ -190,6 +196,13 @@ class SkipListTest:
         while keys:
             assert sl.delete(keys.pop())
         assert sl.level == 0, sl.level
+
+
+    def testReplace(self):
+        sl = acid.engines.SkipList()
+        assert sl.insert('dave', '') is None
+        assert sl.insert('dave', '') == ''
+
 
 
 if __name__ == '__main__':

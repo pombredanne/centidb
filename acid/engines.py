@@ -74,7 +74,7 @@ class Engine(object):
         If `key` previously didn't exist, return ``None`` instead. The default
         implementation is implemented used :py:meth:`get` and
         :py:meth:`put`."""
-        old = self.get(value)
+        old = self.get(key)
         self.put(key, value)
         return old
 
@@ -502,7 +502,7 @@ class TraceEngine(object):
             yield key, value
 
 
-class LmdbEngine(object):
+class LmdbEngine(Engine):
     """Storage engine that uses the OpenLDAP `"Lightning" MDB
     <http://symas.com/mdb/>`_ library via the `py-lmdb
     <http://lmdb.readthedocs.org/>`_ module.
