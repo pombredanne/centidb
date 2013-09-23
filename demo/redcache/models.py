@@ -7,11 +7,11 @@ def init_store():
     store = acid.open('LmdbEngine',
         #trace_path='trace.out',
         path='/media/scratch/t4.lmdb',
-        map_size=1048576*1024*3,
+        map_size=1048576*1024*10,
         map_async=True,
         sync=False,
         metasync=False,
-        writemap=False)
+        writemap=True)
     Model.bind_store(store)
     return store
 
