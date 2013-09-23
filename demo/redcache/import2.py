@@ -11,7 +11,11 @@ import sys
 from operator import itemgetter
 from pprint import pprint
 
+import acid.encoders
 import models
+
+
+json_encoder = acid.encoders.make_json_encoder()
 
 
 def db36(s):
@@ -99,13 +103,12 @@ def process_set(stats, fp):
     for idx, line in enumerate(iter(fp.readline, None), 1):
         if line == '':
             return False
-        process_one(stats, json.loads(line))
-        if not (idx % 500):
+        process_one(stats, json_encoder.unpack(None, line))
+        if not (idx % 10000):
             break
 
-    if 1 or not (stats['comments'] % 500):
-        statinfo = ', '.join('%s=%s' % k for k in sorted(stats.items()))
-        print('Commit ' + statinfo)
+    statinfo = ', '.join('%s=%s' % k for k in sorted(stats.items()))
+    print('Commit ' + statinfo)
     return True
 
 
@@ -115,6 +118,7 @@ def main():
     store = models.init_store()
     #fp = bz2.BZ2File('/home/data/dedupped-1-comment-per-line.json.bz2', 'r', 1048576 * 10)
     fp = bz2.BZ2File('/home/data/top4e4.json.bz2', 'r', 1048576 * 10)
+    #fp = bz2.BZ2File('/home/data/top5k.json.bz2', 'r', 1048576 * 10)
 
     stats = {
         'all_comments': 0,
