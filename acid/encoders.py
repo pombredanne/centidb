@@ -118,8 +118,12 @@ class Compressor(object):
 def make_json_encoder(separators=',:', **kwargs):
     """Return an :py:class:`Encoder <acid.Encoder>` that serializes
     dict/list/string/float/int/bool/None objects using the :py:mod:`json`
-    module. `separators` and `kwargs` are passed to the JSONEncoder
-    constructor."""
+    module. `separators` and `kwargs` are passed to the
+    :py:class:`json.JSONEncoder` constructor.
+
+    The `ujson <https://pypi.python.org/pypi/ujson>`_ package will be used for
+    decoding if it is available, otherwise :py:func:`json.loads` is used.
+    """
     import json
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     try:
