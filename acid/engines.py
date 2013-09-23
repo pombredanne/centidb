@@ -197,7 +197,7 @@ class SkipList(object):
                 self.tail = node
             else:
                 node[3][2] = node
-        return None
+        return old
 
     def delete(self, searchKey):
         """Delete `searchKey` from the list, returning ``True`` if it
