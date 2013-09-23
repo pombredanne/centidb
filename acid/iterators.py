@@ -20,7 +20,7 @@ Iterator implementations.
 
 from __future__ import absolute_import
 
-from acid import core
+import acid.core
 from acid import keylib
 
 
@@ -200,7 +200,7 @@ class BatchRangeIterator(RangeIterator):
                 return False
             lenk = len(self.keys)
             if lenk == 1: # Single record.
-                self.offsets, self.dstart = core.decode_offsets(value)
+                self.offsets, self.dstart = acid.core.decode_offsets(value)
                 self.data = self._decompress(data)
             index = lenk - 1
 
