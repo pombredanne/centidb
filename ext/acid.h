@@ -92,15 +92,20 @@ typedef struct {
     long hash;
     // Size is tracked in Py_SIZE(Key).
     enum KeyFlags flags;
+    // In all cases, points to data.
+    uint8_t *p;
+} Key;
+
+// Structure allocated as the variable part of Key when KEY_SHARED.
+typedef struct {
     // If KEY_SHARED, strong reference to source object.
     PyObject *source;
 #ifdef HAVE_MEMSINK
     // Linked list of consumers monitoring source.
     struct ms_node sink_node;
 #endif
-    // In all cases, points to data.
-    uint8_t *p;
-} Key;
+} SharedKeyInfo;
+
 
 typedef struct {
     PyObject_HEAD

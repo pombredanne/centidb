@@ -51,7 +51,9 @@ make_private_key(uint8_t *p, Py_ssize_t size)
 static Key *
 make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
 {
-    Key *self = PyObject_NewVar(Key, &KeyType, 0);
+    Key *self = PyObject_NewVar(Key, &KeyType, sizeof(SharedKeyInfo));
+    // TODO: relies on arch padding rules?
+    SharedKeyInfo *info = (void *) &self[1];
     if(self) {
         if(ms_listen(source, (PyObject *) self)) {
             PyObject_Del(self);
@@ -61,29 +63,43 @@ make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
         self->flags = KEY_SHARED;
         self->p = p;
         Py_SIZE(self) = size;
-        self->source = source;
+        info->source = source;
         Py_INCREF(source);
     }
     return self;
 }
 
 /**
- * Struct mem_sink invalidate() callback. Convert a KEY_PRIVATE instance into a
- * KEY_COPIED instance.
+ * Struct mem_sink invalidate() callback. Convert a KEY_SHARED instance into a
+ * KEY_COPIED instance, or if it is smaller than sizeof(struct ms_node), .
  */
 static int invalidate_shared_key(PyObject *source, PyObject *sink)
 {
     Key *self = (Key *)sink;
-    uint8_t *p = malloc(Py_SIZE(self));
-    if(! p) {
-        return -1;
+    // TODO: relies on arch padding rules?
+    SharedKeyInfo *info = (void *) &self[1];
+
+    assert(self->flags == KEY_SHARED);
+    PyObject *tmp_source = info->source;
+    Py_ssize_t size = Py_SIZE(self);
+    uint8_t *p;
+
+    // Reuse the 12-24 bytes previously used for ShareKeyInfo if the key fits
+    // in there, otherwise make a new heap allocation.
+    if(size < sizeof(SharedKeyInfo)) {
+        p = (void *)info;
+        self->flags = KEY_PRIVATE;
+    } else {
+        if(! ((p = malloc(size)))) {
+            return -1;
+        }
+        self->flags = KEY_COPIED;
     }
+
     memcpy(p, self->p, Py_SIZE(self));
     self->p = p;
-    self->flags = KEY_COPIED;
     // Deref and forget the source object.
-    Py_DECREF(self->source);
-    self->source = NULL;
+    Py_DECREF(tmp_source);
     return 0;
 }
 #endif
@@ -131,11 +147,13 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 static void
 key_dealloc(Key *self)
 {
+    SharedKeyInfo *info = (void *) &self[1];
+
     switch(self->flags) {
     case KEY_SHARED:
 #ifdef HAVE_MEMSINK
-        ms_cancel(self->source, (PyObject *)self);
-        Py_DECREF(self->source);
+        ms_cancel(info->source, (PyObject *)self);
+        Py_DECREF(info->source);
 #endif
         break;
     case KEY_COPIED:
@@ -585,8 +603,11 @@ init_key_type(void)
 
 #ifdef HAVE_MEMSINK
     MemSink_IMPORT;
-    if(ms_init_sink(&KeyType, offsetof(Key, sink_node),
-                    invalidate_shared_key)) {
+
+    // KEY_SHARED are tracked in SharedKeyInfo, which is allocated at the end
+    // of the Key structure.
+    Py_ssize_t offset = offsetof(SharedKeyInfo, sink_node) + sizeof(Key);
+    if(ms_init_sink(&KeyType, offset, invalidate_shared_key)) {
         return NULL;
     }
 #endif
