@@ -71,8 +71,12 @@ class Engine(object):
 
     def replace(self, key, value):
         """Replace the value of `key` with `value`, returning its prior value.
-        If `key` previously didn't exist, return ``None`` instead."""
-        raise NotImplementedError
+        If `key` previously didn't exist, return ``None`` instead. The default
+        implementation is implemented used :py:meth:`get` and
+        :py:meth:`put`."""
+        old = self.get(value)
+        self.put(key, value)
+        return old
 
     def delete(self, key):
         """Delete `key` if it exists."""
