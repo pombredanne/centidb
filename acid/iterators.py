@@ -19,7 +19,8 @@ Iterator implementations.
 """
 
 from __future__ import absolute_import
-import bisect
+
+from acid import core
 from acid import keylib
 
 
@@ -35,6 +36,14 @@ class Result(object):
     #: Object satisfying the :py:class:`buffer` interface that represents the
     #: raw record data.
     data = None
+
+    #: For a :py:class:`BatchRangeIterator`, the current key. Unused for a
+    #: :py:class:`RangeIterator`.
+    key = None
+
+    #: For a :py:class:`BatchRangeIterator`, the current key's index into
+    #: the batch. Unused for :py:class:`RangeIterator`.
+    index = None
 
 
 class RangeIterator(object):
@@ -191,7 +200,7 @@ class BatchRangeIterator(RangeIterator):
                 return False
             lenk = len(self.keys)
             if lenk == 1: # Single record.
-                self.offsets, self.dstart = decode_offsets(value)
+                self.offsets, self.dstart = core.decode_offsets(value)
                 self.data = self._decompress(data)
             index = lenk - 1
 
