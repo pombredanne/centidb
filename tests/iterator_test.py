@@ -63,6 +63,9 @@ RBPKEYS = BPKEYS[::-1]
 def key0from(genfunc):
     return [g.keys[0][0] for g in genfunc()]
 
+def keyfrom(genfunc):
+    return [g.key for g in genfunc()]
+
 
 @testlib.register()
 class RangeIteratorTest:
@@ -226,20 +229,20 @@ class BatchRangeIteratorTest:
 
     def test_lo_closed_nomatch_sof(self):
         self.rit.set_lo('0', closed=True)
-        eq(BPKEYS, [r.key for r in self.rit.forward()])
-        eq(RBPKEYS, [r.key for r in self.rit.reverse()])
+        eq(BPKEYS, keyfrom(self.rit.forward))
+        eq(RBPKEYS, keyfrom(self.rit.reverse))
 
-    '''
     def test_lo_closed_nomatch_eof(self):
         self.rit.set_lo('a', closed=True)
-        eq([], key0from(self.rit.forward))
-        eq([], key0from(self.rit.reverse))
+        eq([], keyfrom(self.rit.forward))
+        eq([], keyfrom(self.rit.reverse))
 
     def test_lo_closed_match(self):
         self.rit.set_lo('B', closed=True)
-        eq(PKEYS[1:], key0from(self.rit.forward))
-        eq(RPKEYS[:-1], key0from(self.rit.reverse))
+        eq(BPKEYS[1:], keyfrom(self.rit.forward))
+        eq(RBPKEYS[:-1], keyfrom(self.rit.reverse))
 
+    '''
     def test_lo_closed_nomatch(self):
         self.rit.set_lo('BA', closed=True)
         eq(PKEYS[2:], key0from(self.rit.forward))

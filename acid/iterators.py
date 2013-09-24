@@ -209,7 +209,6 @@ class BatchRangeIterator(Iterator):
             # Single record.
             if lenk == 1:
                 self.key = self.keys[0]
-                print 'sngl', self.key
                 self.data = self._decompress(self.raw)
                 self.index = 0
                 return True
@@ -219,11 +218,14 @@ class BatchRangeIterator(Iterator):
             self.index = lenk
 
         self.index -= 1
-        start = self.offsets[self.index]
-        length = self.offsets[self.index + 1] - start
-        self.key = self.keys[-1 + -self.index]
+        if self._reverse:
+            idx = (len(self.keys) - self.index) - 1
+        else:
+            idx = self.index
+        start = self.offsets[idx]
+        length = self.offsets[idx + 1] - start
+        self.key = self.keys[-1 + -idx]
         self.data = self.concat[start:length]
-        print 'batch', self.key
         return True
 
     def forward(self):
@@ -255,10 +257,10 @@ class BatchRangeIterator(Iterator):
         """Begin yielding objects satisfying the :py:class:`Result` interface,
         from `lo`..`hi`. Note the yielded object is reused, so references to it
         should not be held."""
-        if self.lo is None:
-            key = self.prefix
+        if self.hi is None:
+            key = keylib.next_greater(self.prefix)
         else:
-            key = self.lo.to_raw(self.prefix)
+            key = self.hi.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, True)
         self._reverse = True
