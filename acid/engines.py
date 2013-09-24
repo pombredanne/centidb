@@ -72,7 +72,7 @@ class Engine(object):
     def replace(self, key, value):
         """Replace the value of `key` with `value`, returning its prior value.
         If `key` previously didn't exist, return ``None`` instead. The default
-        implementation is implemented used :py:meth:`get` and
+        implementation is implemented using :py:meth:`get` and
         :py:meth:`put`."""
         old = self.get(key)
         self.put(key, value)
@@ -174,8 +174,8 @@ class SkipList(object):
 
     def insert(self, searchKey, value):
         """Insert `searchKey` into the list with `value`. If `searchKey`
-        already exists, its previous value is returned, otherwise ``None`` is
-        returned."""
+        already exists, its previous value is overwritten. The previous value
+        is returned if it existed, otherwise ``None`` is returned."""
         assert searchKey is not None
         update = self._update[:]
         node = self._findLess(update, searchKey)
