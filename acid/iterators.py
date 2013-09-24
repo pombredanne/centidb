@@ -195,29 +195,33 @@ class BatchRangeIterator(Iterator):
         return compressor.unpack(buffer(data, 1))
 
     def _step(self):
+        # We're inside a batch.
         if self.index:
             self.index -= 1
+            start = self.offsets[self.index]
+            length = self.offsets[self.index + 1] - start
+            self.key = self.keys[self.index]
+            self.data = self.concat[start:length]
+            return True
+
+        keys_raw, self.raw = next(self.it, ('', ''))
+        self.keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
+        if not self.keys:
+            return False
+
+        lenk = len(self.keys)
+        if lenk == 1: # Single record.
+            self.key = self.keys[0]
+            self.data = self._decompress(self.raw)
+            self.index = 0
         else:
-            keys_raw, self.raw = next(self.it, ('', ''))
-            keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
-            self.keys = keys
-            if not keys:
-                return False
-
-            lenk = len(self.keys)
-            if lenk == 1: # Single record.
-                self.offsets = (0, len(self.data))
-                self.concat = self._decompress(self.data_raw)
-                self.index = 0
-            else:
-                self.offsets, dstart = acid.core.decode_offsets(self.raw)
-                self.concat = self._decompress(buffer(self.raw, dstart))
-                self.index = lenk - 1
-
-        start = self.offsets[self.index]
-        length = self.offsets[self.index + 1] - start
-        self.key = self.keys[self.index]
-        self.data = self.concat[start:length]
+            self.offsets, dstart = acid.core.decode_offsets(self.raw)
+            self.concat = self._decompress(buffer(self.raw, dstart))
+            self.index = lenk - 1
+            start = self.offsets[self.index]
+            length = self.offsets[self.index + 1] - start
+            self.key = self.keys[self.index]
+            self.data = self.concat[start:length]
         return True
 
     def forward(self):
