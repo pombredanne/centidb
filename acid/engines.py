@@ -508,19 +508,12 @@ class LmdbEngine(Engine):
     <http://lmdb.readthedocs.org/>`_ module.
 
         `env`:
-            :py:class:`lmdb.Environment` to use, or ``None`` if `txn` or
-            `kwargs` is provided.
-
-        `txn`:
-            :py:class:`lmdb.Transaction` to use, or ``None`` if `env` or
-            `kwargs` is provided.
+            :py:class:`lmdb.Environment` to use. If ``None``, the remaining
+            keyword args are passed to the :py:class:`lmdb.Environment`
+            constructor.
 
         `db`:
-            Database handle to use, or ``None`` to use the main database.
-
-        `kwargs`:
-            If `env` and `txn` are ``None``, pass these keyword arguments to
-            create a new :py:class:`lmdb.Environment`.
+            Named database handle to use, or ``None`` to use the main database.
     """
     def __init__(self, env=None, txn=None, db=None, **kwargs):
         if not (env or txn):

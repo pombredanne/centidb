@@ -28,7 +28,7 @@ SkiplistEngine
 LmdbEngine
 ++++++++++
 
-.. autoclass:: acid.engines.LmdbEngine
+.. autoclass:: acid.engines.LmdbEngine (env=None, \**kwargs)
     :members:
 
 
