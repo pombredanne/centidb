@@ -537,13 +537,7 @@ class LmdbEngine(Engine):
     def close(self):
         self.env.close()
 
-    def begin(self, write=False, db=None):
-        """Start a transaction. Only valid if `txn` was not passed to the
-        constructor.
-
-            `write`:
-                Start a write transaction
-        """
+    def begin(self, write=False):
         assert not self.txn
         return LmdbEngine(self.env, self.env.begin(write=write))
 
