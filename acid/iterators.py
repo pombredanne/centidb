@@ -46,24 +46,12 @@ class Result(object):
     index = None
 
 
-class RangeIterator(object):
-    """Provides bidirectional iteration of a range of keys.
-
-        `engine`:
-            :py:class:`acid.engines.Engine` instance to iterate.
-        `prefix`:
-            Bytestring prefix for all keys.
-    """
+class Iterator(object):
     # Various defaults set here to avoid necessity for repeat initialization.
     lo = None
     hi = None
     lo_pred = bool
     hi_pred = bool
-    remain = -1
-
-    def __init__(self, engine, prefix):
-        self.engine = engine
-        self.prefix = prefix
 
     def set_lo(self, key, closed=True):
         """Set the lower bound to `key`. If `closed` is ``True``, include the
@@ -97,6 +85,21 @@ class RangeIterator(object):
         self.hi = key
         self.lo_pred = key.__le__
         self.hi_pred = key.__ge__
+
+
+class RangeIterator(Iterator):
+    """Provides bidirectional iteration of a range of keys.
+
+        `engine`:
+            :py:class:`acid.engines.Engine` instance to iterate.
+        `prefix`:
+            Bytestring prefix for all keys.
+    """
+    remain = -1
+
+    def __init__(self, engine, prefix):
+        self.engine = engine
+        self.prefix = prefix
 
     def _step(self):
         """Step the iterator once, saving the new key and data. Returns True if
@@ -160,7 +163,7 @@ class RangeIterator(object):
             go = self._step()
 
 
-class BatchRangeIterator(RangeIterator):
+class BatchRangeIterator(Iterator):
     """Provides bidirectional iteration of a range of keys, treating >1-length
     keys as batch records.
 
@@ -180,7 +183,8 @@ class BatchRangeIterator(RangeIterator):
     index = 0
 
     def __init__(self, engine, prefix, get_compressor):
-        RangeIterator.__init__(self, engine, prefix)
+        self.engine = engine
+        self.prefix = prefix
         self.get_compressor = get_compressor
 
     def set_max_phys(self, max_phys):
@@ -191,22 +195,54 @@ class BatchRangeIterator(RangeIterator):
         return compressor.unpack(buffer(data, 1))
 
     def _step(self):
-        index = self.index
-        if index:
-            index -= 1
+        if self.index:
+            self.index -= 1
         else:
-            go = RangeIterator._step(self)
-            if not go:
+            keys_raw, self.raw = next(self.it, ('', ''))
+            keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
+            self.keys = keys
+            if not keys:
                 return False
+
             lenk = len(self.keys)
             if lenk == 1: # Single record.
-                self.offsets, self.dstart = acid.core.decode_offsets(value)
-                self.data = self._decompress(data)
-            index = lenk - 1
+                self.offsets = (0, len(self.data))
+                self.concat = self._decompress(self.data_raw)
+                self.index = 0
+            else:
+                self.offsets, dstart = acid.core.decode_offsets(self.raw)
+                self.concat = self._decompress(buffer(self.raw, dstart))
+                self.index = lenk - 1
 
-        self.key = self.keys[index]
-        self.index = index
+        start = self.offsets[self.index]
+        length = self.offsets[self.index + 1] - start
+        self.key = self.keys[self.index]
+        self.data = self.concat[start:length]
         return True
+
+    def forward(self):
+        """Begin yielding objects satisfying the :py:class:`Result` interface,
+        from `lo`..`hi`. Note the yielded object is reused, so references to it
+        should not be held."""
+        if self.lo is None:
+            key = self.prefix
+        else:
+            key = self.lo.to_raw(self.prefix)
+
+        self.it = self.engine.iter(key, False)
+        # Fetch the first key. If _step() returns false, then first key is
+        # beyond collection prefix. Cease iteration.
+        go = self._step()
+
+        # When lo(closed=False), skip the start key.
+        if go and not self.lo_pred(self.keys[0]):
+            go = self._step()
+
+        remain = self.remain
+        while go and remain and self.hi_pred(self.keys[0]):
+            yield self
+            remain -= 1
+            go = self._step()
 
 
 def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
