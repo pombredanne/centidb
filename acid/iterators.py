@@ -52,6 +52,7 @@ class Iterator(object):
     hi = None
     lo_pred = bool
     hi_pred = bool
+    remain = -1
 
     def set_lo(self, key, closed=True):
         """Set the lower bound to `key`. If `closed` is ``True``, include the
@@ -95,7 +96,6 @@ class RangeIterator(Iterator):
         `prefix`:
             Bytestring prefix for all keys.
     """
-    remain = -1
 
     def __init__(self, engine, prefix):
         self.engine = engine
@@ -195,33 +195,35 @@ class BatchRangeIterator(Iterator):
         return compressor.unpack(buffer(data, 1))
 
     def _step(self):
+        """Progress one step through the batch, or fetch another physical
+        record if the batch is exhausted. Returns ``True`` so long as the
+        collection range has not been exceeded."""
         # We're inside a batch.
-        if self.index:
-            self.index -= 1
-            start = self.offsets[self.index]
-            length = self.offsets[self.index + 1] - start
-            self.key = self.keys[self.index]
-            self.data = self.concat[start:length]
-            return True
+        if not self.index:
+            keys_raw, self.raw = next(self.it, ('', ''))
+            self.keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
+            if not self.keys:
+                return False
 
-        keys_raw, self.raw = next(self.it, ('', ''))
-        self.keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
-        if not self.keys:
-            return False
+            lenk = len(self.keys)
+            # Single record.
+            if lenk == 1:
+                self.key = self.keys[0]
+                print 'sngl', self.key
+                self.data = self._decompress(self.raw)
+                self.index = 0
+                return True
 
-        lenk = len(self.keys)
-        if lenk == 1: # Single record.
-            self.key = self.keys[0]
-            self.data = self._decompress(self.raw)
-            self.index = 0
-        else:
             self.offsets, dstart = acid.core.decode_offsets(self.raw)
             self.concat = self._decompress(buffer(self.raw, dstart))
-            self.index = lenk - 1
-            start = self.offsets[self.index]
-            length = self.offsets[self.index + 1] - start
-            self.key = self.keys[self.index]
-            self.data = self.concat[start:length]
+            self.index = lenk
+
+        self.index -= 1
+        start = self.offsets[self.index]
+        length = self.offsets[self.index + 1] - start
+        self.key = self.keys[-1 + -self.index]
+        self.data = self.concat[start:length]
+        print 'batch', self.key
         return True
 
     def forward(self):
@@ -234,16 +236,45 @@ class BatchRangeIterator(Iterator):
             key = self.lo.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, False)
+        self._reverse = False
         # Fetch the first key. If _step() returns false, then first key is
         # beyond collection prefix. Cease iteration.
         go = self._step()
 
         # When lo(closed=False), skip the start key.
-        if go and not self.lo_pred(self.keys[0]):
+        while go and not self.lo_pred(self.key):
             go = self._step()
 
         remain = self.remain
-        while go and remain and self.hi_pred(self.keys[0]):
+        while go and remain and self.hi_pred(self.key):
+            yield self
+            remain -= 1
+            go = self._step()
+
+    def reverse(self):
+        """Begin yielding objects satisfying the :py:class:`Result` interface,
+        from `lo`..`hi`. Note the yielded object is reused, so references to it
+        should not be held."""
+        if self.lo is None:
+            key = self.prefix
+        else:
+            key = self.lo.to_raw(self.prefix)
+
+        self.it = self.engine.iter(key, True)
+        self._reverse = True
+
+        # Fetch the first key. If _step() returns false, then we may have
+        # seeked to first record of next prefix, so skip first returned result.
+        go = self._step()
+        if not go:
+            go = self._step()
+
+        # When lo(closed=False), skip the start key.
+        while go and not self.hi_pred(self.key):
+            go = self._step()
+
+        remain = self.remain
+        while go and remain and self.lo_pred(self.key):
             yield self
             remain -= 1
             go = self._step()
