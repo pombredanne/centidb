@@ -219,9 +219,9 @@ class BatchRangeIterator(Iterator):
 
         self.index -= 1
         if self._reverse:
-            idx = (len(self.keys) - self.index) - 1
-        else:
             idx = self.index
+        else:
+            idx = (len(self.keys) - self.index) - 1
         start = self.offsets[idx]
         length = self.offsets[idx + 1] - start
         self.key = self.keys[-1 + -idx]

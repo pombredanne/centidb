@@ -48,7 +48,7 @@ BATCH_KEYSETS = [
         ['OCCURS_BEFORE_PREFIXD', 'OCCURS_BEFORE_PREFIXC',]
     ]),
     ('P_', [
-        [('A',), ('B',)],
+        [('B',), ('A',)],
         [('BB',)],
         [('BD',), ('BC',)],
         [('CC',), ('CB',), ('CA',)],
@@ -56,9 +56,11 @@ BATCH_KEYSETS = [
     ])
 ]
 
-BPKEYS = reduce(operator.add, BATCH_KEYSETS[1][1])
+BPKEYS = list(sorted(reduce(operator.add, BATCH_KEYSETS[1][1])))
 RBPKEYS = BPKEYS[::-1]
 
+print 'BPKEYS', BPKEYS
+print 'RBPKEYS', RBPKEYS
 
 def key0from(genfunc):
     return [g.keys[0][0] for g in genfunc()]
@@ -242,42 +244,42 @@ class BatchRangeIteratorTest:
         eq(BPKEYS[1:], keyfrom(self.rit.forward))
         eq(RBPKEYS[:-1], keyfrom(self.rit.reverse))
 
-    '''
     def test_lo_closed_nomatch(self):
         self.rit.set_lo('BA', closed=True)
-        eq(PKEYS[2:], key0from(self.rit.forward))
-        eq(RPKEYS[:-2], key0from(self.rit.reverse))
+        eq(BPKEYS[2:], keyfrom(self.rit.forward))
+        eq(RBPKEYS[:-2], keyfrom(self.rit.reverse))
 
     # open
 
     def test_lo_open_nomatch_sof(self):
         self.rit.set_lo('0', closed=False)
-        eq(PKEYS, key0from(self.rit.forward))
-        eq(RPKEYS, key0from(self.rit.reverse))
+        eq(BPKEYS, keyfrom(self.rit.forward))
+        eq(RBPKEYS, keyfrom(self.rit.reverse))
 
     def test_lo_open_nomatch_eof(self):
         self.rit.set_lo('a', closed=False)
-        eq([], key0from(self.rit.forward))
-        eq([], key0from(self.rit.reverse))
+        eq([], keyfrom(self.rit.forward))
+        eq([], keyfrom(self.rit.reverse))
 
     def test_lo_open_match(self):
         self.rit.set_lo('B', closed=False)
-        eq(PKEYS[2:], key0from(self.rit.forward))
-        eq(RPKEYS[:-2], key0from(self.rit.reverse))
+        eq(BPKEYS[2:], keyfrom(self.rit.forward))
+        eq(RBPKEYS[:-2], keyfrom(self.rit.reverse))
 
     def test_lo_open_nomatch(self):
         self.rit.set_lo('BA', closed=False)
-        eq(PKEYS[2:], key0from(self.rit.forward))
-        eq(RPKEYS[:-2], key0from(self.rit.reverse))
+        eq(BPKEYS[2:], keyfrom(self.rit.forward))
+        eq(RBPKEYS[:-2], keyfrom(self.rit.reverse))
 
     # Test set_hi() with key <= start of file, >= end of file, some existent
     # key, some nonexistent key, open and closed.
 
     def test_hi_closed_nomatch_sof(self):
         self.rit.set_hi('0', closed=True)
-        eq([], key0from(self.rit.forward))
-        eq([], key0from(self.rit.reverse))
+        eq([], keyfrom(self.rit.forward))
+        eq([], keyfrom(self.rit.reverse))
 
+    '''
     def test_hi_closed_nomatch_eof(self):
         self.rit.set_hi('a', closed=True)
         eq(PKEYS, key0from(self.rit.forward))
