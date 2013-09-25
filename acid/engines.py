@@ -20,6 +20,7 @@ import functools
 import itertools
 import math
 import random
+import threading
 
 
 __all__ = ['SkipList', 'SkiplistEngine', 'ListEngine', 'PlyvelEngine',
@@ -308,33 +309,63 @@ class PlyvelEngine(Engine):
     """Storage engine that uses Google LevelDB via the `Plyvel
     <http://plyvel.readthedocs.org/>`_ module.
 
+    Read transactions are implemented using snapshots, and write transactions
+    are implemented using an Engine-internal :py:class:`threading.Lock`. Note
+    that WriteBatches cannot be used, since Acid requires a consistent view of
+    the partially mutated database from within a write transaction, which
+    LevelDB does not automatically support.
+
         `db`:
             If specified, should be a `plyvel.DB` instance for an already open
             database. Otherwise, the remaining keyword args are passed to the
             `plyvel.DB` constructor.
+
+        `lock`:
+            If not ``None``, specifies some instance satisfying the
+            :py:class:`threading.Lock` interface to use as an alternative lock
+            instead of the Engine-internal write lock. This can be used to
+            synchronize writes with some other aspect of the application, or to
+            replace the lock with e.g. a greenlet-friendly implementation.
+
     """
-    def __init__(self, db=None, wb=None, **kwargs):
+    def __init__(self, db=None, lock=None, _snapshot=None, **kwargs):
         if not db:
             import plyvel
             db = plyvel.DB(**kwargs)
         self.db = db
-        self.wb = wb
-        self.get = db.get
-        self.put = (wb or db).put
-        self.delete = (wb or db).delete
+        self.snapshot = _snapshot
+        self.lock = lock or threading.Lock()
+
+        self.put = db.put
+        self.delete = db.delete
+        if _snapshot:
+            self.get = _snapshot.get
+            self._iter = _snapshot.iterator
+        else:
+            self.get = db.get
+            self._iter = db.iterator
 
     def close(self):
         self.db.close()
 
     def begin(self, write=False):
-        wb = self.db.write_batch(sync=True)
-        return PlyvelEngine(self.db, wb)
+        if write:
+            self.lock.acquire()
+            snapshot = None
+        else:
+            snapshot = self.db.snapshot()
+        return PlyvelEngine(self.db, self.lock, snapshot)
 
     def commit(self):
-        self.wb.write()
+        if not self.snapshot: # write txn
+            self.lock.release()
+
+    def abort(self):
+        if not self.snapshot: # write txn
+            self.lock.release()
 
     def iter(self, k, reverse):
-        it = self.db.iterator()
+        it = self._iter()
         it.seek(k)
         if reverse:
             tup = next(it, None)
