@@ -18,9 +18,9 @@
 The `acid.events` module defines a set of events that may be fired when some
 mutation occurs on a collection.
 
-A trigger may be used as a decorator applied to a method of an
+An event function may be used as a decorator applied to a method of an
 :py:mod:`acid.meta` Model, in which case the function will be associated with
-the Model's :py:class:`Collection <acid.Collection>` when it is created.
+the Model's :py:class:`Collection <acid.Collection>` when it is created:
 
 ::
 
@@ -30,8 +30,8 @@ the Model's :py:class:`Collection <acid.Collection>` when it is created.
             \"\"\"Assign a password to the account during creation.\"\"\"
             self.password = passlib.generate(chars=8)
 
-Alternatively triggers may be registered for any free-standing function against
-any model or :py:class:`Collection <acid.Collection>`.
+Alternatively they may be registered for any free-standing function against
+any model or :py:class:`Collection <acid.Collection>`:
 
 ::
 
@@ -76,7 +76,7 @@ def on_create(func, target=None):
             '''Update the model's creation time.'''
             self.created = datetime.datetime.now()
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_on_create = True
     return func
 
@@ -91,7 +91,7 @@ def on_update(func, target=None):
             '''Update the model's modified time.'''
             self.modified = datetime.datetime.utcnow()
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_on_create = True
     func.meta_on_update = True
     return func
@@ -122,7 +122,7 @@ def after_replace(func, target=None):
         registering handlers if any index is defined on a collection.
 
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_on_create = True
     func.meta_on_update = True
     return func
@@ -139,7 +139,7 @@ def on_delete(func, target=None):
             if self.state == 'active':
                 raise Exception("can't delete while account is active.")
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_on_delete = True
     return func
 
@@ -155,7 +155,7 @@ def after_create(func, target=None):
             msg = Message(user_id=self.id, text='Welcome to our service!')
             msg.save()
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_after_create = True
     func.meta_after_update = True
     return func
@@ -171,7 +171,7 @@ def after_update(func, target=None):
             '''Push an update event to message queue subscribers.'''
             my_message_queue.send(topic='account-updated', id=self.id)
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_after_update = True
     return func
 
@@ -187,6 +187,6 @@ def after_delete(func, target=None):
             for msg in Message.user_index.find(prefix=self.id):
                 msg.delete()
     """
-    assert target is None, 'external triggers not supported yet.'
+    assert target is None, 'external events not supported yet.'
     func.meta_after_delete = True
     return func
