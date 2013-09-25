@@ -44,8 +44,8 @@ if memsink:
 ext_modules = []
 if use_cpython:
     ext_modules = [
-        Extension("_keylib", sources=[
-            'ext/keylib.c', 'ext/key.c', 'ext/fixed_offset.c'],
+        Extension("_acid", sources=[
+            'ext/acid.c', 'ext/keylib.c', 'ext/key.c', 'ext/fixed_offset.c'],
             extra_compile_args=extra_compile_args)
     ]
 

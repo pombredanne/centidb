@@ -130,7 +130,11 @@ int skip_element(struct reader *rdr, int *eof);
 PyTypeObject *init_fixed_offset_type(void);
 PyObject *get_fixed_offset(int offset_secs);
 
+PyObject *
+acid_init_module(const char *name, PyMethodDef *methods);
+
 PyTypeObject *init_key_type(void);
+int init_keylib_module(void);
 
 
 #endif /* !ACID_H */

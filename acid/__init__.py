@@ -16,6 +16,16 @@
 
 from __future__ import absolute_import
 
+# Hack: disable speedups while testing or reading docstrings.
+import os
+import sys
+if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
+        os.getenv('ACID_NO_SPEEDUPS') is None:
+    try:
+        import acid._acid
+    except ImportError:
+        pass
+
 from acid import core
 from acid.core import *
 from acid.keylib import Key

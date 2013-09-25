@@ -803,10 +803,7 @@ class Store(object):
             self._meta.put(value + n, key=key)
         return 0L + value
 
-# Hack: disable speedups while testing or reading docstrings.
-if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
-        os.getenv('ACID_NO_SPEEDUPS') is None:
-    try:
-        from acid._keylib import decode_offsets
-    except ImportError:
-        pass
+try:
+    from acid._keylib import decode_offsets
+except ImportError:
+    pass

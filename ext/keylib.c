@@ -1031,8 +1031,8 @@ static PyMethodDef KeylibMethods[] = {
 /**
  * Do all required to initialize the module.
  */
-PyMODINIT_FUNC
-init_keylib(void)
+int
+init_keylib_module(void)
 {
     PyDateTime_IMPORT;
 
@@ -1044,23 +1044,20 @@ init_keylib(void)
     uuid_get_bytes = import_object("uuid", "UUID", "get_bytes", NULL);
     assert(datetime_utcoffset && uuid_get_bytes);
 
-    PyObject *mod = Py_InitModule("acid._keylib", KeylibMethods);
+    PyObject *mod = acid_init_module("_keylib", KeylibMethods);
     if(! mod) {
-        return;
-    }
-
-    PyObject *dct = PyModule_GetDict(mod);
-    if(! dct) {
-        return;
+        return -1;
     }
 
     PyTypeObject *fixed_offset = init_fixed_offset_type();
     if(fixed_offset) {
-        PyDict_SetItemString(dct, "FixedOffset", (PyObject *) fixed_offset);
+        PyModule_AddObject(mod, "FixedOffset", (PyObject *) fixed_offset);
     }
 
     KeyType = init_key_type();
     if(KeyType) {
-        PyDict_SetItemString(dct, "Key", (PyObject *) KeyType);
+        PyModule_AddObject(mod, "Key", (PyObject *) KeyType);
     }
+
+    return 0;
 }
