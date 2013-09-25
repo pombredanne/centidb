@@ -409,6 +409,10 @@ The following parameters are supported everywhere some kind of key enumeration
 may occur using :py:class:`Collection` or :py:class:`Index`, for example all
 iteration methods.
 
+    `key`, `args`:
+        Exact key or index tuple to locate. All remaining options, including
+        `max`, are ignored if `key` is specified.
+
     `lo`:
         Lowest key returned. All returned keys will be `>= lo`. If unspecified,
         defaults to the lowest key in the index or collection.
@@ -417,11 +421,6 @@ iteration methods.
         Highest key returned. If `include=False`, all returned keys wil be `<
         hi`, otherwise they will be `<= hi`. If unspecified, defaults to the
         highest key in the index or collection.
-
-    `key`, `args`:
-        Key or index tuple to begin iteration from. Equivalent to `hi` when
-        `reverse=True` or `lo` when `reverse=False`. When given and
-        `reverse=True`, `include` is automatically set to ``True``.
 
     `reverse`:
         Iterate from the end of the range to the start. If unspecified,

@@ -391,8 +391,7 @@ class Collection(object):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead."""
-        key = keylib.Key(key)
-        it = self._iter(None, key, key, None, False, None, True, None)
+        it = self._iter(key, None, None, None, False, None, True, None)
         for r in it:
             if raw:
                 return r.data

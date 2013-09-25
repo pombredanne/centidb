@@ -301,13 +301,15 @@ class BatchRangeIterator(Iterator):
 
 def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
     """This function is a stand-in until the core.py API is refurbished."""
-    if prefix:
+    if key:
+        it.set_exact(key)
+        return it.forward()
+        #if reverse:
+            #it.set_hi(key, closed=True)
+        #else:
+            #it.set_lo(key, closed=True)
+    elif prefix:
         it.set_prefix(prefix)
-    elif key:
-        if reverse:
-            it.set_hi(key, closed=True)
-        else:
-            it.set_lo(key, closed=True)
     else:
         if lo:
             it.set_lo(lo, include)
@@ -318,8 +320,6 @@ def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
         it.set_max(max_)
     if max_phys:
         it.set_max_phys(max_phys)
-    #if key:
-        #it.set_exact(key)
 
     if reverse:
         return it.reverse()

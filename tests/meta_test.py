@@ -71,7 +71,7 @@ class TestSave(TestBase):
             mod.save()
         with self.store.begin():
             assert Model.by_name.get(u'Dave') is not None
-            assert len(list(Model.by_name.keys('Dave'))) == 1
+            assert len(list(Model.by_name.keys(lo='Dave'))) == 1
 
 
 if __name__ == '__main__':
