@@ -36,6 +36,7 @@ Iterator Result
 
 .. autoclass:: acid.iterators.Result
     :members:
+    :inherited-members:
 
 
 RangeIterator
@@ -43,6 +44,7 @@ RangeIterator
 
 .. autoclass:: acid.iterators.RangeIterator
     :members:
+    :inherited-members:
 
 
 BatchRangeIterator
