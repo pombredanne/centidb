@@ -11,32 +11,32 @@ Declarative Interface
 ::
 
     import acid
-    from acid import meta
+    import acid.meta
 
 
-    class Base(meta.Model):
+    class Base(acid.meta.Model):
         """Base for models belonging to this program. Can be used to add common
         fields, and to bind all subclasses to a particular acid.Store with a
         single call."""
 
 
     class User(Base):
-        email = meta.String()
-        first = meta.String()
-        last = meta.String()
-        age = meta.Integer()
+        email = acid.meta.String()
+        first = acid.meta.String()
+        last = acid.meta.String()
+        age = acid.meta.Integer()
 
-        @meta.constraint
+        @acid.meta.constraint
         def sane_age(self):
             """Ensure the user's age is 1..149 if they provided it."""
             return self.age is None or (0 < self.age < 150)
 
 
     class Item(Base):
-        user_id = meta.Integer()
-        data = meta.String()
+        user_id = acid.meta.Integer()
+        data = acid.meta.String()
 
-        @meta.constraint
+        @acid.meta.constraint
         def sane_user_id(self):
             """Ensure a User model exists for user_id."""
             return User.get(self.user_id) is not None
