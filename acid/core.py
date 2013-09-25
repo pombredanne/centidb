@@ -39,6 +39,8 @@ __all__ = ['Store', 'Collection', 'Index', 'open']
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
 ITEMGETTER_2 = operator.itemgetter(2)
+ATTRGETTER_KEY = operator.attrgetter('key')
+ATTRGETTER_DATA = operator.attrgetter('key')
 
 KIND_TABLE = 0
 KIND_INDEX = 1
@@ -323,114 +325,12 @@ class Collection(object):
         self.indices[name] = index
         return index
 
-    def _logical_iter(self, it, reverse, prefix_s, prefix):
-        """Generator that wraps a database engine iterator to yield logical
-        records. For compressed records, each physical record may contain
-        multiple physical records. This job's function is to make the
-        distinction invisible to reads."""
-        #   * When iterating forward, if first yielded key lacks collection
-        #     prefix, result of iteration is empty.
-        #   * When iterating reverse, if first yielded key lacks collection
-        #     prefix, discard, then behave as forward.
-        #   * Records are discarded in the direction of iteration until
-        #     startpred() or not self.prefix.
-        #   * Records are yielded following startpred() until not endpred() or
-        #     not self.prefix.
-        prefix = prefix or ()
-        tup = next(it, None)
-        if tup and tup[0][:len(prefix_s)] == prefix_s:
-            it = itertools.chain((tup,), it)
-        for key, value in it:
-            keys = keylib.unpacks(key, prefix_s)
-            if not keys:
-                return
-
-            lenk = len(keys)
-            if lenk == 1:
-                key = keylib.Key(*(prefix + keys[0]))
-                yield False, key, self._decompress(value)
-            else: # Batch record.
-                offsets, dstart = decode_offsets(value)
-                data = self._decompress(buffer(value, dstart))
-                if reverse:
-                    stop = -1
-                    step = -1
-                    i = lenk
-                else:
-                    stop = lenk
-                    step = 1
-                    i = 0
-                while i != stop:
-                    key = keys[-1 - i]
-                    offs = offsets[i]
-                    size = offsets[i+1] - offs
-                    key = keylib.Key(*(prefix + key))
-                    yield True, key, buffer(data, offs, size)
-                    i += step
-
-    # -----------------------------------------------------------
-    # prefix: a
-    #                          _iter(key=ad, reverse=True)
-    #                         /_iter(hi=ad, reverse=True)
-    #                        //
-    #       aa     ab     aedc     af     ba
-    #       ^             ^               ^
-    #       |             |               |
-    #       |             |               |
-    #  .iter(prefix)      |        .iter(next_greater(prefix))
-    #                 .iter(ad)
-    # -----------------------------------------------------------
-    # _iter(, , , False): lokey=prefix, hikey=ng(prefix)
-    #                     startpred=lokey, endpred=
     def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
-        if key is not None:
-            key = keylib.Key(key)
-            if reverse:
-                hi = key
-                include = True
-            else:
-                lo = key
-
-        if prefix:
-            prefix = keylib.Key(prefix)
-            prefix_s = prefix.to_raw(self.prefix)
-        else:
-            prefix_s = self.prefix
-
-        if lo is None:
-            lokey = prefix_s
-        else:
-            lo = keylib.Key(lo)
-            lokey = lo.to_raw(self.prefix)
-
-        if hi is None:
-            hikey = keylib.next_greater(prefix_s)
-            include = False
-        else:
-            hi = keylib.Key(hi)
-            hikey = hi.to_raw(self.prefix)
-
-        if reverse:
-            startkey = hikey
-            startpred = hi and (hi.__lt__ if include else hi.__le__)
-            endpred = lo and lo.__ge__
-        else:
-            startkey = lokey
-            startpred = None
-            endpred = hi and (hi.__ge__ if include else hi.__gt__)
-
-        it = self.store._txn_context.get().iter(startkey, reverse)
-        if max_phys is not None:
-            it = itertools.islice(it, max_phys)
-
-        it = self._logical_iter(it, reverse, prefix_s, prefix)
-        if max_ is not None:
-            it = itertools.islice(it, max_)
-        if startpred:
-            it = itertools.dropwhile(_kcmp(startpred), it)
-        if endpred:
-            it = itertools.takewhile(_kcmp(endpred), it)
-        return it
+        txn = self.store._txn_context.get()
+        it = iterators.BatchRangeIterator(txn, self.prefix,
+                                          self.store.get_encoder)
+        return iterators.from_args(it, key, lo, hi, prefix, reverse,
+                                   max_, include, max_phys)
 
     def __getitem__(self, index):
         return self.indices[index]
@@ -457,32 +357,32 @@ class Collection(object):
         """Yield all `(key tuple, value)` tuples in key order."""
         it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         if raw:
-            return it
-        return ((key_, self.encoder.unpack(key_, data)) for _, key_, data in it)
+            return ((r.key, r.data) for r in it)
+        return ((r.key, self.encoder.unpack(r.key, r.data)) for r in it)
 
     def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
              max=None, include=False):
         """Yield key tuples in key order."""
         it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
-        return itertools.imap(ITEMGETTER_1, it)
+        return itertools.imap(ATTRGETTER_KEY, it)
 
     def values(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
                max=None, include=False, raw=False):
         """Yield record values in key order."""
         it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         if raw:
-            return itertools.imap(ITEMGETTER_2, it)
-        return (self.encoder.unpack(key_, data) for _, key_, data in it)
+            return itertools.imap(ATTRGETTER_DATA, it)
+        return (self.encoder.unpack(r.key, r.data) for r in it)
 
     def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
              include=False, raw=None, default=None):
         """Return the first matching record, or None. Like ``next(itervalues(),
         default)``."""
         it = self._iter(key, lo, hi, prefix, reverse, None, include, None)
-        for _, key_, data in it:
+        for r in it:
             if raw:
-                return data
-            return self.encoder.unpack(key_, data)
+                return r.data
+            return self.encoder.unpack(r.key, r.data)
         return default
 
     def get(self, key, default=None, raw=False):
@@ -490,10 +390,10 @@ class Collection(object):
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead."""
         it = self._iter(None, key, key, None, False, None, True, None)
-        for _, key_, data in it:
+        for r in it:
             if raw:
-                return data
-            return self.encoder.unpack(key_, data)
+                return r.data
+            return self.encoder.unpack(r.key, r.data)
         return default
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
@@ -575,21 +475,21 @@ class Collection(object):
         groupval = None
         items = []
 
-        for batch, key, data in it:
-            if preserve and batch:
+        for r in it:
+            if preserve and len(r.keys) > 1:
                 self._write_batch(txn, items, packer)
             else:
-                txn.delete(key.to_raw(self.prefix))
-                items.append((key, data))
+                txn.delete(keylib.packs(r.key, self.prefix))
+                items.append((r.key, r.data))
                 if max_bytes:
                     _, encoded = self._prepare_batch(items, packer)
                     if len(encoded) > max_bytes:
                         items.pop()
                         self._write_batch(txn, items, packer)
-                        items.append((key, data))
+                        items.append((r.key, r.data))
                 done = max_recs and len(items) == max_recs
                 if (not done) and grouper:
-                    val = grouper(self.encoder.unpack(key, data))
+                    val = grouper(self.encoder.unpack(r.key, r.data))
                     done = val != groupval
                     groupval = val
                 if done:
@@ -691,14 +591,14 @@ class Collection(object):
         key = keylib.Key(key)
         it = self._iter(key, None, None, None, None, None, True, None)
         txn = self.store._txn_context.get()
-        for batch, key_, data in it:
-            if key != key_:
+        for r in it:
+            if r.key != key:
                 break
-            obj = self.encoder.unpack(key, data)
+            obj = self.encoder.unpack(r.key, r.data)
             if self.indices:
                 for key_ in self._index_keys(key, obj):
                     txn.delete(key_)
-            if batch:
+            if len(r.keys) > 1:
                 self._split_batch(key)
             else:
                 txn.delete(keylib.packs(key, self.prefix))
