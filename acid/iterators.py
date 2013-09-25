@@ -188,9 +188,14 @@ class BatchRangeIterator(Iterator):
         self.get_compressor = get_compressor
 
     def set_max_phys(self, max_phys):
+        """Set the maximum number of physical records to visit."""
         self.max_phys = max_phys
 
     def _decompress(self, data):
+        """Extract the compressor identifier prefix from `data`, use the
+        `get_compressor` callback provided to the constructor to get a
+        :py:class:`acid.encoders.Compressor` instance from the identifer, then
+        decompress the remainder of the string and return it."""
         compressor = self.get_compressor(data[0])
         return compressor.unpack(buffer(data, 1))
 
@@ -198,8 +203,18 @@ class BatchRangeIterator(Iterator):
         """Progress one step through the batch, or fetch another physical
         record if the batch is exhausted. Returns ``True`` so long as the
         collection range has not been exceeded."""
-        # We're inside a batch.
+        # Previous record was non-batch, or previous batch exhausted. Need to
+        # fetch another record.
         if not self.index:
+            # Have we visited maximum number of physical records? If so, stop
+            # iteration.
+            if not self.max_phys:
+                return False
+            self.max_phys -= 1
+
+            # Get the next record and decode its key. from_raw() returns None
+            # if the key's prefix doesn't match self.prefix, which indicates
+            # we've reached the end of the collection.
             keys_raw, self.raw = next(self.it, ('', ''))
             self.keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
             if not self.keys:
@@ -213,6 +228,8 @@ class BatchRangeIterator(Iterator):
                 self.index = 0
                 return True
 
+            # Decode the array of logical record offsets and save it, along
+            # with the decompressed concatenation of all records.
             self.offsets, dstart = acid.core.decode_offsets(self.raw)
             self.concat = self._decompress(buffer(self.raw, dstart))
             self.index = lenk

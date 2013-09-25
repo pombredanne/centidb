@@ -345,6 +345,36 @@ class BatchRangeIteratorTest:
         self.rit.set_hi('D', closed=False)
         eq([RBPKEYS[1]], keyfrom(self.rit.reverse))
 
+    # Test max_phys
+
+    def test_max_phys_1_forward(self):
+        self.rit.set_max_phys(1)
+        # First physical record is a batch of 2 keys.
+        eq(BPKEYS[:2], keyfrom(self.rit.forward))
+
+    def test_max_phys_1_reverse(self):
+        self.rit.set_max_phys(1)
+        # Last physical record is non-batch.
+        eq(RBPKEYS[:1], keyfrom(self.rit.reverse))
+
+    def test_max_phys_2_forward(self):
+        self.rit.set_max_phys(2)
+        # First 2 records contain 3 keys.
+        eq(BPKEYS[:3], keyfrom(self.rit.forward))
+
+    def test_max_phys_2_reverse(self):
+        self.rit.set_max_phys(2)
+        # Last 2 records contain 4 keys.
+        eq(RBPKEYS[:4], keyfrom(self.rit.reverse))
+
+    def test_max_lo_non_batch(self):
+        # Begin iteration from non-batch record.
+        self.rit.set_lo('BB', closed=True)
+        # Continue for 2 physical records (BB, BC, BD)
+        self.rit.set_max_phys(2)
+        eq(BPKEYS[2:5], keyfrom(self.rit.forward))
+
+
 
 if __name__ == '__main__':
     testlib.main()
