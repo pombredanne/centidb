@@ -187,8 +187,9 @@ class Index(object):
              raw=False, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
-        it = self.values(args, lo, hi, reverse, None, include, raw)
-        return next(it, default)
+        it = self.items(args, lo, hi, reverse, None, include, raw)
+        tup = next(it, None)
+        return tup[1] if tup else default
 
     def has(self, x):
         """Return True if an entry with the exact tuple `x` exists in the
