@@ -39,9 +39,9 @@ CheeseBoard
 <h3>Posts</h3>
 
 @if posts:
-    @for (id,), post in posts:
-        <h5><img src=/static/cheese2.png> Comment @str(id) from @post['name']</h5>
-        <blockquote>@post['text']</blockquote>
+    @for post in posts:
+        <h5><img src=/static/cheese2.png> Comment @str(post.key[0]) from @post.name</h5>
+        <blockquote>@post.text</blockquote>
 @end
 @else:
     <em>(no posts)</em>

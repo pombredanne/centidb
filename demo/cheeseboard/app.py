@@ -33,17 +33,15 @@ def index():
     with store.begin():
         posts = list(models.Post.iter(hi=hi, reverse=True, max=5))
         highest_id = models.Post.find(reverse=True)
-        print list(models.Post.iter())
     t1 = time.time()
-    print posts
     older = None
     newer = None
     if posts:
-        oldest = posts[-1][0][0] - 1
+        oldest = posts[-1].key[0] - 1
         if oldest > 0:
             older = '?hi=' + str(oldest)
-        if posts[0][0] < highest_id:
-            newer = '?hi=' + str(posts[0][0][0] + 5)
+        if posts[0].key < highest_id:
+            newer = '?hi=' + str(posts[0].key[0] + 5)
 
     return templates.get_template('index.html').render({
         'error': bottle.request.query.get('error'),
