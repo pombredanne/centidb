@@ -48,6 +48,12 @@ Features:
         transparently maintains a compact record encoding, and provides a
         convenient ORM-like storage interface familiar to many developers.
 
+    :ref:`Record Mutation Events <events>`
+
+        Functions can be registered for invocation prior to or after any
+        create, update, replacement, or deletion. A function may modify the
+        record, implement a constraint, or trigger some external process.
+
     :ref:`One Engine, Many Collections <intro>`
 
         Similar to a regular DBMS, the storage engine may contain multiple
