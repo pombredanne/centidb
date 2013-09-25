@@ -221,7 +221,7 @@ class BatchRangeIteratorTest:
 
         for prefix, keys in BATCH_KEYSETS:
             for tups in keys:
-                phys = acid.keylib.packs(tups, prefix=prefix)
+                phys = acid.keylib.packs(tups, prefix)
                 self.engine.put(phys, val)
 
     # Test set_lo() with key <= start of file, >= end of file, some existent
