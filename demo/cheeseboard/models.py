@@ -1,5 +1,6 @@
 
 import time
+import acid.events
 import acid.meta
 
 
@@ -13,15 +14,15 @@ class Post(Model):
     text = acid.meta.String()
     created = acid.meta.Time()
 
-    @acid.meta.constraint
+    @acid.events.constraint
     def check_name(self):
         return self.name and len(self.name) >= 3
 
-    @acid.meta.constraint
+    @acid.events.constraint
     def check_text(self):
         return self.text and len(self.text) > 5
 
-    @acid.meta.on_create
+    @acid.events.on_create
     def set_created(self):
         self.created = time.time()
 
