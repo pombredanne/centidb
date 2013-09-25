@@ -168,9 +168,10 @@ class Index(object):
               include=False, raw=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order."""
+        get = self.coll.get
         for e in self._iter(args, lo, hi, reverse, max, include):
             key = e.keys[1]
-            obj = self.coll.get(key, None, raw)
+            obj = get(key, None, raw)
             if obj:
                 yield key, obj
             else:
