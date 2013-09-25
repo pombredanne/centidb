@@ -49,12 +49,17 @@ any model or :py:class:`Collection <acid.Collection>`.
 
 
 def constraint(func):
-    """Mark a function as implementing a collection constraint. Constraints are
-    checked during :py:meth:`acid.meta.Model.save`.
+    """Mark a function as implementing a collection constraint. The function
+    should return ``True`` if the constraint is satisfied, or raise an
+    exception or return any falsey value otherwise.
+
+    Constraints are implemented as :py:func:`on_update` handlers that convert
+    falsey return values into :py:class:`ConstraintErrors
+    <acid.errors.ConstraintError>`.
 
     ::
 
-        @meta.constraint
+        @acid.events.constraint
         def is_age_valid(self):
             return 0 < self.age < 150
     """
@@ -68,7 +73,7 @@ def on_create(func, target=None):
 
     ::
 
-        @meta.on_create
+        @acid.events.on_create
         def set_created(self):
             '''Update the model's creation time.'''
             self.created = datetime.datetime.now()
@@ -83,7 +88,7 @@ def on_update(func, target=None):
 
     ::
 
-        @meta.on_update
+        @acid.events.on_update
         def set_modified(self):
             '''Update the model's modified time.'''
             self.modified = datetime.datetime.utcnow()
@@ -130,7 +135,7 @@ def on_delete(func, target=None):
 
     ::
 
-        @meta.on_delete
+        @acid.events.on_delete
         def ensure_can_delete(self):
             '''Prevent deletion if account is active.'''
             if self.state == 'active':
@@ -146,7 +151,7 @@ def after_create(func, target=None):
 
     ::
 
-        @meta.after_create
+        @acid.events.after_create
         def send_welcome_message(self):
             '''Send the user a welcome message.'''
             msg = Message(user_id=self.id, text='Welcome to our service!')
@@ -163,7 +168,7 @@ def after_update(func, target=None):
 
     ::
 
-        @meta.after_update
+        @acid.events.after_update
         def notify_update(self):
             '''Push an update event to message queue subscribers.'''
             my_message_queue.send(topic='account-updated', id=self.id)
@@ -178,7 +183,7 @@ def after_delete(func, target=None):
 
     ::
 
-        @meta.after_delete
+        @acid.events.after_delete
         def delete_messages(self):
             '''Delete all the account's messages.'''
             for msg in Message.user_index.find(prefix=self.id):
