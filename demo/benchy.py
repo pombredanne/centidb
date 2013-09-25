@@ -42,12 +42,13 @@ class AcidEngine(object):
         self.make_engine()
 
     def make_coll(self, use_indices):
-        self.coll = self.store.add_collection('stuff',
-            encoder=self.ENCODER,
-            key_func=self.KEY_FUNC)
-        if use_indices:
-            self.coll.add_index('rev_name', lambda p: p['name'])
-            self.coll.add_index('rev_locn', lambda p: p['location'])
+        with self.store.begin(write=True):
+            self.coll = self.store.add_collection('stuff',
+                encoder=self.ENCODER,
+                key_func=self.KEY_FUNC)
+            if use_indices:
+                self.coll.add_index('rev_name', lambda p: p['name'])
+                self.coll.add_index('rev_locn', lambda p: p['location'])
 
     def close(self):
         self.store.engine.close()
@@ -56,23 +57,22 @@ class AcidEngine(object):
 
     def insert(self, words, upper, stub, blind):
         coll = self.coll
-        txn = self.store.engine.begin(write=True)
-        for i in xrange(len(words)):
-            doc = {'stub': stub, 'name': words[i], 'location': upper[i]}
-            coll.put(doc, blind=blind, txn=txn)
-        txn.commit()
+        with self.store.begin(write=True):
+            for i in xrange(len(words)):
+                doc = {'stub': stub, 'name': words[i], 'location': upper[i]}
+                coll.put(doc, blind=blind)
 
     def randget_idx(self, words):
         index = self.coll.indices['rev_name']
-        txn = self.store.engine.begin()
-        for word in words:
-            index.get(word, txn=txn)
+        with self.store.begin():
+            for word in words:
+                index.get(word)
 
     def randget_id(self, words, upper):
-        txn = self.store.engine.begin()
         coll = self.coll
-        for i in xrange(len(words)):
-            coll.get((words[i], upper[i]), txn=txn)
+        with self.store.begin():
+            for i in xrange(len(words)):
+                coll.get((words[i], upper[i]))
 
 
 class LmdbEngine(AcidEngine):
@@ -200,7 +200,7 @@ def x():
     ids = range(len(words))
     random.shuffle(ids)
 
-    engines = [LmdbEngine, SkiplistEngine, SqliteEngine]
+    engines = [LmdbEngine, SkiplistEngine] #, SqliteEngine]
     if plyvel:
         engines += [PlyvelEngine]
     if pymongo:
