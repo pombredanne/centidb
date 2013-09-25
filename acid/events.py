@@ -115,7 +115,7 @@ def after_replace(func, target=None):
 
     .. caution::
 
-        Registering any `on_replace` handler causes :py:meth:`Collection.put
+        Registering any `after_replace` handler causes :py:meth:`Collection.put
         <acid.Collection.put>` to use :py:meth:`Engine.replace
         <acid.engines.Engine.replace>` instead of :py:meth:`Engine.put
         <acid.engines.Engine.put>`, which cannot be supported efficiently for
