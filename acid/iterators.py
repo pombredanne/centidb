@@ -48,23 +48,23 @@ class Result(object):
 
 class Iterator(object):
     # Various defaults set here to avoid necessity for repeat initialization.
-    lo = None
-    hi = None
-    lo_pred = bool
-    hi_pred = bool
+    _lo = None
+    _hi = None
+    _lo_pred = bool
+    _hi_pred = bool
     remain = -1
 
     def set_lo(self, key, closed=True):
         """Set the lower bound to `key`. If `closed` is ``True``, include the
         lower bound in the result set, otherwise exclude it."""
-        self.lo = keylib.Key(key)
-        self.lo_pred = getattr(self.lo, ('__lt__', '__le__')[closed])
+        self._lo = keylib.Key(key)
+        self._lo_pred = getattr(self._lo, ('__lt__', '__le__')[closed])
 
     def set_hi(self, key, closed=False):
         """Set the upper bound to `key`. If `closed` is ``True``, include the
         upper bound in the result set, otherwise exclude it."""
-        self.hi = keylib.Key(key)
-        self.hi_pred = getattr(self.hi, ('__gt__', '__ge__')[closed])
+        self._hi = keylib.Key(key)
+        self._hi_pred = getattr(self._hi, ('__gt__', '__ge__')[closed])
 
     def set_prefix(self, key):
         """Provides directional iteration of a range of keys with a set prefix.
@@ -82,10 +82,10 @@ class Iterator(object):
         """Set the lower and upper bounds such that `key` is the only key
         returned, if it exists."""
         key = keylib.Key(key)
-        self.lo = key
-        self.hi = key
-        self.lo_pred = key.__le__
-        self.hi_pred = key.__ge__
+        self._lo = key
+        self._hi = key
+        self._lo_pred = key.__le__
+        self._hi_pred = key.__ge__
 
 
 class RangeIterator(Iterator):
@@ -114,10 +114,10 @@ class RangeIterator(Iterator):
         """Begin yielding objects satisfying the :py:class:`Result` interface,
         from `lo`..`hi`. Note the yielded object is reused, so references to it
         should not be held."""
-        if self.lo is None:
+        if self._lo is None:
             key = self.prefix
         else:
-            key = self.lo.to_raw(self.prefix)
+            key = self._lo.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, False)
         # Fetch the first key. If _step() returns false, then first key is
@@ -125,11 +125,11 @@ class RangeIterator(Iterator):
         go = self._step()
 
         # When lo(closed=False), skip the start key.
-        if go and not self.lo_pred(self.keys[0]):
+        if go and not self._lo_pred(self.keys[0]):
             go = self._step()
 
         remain = self.remain
-        while go and remain and self.hi_pred(self.keys[0]):
+        while go and remain and self._hi_pred(self.keys[0]):
             yield self
             remain -= 1
             go = self._step()
@@ -138,10 +138,10 @@ class RangeIterator(Iterator):
         """Begin yielding objects satisfying the :py:class:`Result` interface,
         from `hi`..`lo`. Note the yielded object is reused, so references to it
         should not be held."""
-        if self.hi is None:
+        if self._hi is None:
             key = keylib.next_greater(self.prefix)
         else:
-            key = self.hi.to_raw(self.prefix)
+            key = self._hi.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, True)
 
@@ -151,13 +151,13 @@ class RangeIterator(Iterator):
         if not go:
             go = self._step()
 
-        # We should now be positioned on the first record >= self.hi. When
+        # We should now be positioned on the first record >= self._hi. When
         # hi(closed=False), skip the first result.
-        if go and not self.hi_pred(self.keys[0]):
+        if go and not self._hi_pred(self.keys[0]):
             go = self._step()
 
         remain = self.remain
-        while go and remain and self.lo_pred(self.keys[0]):
+        while go and remain and self._lo_pred(self.keys[0]):
             yield self
             remain -= 1
             go = self._step()
@@ -249,10 +249,10 @@ class BatchRangeIterator(Iterator):
         """Begin yielding objects satisfying the :py:class:`Result` interface,
         from `lo`..`hi`. Note the yielded object is reused, so references to it
         should not be held."""
-        if self.lo is None:
+        if self._lo is None:
             key = self.prefix
         else:
-            key = self.lo.to_raw(self.prefix)
+            key = self._lo.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, False)
         self._reverse = False
@@ -261,11 +261,11 @@ class BatchRangeIterator(Iterator):
         go = self._step()
 
         # When lo(closed=False), skip the start key.
-        while go and not self.lo_pred(self.key):
+        while go and not self._lo_pred(self.key):
             go = self._step()
 
         remain = self.remain
-        while go and remain and self.hi_pred(self.key):
+        while go and remain and self._hi_pred(self.key):
             yield self
             remain -= 1
             go = self._step()
@@ -274,10 +274,10 @@ class BatchRangeIterator(Iterator):
         """Begin yielding objects satisfying the :py:class:`Result` interface,
         from `lo`..`hi`. Note the yielded object is reused, so references to it
         should not be held."""
-        if self.hi is None:
+        if self._hi is None:
             key = keylib.next_greater(self.prefix)
         else:
-            key = self.hi.to_raw(self.prefix)
+            key = self._hi.to_raw(self.prefix)
 
         self.it = self.engine.iter(key, True)
         self._reverse = True
@@ -289,11 +289,11 @@ class BatchRangeIterator(Iterator):
             go = self._step()
 
         # When lo(closed=False), skip the start key.
-        while go and not self.hi_pred(self.key):
+        while go and not self._hi_pred(self.key):
             go = self._step()
 
         remain = self.remain
-        while go and remain and self.lo_pred(self.key):
+        while go and remain and self._lo_pred(self.key):
             yield self
             remain -= 1
             go = self._step()
