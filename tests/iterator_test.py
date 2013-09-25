@@ -59,8 +59,6 @@ BATCH_KEYSETS = [
 BPKEYS = list(sorted(reduce(operator.add, BATCH_KEYSETS[1][1])))
 RBPKEYS = BPKEYS[::-1]
 
-print 'BPKEYS', BPKEYS
-print 'RBPKEYS', RBPKEYS
 
 def key0from(genfunc):
     return [g.keys[0][0] for g in genfunc()]
@@ -279,60 +277,59 @@ class BatchRangeIteratorTest:
         eq([], keyfrom(self.rit.forward))
         eq([], keyfrom(self.rit.reverse))
 
-    '''
     def test_hi_closed_nomatch_eof(self):
         self.rit.set_hi('a', closed=True)
-        eq(PKEYS, key0from(self.rit.forward))
-        eq(RPKEYS, key0from(self.rit.reverse))
+        eq(BPKEYS, keyfrom(self.rit.forward))
+        eq(RBPKEYS, keyfrom(self.rit.reverse))
 
     def test_hi_closed_match(self):
         self.rit.set_hi('B', closed=True)
-        eq(PKEYS[:2], key0from(self.rit.forward))
-        eq(RPKEYS[-2:], key0from(self.rit.reverse))
+        eq(BPKEYS[:2], keyfrom(self.rit.forward))
+        eq(RBPKEYS[-2:], keyfrom(self.rit.reverse))
 
     def test_hi_closed_nomatch(self):
         self.rit.set_hi('BA', closed=True)
-        eq(PKEYS[:2], key0from(self.rit.forward))
-        eq(RPKEYS[-2:], key0from(self.rit.reverse))
+        eq(BPKEYS[:2], keyfrom(self.rit.forward))
+        eq(RBPKEYS[-2:], keyfrom(self.rit.reverse))
 
     # Test set_exact() with key <= start of file, >= end of file, some existent
     # key, some nonexistent key, open and closed.
 
     def test_exact_closed_nomatch_sof(self):
         self.rit.set_exact('0')
-        eq([], key0from(self.rit.forward))
-        eq([], key0from(self.rit.reverse))
+        eq([], keyfrom(self.rit.forward))
+        eq([], keyfrom(self.rit.reverse))
 
     def test_exact_closed_nomatch_eof(self):
         self.rit.set_exact('a')
-        eq([], key0from(self.rit.forward))
-        eq([], key0from(self.rit.reverse))
+        eq([], keyfrom(self.rit.forward))
+        eq([], keyfrom(self.rit.reverse))
 
     def test_exact_closed_match(self):
         self.rit.set_exact('B')
-        eq([PKEYS[1]], key0from(self.rit.forward))
-        eq([RPKEYS[-2]], key0from(self.rit.reverse))
+        eq([BPKEYS[1]], keyfrom(self.rit.forward))
+        eq([RBPKEYS[-2]], keyfrom(self.rit.reverse))
 
     def test_exact_closed_nomatch(self):
         self.rit.set_exact('BA')
-        eq([], key0from(self.rit.forward))
-        eq([], key0from(self.rit.reverse))
+        eq([], keyfrom(self.rit.forward))
+        eq([], keyfrom(self.rit.reverse))
 
     # Test max by itself, and with options.
 
     def test_no_max(self):
-        eq(PKEYS, key0from(self.rit.forward))
+        eq(BPKEYS, keyfrom(self.rit.forward))
 
     def test_no_max_reverse(self):
-        eq(RPKEYS, key0from(self.rit.reverse))
+        eq(RBPKEYS, keyfrom(self.rit.reverse))
 
     def test_max_1(self):
         self.rit.set_max(1)
-        eq([PKEYS[0]], key0from(self.rit.forward))
+        eq([BPKEYS[0]], keyfrom(self.rit.forward))
 
     def test_max_1_reverse(self):
         self.rit.set_max(1)
-        eq([RPKEYS[0]], key0from(self.rit.reverse))
+        eq([RBPKEYS[0]], keyfrom(self.rit.reverse))
 
     def test_max_2(self):
         self.rit.set_max(2)
@@ -341,14 +338,12 @@ class BatchRangeIteratorTest:
     def test_max_1_open_lo(self):
         self.rit.set_max(1)
         self.rit.set_lo('A', closed=False)
-        eq([PKEYS[1]], key0from(self.rit.forward))
+        eq([BPKEYS[1]], keyfrom(self.rit.forward))
 
     def test_max_1_reverse_open_hi(self):
         self.rit.set_max(1)
         self.rit.set_hi('D', closed=False)
-        eq([RPKEYS[1]], key0from(self.rit.reverse))
-    '''
-
+        eq([RBPKEYS[1]], keyfrom(self.rit.reverse))
 
 
 if __name__ == '__main__':
