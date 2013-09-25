@@ -165,28 +165,28 @@ class Index(object):
         return (e.keys[1] for e in it)
 
     def items(self, args=None, lo=None, hi=None, reverse=None, max=None,
-              include=False):
+              include=False, raw=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order."""
         for e in self._iter(args, lo, hi, reverse, max, include):
             key = e.keys[1]
-            obj = self.coll.get(key)
+            obj = self.coll.get(key, None, raw)
             if obj:
                 yield key, obj
             else:
                 warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
     def values(self, args=None, lo=None, hi=None, reverse=None, max=None,
-               include=False):
+               include=False, raw=False):
         """Yield all values referred to by the index, in tuple order."""
-        it = self.items(args, lo, hi, reverse, max, include)
+        it = self.items(args, lo, hi, reverse, max, include, raw)
         return itertools.imap(ITEMGETTER_1, it)
 
     def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
-             default=None):
+             raw=False, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
-        it = self.values(args, lo, hi, reverse, None, include)
+        it = self.values(args, lo, hi, reverse, None, include, raw)
         return next(it, default)
 
     def has(self, x):
@@ -196,10 +196,10 @@ class Index(object):
         tup, _ = next(self.pairs(x), (None, None))
         return tup == x
 
-    def get(self, x, default=None):
+    def get(self, x, default=None, raw=False):
         """Return the first matching record from the index."""
         x = keylib.Key(x)
-        for tup in self.items(lo=x, hi=x, include=True):
+        for tup in self.items(lo=x, hi=x, include=True, raw=raw):
             return tup[1]
         return default
 
