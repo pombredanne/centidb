@@ -116,8 +116,8 @@ fp = None
 
 def main():
     store = models.init_store()
-    #fp = bz2.BZ2File('/home/data/dedupped-1-comment-per-line.json.bz2', 'r', 1048576 * 10)
-    fp = bz2.BZ2File('/home/data/top4e4.json.bz2', 'r', 1048576 * 10)
+    fp = bz2.BZ2File('/home/data/dedupped-1-comment-per-line.json.bz2', 'r', 1048576 * 10)
+    #fp = bz2.BZ2File('/home/data/top4e4.json.bz2', 'r', 1048576 * 10)
     #fp = bz2.BZ2File('/home/data/top5k.json.bz2', 'r', 1048576 * 10)
 
     stats = {
