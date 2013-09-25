@@ -108,7 +108,7 @@ def after_replace(func, target=None):
 
     ::
 
-        @triggers.after_replace
+        @acid.events.after_replace
         def after_replace(self, old):
             print "Record %s replaced: old ctime %s, new time %s" %\\
                   (self.key, old.ctime, self.ctime)
