@@ -88,6 +88,7 @@ Features:
     intro
     core
     meta
+    events
     engines
     errors
     encoders

@@ -20,6 +20,7 @@ acid.meta tests
 
 
 import acid
+import acid.events
 import acid.meta
 
 import testlib
@@ -32,7 +33,7 @@ class Model(acid.meta.Model):
     def by_name(self):
         return self.name
 
-    @acid.meta.constraint
+    @acid.events.constraint
     def check_name(self):
         return self.name and self.name[0].isupper()
 
