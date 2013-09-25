@@ -364,7 +364,7 @@ class BaseModel(object):
         """Yield matching models in key order; see
         :py:meth:`acid.Store.values`."""
         coll = cls.collection()
-        return coll.values(key, lo, hi, prefix, reverse, max, include)
+        return coll.values(key, lo, hi, prefix, reverse, max, include, raw)
 
     def __init__(self, _rec=None, _key=None, **kwargs):
         self._key = _key
