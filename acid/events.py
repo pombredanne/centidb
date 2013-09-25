@@ -120,8 +120,8 @@ def after_replace(func, target=None):
         <acid.engines.Engine.replace>` instead of :py:meth:`Engine.put
         <acid.engines.Engine.put>`, which cannot be supported efficiently for
         all storage engines. Note that indices are internally implemented as
-        `after_replace` handlers, so there is no penalty to registering
-        additional handlers if any index is defined on a collection.
+        `after_replace` handlers, so there is no additional penalty to
+        registering handlers if any index is defined on a collection.
 
     """
     assert target is None, 'external triggers not supported yet.'
