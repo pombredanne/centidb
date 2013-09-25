@@ -52,7 +52,7 @@ class Iterator(object):
     _hi = None
     _lo_pred = bool
     _hi_pred = bool
-    remain = -1
+    _remain = -1
 
     def set_lo(self, key, closed=True):
         """Set the lower bound to `key`. If `closed` is ``True``, include the
@@ -76,7 +76,7 @@ class Iterator(object):
     def set_max(self, max_):
         """Set the maximum size of the result set."""
         assert max_ >= 0, 'Result set size must be >= 0'
-        self.remain = max_
+        self._remain = max_
 
     def set_exact(self, key):
         """Set the lower and upper bounds such that `key` is the only key
@@ -128,7 +128,7 @@ class RangeIterator(Iterator):
         if go and not self._lo_pred(self.keys[0]):
             go = self._step()
 
-        remain = self.remain
+        remain = self._remain
         while go and remain and self._hi_pred(self.keys[0]):
             yield self
             remain -= 1
@@ -156,7 +156,7 @@ class RangeIterator(Iterator):
         if go and not self._hi_pred(self.keys[0]):
             go = self._step()
 
-        remain = self.remain
+        remain = self._remain
         while go and remain and self._lo_pred(self.keys[0]):
             yield self
             remain -= 1
@@ -179,8 +179,8 @@ class BatchRangeIterator(Iterator):
             function should return a :py:class:`acid.encoders.Compressor`
             instance.
     """
-    max_phys = -1
-    index = 0
+    _max_phys = -1
+    _index = 0
 
     def __init__(self, engine, prefix, get_compressor):
         self.engine = engine
@@ -189,7 +189,7 @@ class BatchRangeIterator(Iterator):
 
     def set_max_phys(self, max_phys):
         """Set the maximum number of physical records to visit."""
-        self.max_phys = max_phys
+        self._max_phys = max_phys
 
     def _decompress(self, data):
         """Extract the compressor identifier prefix from `data`, use the
@@ -205,12 +205,12 @@ class BatchRangeIterator(Iterator):
         collection range has not been exceeded."""
         # Previous record was non-batch, or previous batch exhausted. Need to
         # fetch another record.
-        if not self.index:
+        if not self._index:
             # Have we visited maximum number of physical records? If so, stop
             # iteration.
-            if not self.max_phys:
+            if not self._max_phys:
                 return False
-            self.max_phys -= 1
+            self._max_phys -= 1
 
             # Get the next record and decode its key. from_raw() returns None
             # if the key's prefix doesn't match self.prefix, which indicates
@@ -225,20 +225,20 @@ class BatchRangeIterator(Iterator):
             if lenk == 1:
                 self.key = self.keys[0]
                 self.data = self._decompress(self.raw)
-                self.index = 0
+                self._index = 0
                 return True
 
             # Decode the array of logical record offsets and save it, along
             # with the decompressed concatenation of all records.
             self.offsets, dstart = acid.core.decode_offsets(self.raw)
             self.concat = self._decompress(buffer(self.raw, dstart))
-            self.index = lenk
+            self._index = lenk
 
-        self.index -= 1
+        self._index -= 1
         if self._reverse:
-            idx = self.index
+            idx = self._index
         else:
-            idx = (len(self.keys) - self.index) - 1
+            idx = (len(self.keys) - self._index) - 1
         start = self.offsets[idx]
         length = self.offsets[idx + 1] - start
         self.key = self.keys[-1 + -idx]
@@ -264,7 +264,7 @@ class BatchRangeIterator(Iterator):
         while go and not self._lo_pred(self.key):
             go = self._step()
 
-        remain = self.remain
+        remain = self._remain
         while go and remain and self._hi_pred(self.key):
             yield self
             remain -= 1
@@ -292,7 +292,7 @@ class BatchRangeIterator(Iterator):
         while go and not self._hi_pred(self.key):
             go = self._step()
 
-        remain = self.remain
+        remain = self._remain
         while go and remain and self._lo_pred(self.key):
             yield self
             remain -= 1
