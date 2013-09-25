@@ -299,11 +299,8 @@ class BatchRangeIterator(Iterator):
             go = self._step()
 
 
-def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
+def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
     """This function is a stand-in until the core.py API is refurbished."""
-    txn = obj.store._txn_context.get()
-    it = RangeIterator(txn, obj.prefix)
-
     if prefix:
         it.set_prefix(prefix)
     elif key:
@@ -319,6 +316,8 @@ def from_args(obj, key, lo, hi, prefix, reverse, max_, include):
 
     if max_:
         it.set_max(max_)
+    if max_phys:
+        it.set_max_phys(max_phys)
     #if key:
         #it.set_exact(key)
 

@@ -128,8 +128,10 @@ class Index(object):
     def _iter(self, key, lo, hi, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
         """
-        return iterators.from_args(self, key, lo, hi, None,
-                                   reverse, max, include)
+        txn = self.store._txn_context.get()
+        it = iterators.RangeIterator(txn, self.prefix)
+        return iterators.from_args(it, key, lo, hi, None,
+                                   reverse, max, include, None)
 
     def count(self, args=None, lo=None, hi=None, max=None, include=False):
         """Return a count of index entries matching the parameter
