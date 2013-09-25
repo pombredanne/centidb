@@ -114,12 +114,11 @@ class CountingEngine(acid.engines.Engine):
 #
 
 def _reload_acid():
+    for key in sys.modules.keys():
+        if 'acid' in key:
+            del sys.modules[key]
     global acid
-    acid.keylib = reload(acid.keylib)
-    acid.engines = reload(acid.engines)
-    acid.encoders = reload(acid.encoders)
-    acid.core = reload(acid.core)
-    acid = reload(acid)
+    import acid
 
 
 class PythonMixin:
