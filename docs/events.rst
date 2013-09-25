@@ -9,14 +9,14 @@ Events
 .. automodule:: acid.events
 
 
-Specifying constraints
-++++++++++++++++++++++
+Constraints
++++++++++++
 
 .. autofunction:: acid.events.constraint ()
 
 
-Triggers
-++++++++
+Event Types
++++++++++++
 
 It is possible to register functions to be called when models are modified
 somehow. Inheritance is respected, in that triggers registered against a base

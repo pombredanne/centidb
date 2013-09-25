@@ -51,11 +51,9 @@ any model or :py:class:`Collection <acid.Collection>`.
 def constraint(func):
     """Mark a function as implementing a collection constraint. The function
     should return ``True`` if the constraint is satisfied, or raise an
-    exception or return any falsey value otherwise.
-
-    Constraints are implemented as :py:func:`on_update` handlers that convert
-    falsey return values into :py:class:`ConstraintErrors
-    <acid.errors.ConstraintError>`.
+    exception or return any falsey value otherwise. Constraints are implemented
+    as :py:func:`on_update` handlers that convert falsey return values into
+    :py:class:`ConstraintErrors <acid.errors.ConstraintError>`.
 
     ::
 
