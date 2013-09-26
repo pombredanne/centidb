@@ -93,11 +93,6 @@ def decode_offsets(s):
     return out, pos
 
 
-def __kcmp(fn, o):
-    return fn(o[1])
-_kcmp = functools.partial(functools.partial, __kcmp)
-
-
 class Index(object):
     """Provides query and manipulation access to a single index on a
     Collection. You should not create this class directly, instead use
