@@ -127,49 +127,51 @@ class Index(object):
         self.func = func
         self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
 
-    def _iter(self, key, lo, hi, reverse, max, include):
+    def _iter(self, key, lo, hi, prefix, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
         """
         txn = self.store._txn_context.get()
         it = iterators.RangeIterator(txn, self.prefix)
-        return iterators.from_args(it, key, lo, hi, None,
-                                   reverse, max, include, None)
+        return iterators.from_args(it,
+            key, lo, hi, prefix, reverse, max, include, None)
 
-    def count(self, args=None, lo=None, hi=None, max=None, include=False):
+    def count(self, args=None, lo=None, hi=None, prefix=None, max=None,
+              include=False):
         """Return a count of index entries matching the parameter
         specification."""
-        return sum(1 for _ in self._iter(args, lo, hi, 0, max, include))
+        it = self._iter(args, lo, hi, prefix, False, max, include)
+        return sum(1 for _ in it)
 
-    def pairs(self, args=None, lo=None, hi=None, reverse=None, max=None,
-              include=False):
+    def pairs(self, args=None, lo=None, hi=None, prefix=None, reverse=None,
+              max=None, include=False):
         """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record.
         
         `Note:` the yielded sequence is a list, not a tuple."""
-        it = self._iter(args, lo, hi, reverse, max, include)
+        it = self._iter(args, lo, hi, prefix, reverse, max, include)
         return (e.keys for e in it)
 
-    def tups(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=False):
+    def tups(self, args=None, lo=None, prefix=None, hi=None, reverse=None,
+             max=None, include=False):
         """Yield all index tuples in the index, in tuple order. The index tuple
         is the part of the entry produced by the user's index function, i.e.
         the index's natural "value"."""
-        it = self._iter(args, lo, hi, reverse, max, include)
+        it = self._iter(args, lo, hi, prefix, reverse, max, include)
         return (e.keys[0] for e in it)
 
-    def keys(self, args=None, lo=None, hi=None, reverse=None, max=None,
-            include=False):
+    def keys(self, args=None, lo=None, hi=None, prefix=None, reverse=None,
+             max=None, include=False):
         """Yield all keys in the index, in tuple order."""
-        it = self._iter(args, lo, hi, reverse, max, include)
+        it = self._iter(args, lo, hi, prefix, reverse, max, include)
         return (e.keys[1] for e in it)
 
-    def items(self, args=None, lo=None, hi=None, reverse=None, max=None,
-              include=False, raw=False):
+    def items(self, args=None, lo=None, hi=None, prefix=None, reverse=None,
+              max=None, include=False, raw=False):
         """Yield all `(key, value)` items referred to by the index, in tuple
         order."""
         get = self.coll.get
-        for e in self._iter(args, lo, hi, reverse, max, include):
+        for e in self._iter(args, lo, hi, prefix, reverse, max, include):
             key = e.keys[1]
             obj = get(key, None, raw)
             if obj:
@@ -177,24 +179,25 @@ class Index(object):
             else:
                 warnings.warn('stale entry in %r, requires rebuild' % (self,))
 
-    def values(self, args=None, lo=None, hi=None, reverse=None, max=None,
-               include=False, raw=False):
+    def values(self, args=None, lo=None, hi=None, prefix=None, reverse=None,
+               max=None, include=False, raw=False):
         """Yield all values referred to by the index, in tuple order."""
-        it = self.items(args, lo, hi, reverse, max, include, raw)
+        it = self.items(args, lo, hi, prefix, reverse, max, include, raw)
         return itertools.imap(ITEMGETTER_1, it)
 
-    def find(self, args=None, lo=None, hi=None, reverse=None, include=False,
-             raw=False, default=None):
+    def find(self, args=None, lo=None, hi=None, prefix=None, reverse=None,
+             include=False, raw=False, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
-        for tup in self.items(args, lo, hi, reverse, None, include, raw):
+        it = self.items(args, lo, hi, prefix, reverse, None, include, raw)
+        for tup in it:
             return tup[1]
         return default
 
     def has(self, x):
         """Return ``True`` if an entry with the exact tuple `x` exists in the
         index."""
-        it = self._iter(x, None, None, None, None, None)
+        it = self._iter(x, None, None, None, None, None, None)
         return next(it, None) is not None
 
     def get(self, x, default=None, raw=False):
