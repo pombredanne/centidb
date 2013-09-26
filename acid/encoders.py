@@ -55,10 +55,10 @@ class RecordEncoder(object):
             instances. The default is :py:class:`dict`.
 
         `get`
-            Functions invoked as `func(obj, attr)` to return the value of
-            attribute `attr` from `obj`. Used by :py:mod:`acid.meta` to
-            implement attribute access. The default is
-            :py:func:`operator.getitem`.
+            Functions invoked as `func(obj, attr, default)` to return the value
+            of attribute `attr` from `obj` if it is set, otherwise `default`.
+            Used by :py:mod:`acid.meta` to implement attribute access. The
+            default is :py:func:`operator.getitem`.
 
         `set`
             Function invoked as `func(obj, attr, value)` to set the attribute

@@ -39,9 +39,12 @@ import acid.errors
 class Field(object):
     """Base class for all field types.
     """
+    default = None
+
     def __get__(self, instance, klass):
         if instance:
-            return klass.META_ENCODER.get(instance._rec, self.name)
+            return klass.META_ENCODER.get(instance._rec, self.name,
+                                          self.default)
         return self
 
     def __set__(self, instance, value):
