@@ -187,21 +187,19 @@ class Index(object):
              raw=False, default=None):
         """Return the first matching record from the index, or None. Like
         ``next(itervalues(), default)``."""
-        it = self.items(args, lo, hi, reverse, None, include, raw)
-        tup = next(it, None)
-        return tup[1] if tup else default
+        for tup in self.items(args, lo, hi, reverse, None, include, raw):
+            return tup[1]
+        return default
 
     def has(self, x):
-        """Return True if an entry with the exact tuple `x` exists in the
+        """Return ``True`` if an entry with the exact tuple `x` exists in the
         index."""
-        x = keylib.Key(x)
-        tup, _ = next(self.pairs(x), (None, None))
-        return tup == x
+        it = self._iter(x, None, None, None, None, None)
+        return next(it, None) is not None
 
     def get(self, x, default=None, raw=False):
         """Return the first matching record from the index."""
-        x = keylib.Key(x)
-        for tup in self.items(lo=x, hi=x, include=True, raw=raw):
+        for tup in self.items(x, raw=raw):
             return tup[1]
         return default
 
