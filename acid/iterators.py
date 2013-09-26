@@ -304,10 +304,6 @@ def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
     if key:
         it.set_exact(key)
         return it.forward()
-        #if reverse:
-            #it.set_hi(key, closed=True)
-        #else:
-            #it.set_lo(key, closed=True)
     elif prefix:
         it.set_prefix(prefix)
     else:
