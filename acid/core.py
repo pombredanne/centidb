@@ -344,12 +344,12 @@ class Collection(object):
         existing under `key`."""
         idx_keys = []
         for idx in self.indices.itervalues():
-            lst = idx.func(obj)
-            if lst:
-                if type(lst) is not list:
-                    lst = [lst]
-                for idx_key in lst:
-                    idx_keys.append(keylib.packs([idx_key, key], idx.prefix))
+            res = idx.func(obj)
+            if type(res) is list:
+                for ikey in res:
+                    idx_keys.append(keylib.packs([ikey, key], idx.prefix))
+            elif res is not None:
+                idx_keys.append(keylib.packs([res, key], idx.prefix))
         return idx_keys
 
     def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
