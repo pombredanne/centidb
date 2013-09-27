@@ -197,11 +197,23 @@ class SkipListTest:
             assert sl.delete(keys.pop())
         assert sl.level == 0, sl.level
 
-
     def testReplace(self):
         sl = acid.engines.SkipList()
         assert sl.insert('dave', '') is None
         assert sl.insert('dave', '') == ''
+
+    def testFindLess(self):
+        sl = acid.engines.SkipList()
+        update = sl._update[:]
+        assert sl._findLess(update, 'missing') is sl.head
+
+        sl.insert('dave', 'dave')
+        assert sl._findLess(update, 'dave') is sl.head
+
+        sl.insert('dave2', 'dave')
+        assert sl._findLess(update, 'dave2')[0] == 'dave'
+
+        assert sl._findLess(update, 'dave3')[0] == 'dave2'
 
 
 

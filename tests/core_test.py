@@ -108,22 +108,6 @@ class IterTest:
         eq(self.REVERSE, self.riter())
 
 
-@testlib.register(native=False)
-class SkiplistTest:
-    def testFindLess(self):
-        sl = acid.engines.SkipList()
-        update = sl._update[:]
-        assert sl._findLess(update, 'missing') is sl.head
-
-        sl.insert('dave', 'dave')
-        assert sl._findLess(update, 'dave') is sl.head
-
-        sl.insert('dave2', 'dave')
-        assert sl._findLess(update, 'dave2')[0] == 'dave'
-
-        assert sl._findLess(update, 'dave3')[0] == 'dave2'
-
-
 @testlib.register()
 class OneCollBoundsTest:
     def setUp(self):
