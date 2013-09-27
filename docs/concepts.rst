@@ -52,7 +52,7 @@ Storage Engines
 Beneath every database there are one or more *storage engines* responsible for
 persisting data durably, and using a method that allows existing data to be
 quickly located. Much of a database's complexity is dedicated to the task of
-taking high-level requests by the user for data, and mapping them into
+taking high-level questions posed by the user, and mapping them into
 fundamental operations against a storage engine.
 
 Storage engines almost unilaterally deal in *(key, value)* pairs as the
@@ -60,17 +60,17 @@ primitive unit of data; much of the engine's job is to take *key* and as
 efficiently as possible lookup or modify its corresponding *value*, depending
 on what operation the database system asks for. Many technologies are used to
 implement storage engines, each with their own interesting set of properties,
-but for the purposes of Acid we are only interested in a particular property.
+but for the purposes of Acid we are mainly interested in a particular property.
 
 
 Unordered Engines
 -----------------
 
-An unordered engine receives a *(key, value)* pair and uses some method to
-distribute the *key* within some space. An example would be a hash table that
-compute some value of `key`, then use modular arithmetic to assign it to a
-*bucket*. Even though ``aaaa`` and ``aaab`` differ by a single byte, the former
-key might be assigned bucket *1412312* while the latter *123*.
+An unordered engine receives a *(key, value)* pair and typically uses some
+method to distribute the *key* within a space. An example would be a hash table
+that computes a hash value for `key`, then uses modulo to assign that value to
+a *bucket*. Even though ``aaaa`` and ``aaab`` differ by a single byte, the
+former key might be assigned bucket *1412312* while the latter *123*.
 
 This has many useful properties, for example, it ensures that writes, even to
 very similar keys, will be evenly distributed across available resources. If
@@ -94,10 +94,10 @@ spindles.
 Scanning the contents of such an engine is usually possible, however the
 results will not be returned in any meaningful order, and any future changes
 such as insertion or deletion may cause the previous order to change
-unpredictably. Unordered engines make it efficient to fetch or update
+unpredictably. Unordered engines optimize for fast fetch or update of
 individual records given their key, but do so by sacrificing an important
-operation: the *range scan*. As we will shortly see, range scans are crucial to
-the most useful feature of a traditional database.
+operation: the *range query*. As we will shortly see, range queries are crucial
+to the most useful feature of a traditional database.
 
 
 Ordered Engines
@@ -125,14 +125,14 @@ operation.
 Just as when a human looks up a word in a paper dictionary, when a database
 asks an ordered storage engine to "lookup the definition of ``aaaa``", it is a
 very simple matter to discover which words directly precede or follow ``aaaa``,
-since these words will appear on the same page.
+since these words will appear on the same page of the dictionary.
 
 
 Indices
 +++++++
 
 The majority of row-oriented database systems rely on this ordering behaviour
-to efficiently provide their most useful feature: indices. An index here is
+to efficiently support their most useful feature: indices. An index here is
 simply a dictionary where a record's key and its indexable value are swapped:
 the key becomes the value, and the value to be indexed becomes the key, like
 *(value, key)*. The resulting pair is an index entry, and a collection of index
@@ -151,7 +151,7 @@ entries forms an index.
 Notice what happens when this dictionary is written to the storage engine: we
 are guaranteed that the dictionary's order will be maintained, and so we can
 quickly discover the key for a record containing, say, *44* in its *Age* field.
-To find out which person is aged *44*, all required is to look up the entry for
+To discover which person is aged *44*, all required is to look up the entry for
 *44* in this dictionary, then look up its corresponding value (the original
 record's key) in the original dictionary.
 
@@ -162,19 +162,45 @@ forward, noting each record key until an entry with an index key larger than
 *40* is found.
 
 Once again, since the storage engine works hard to keep similar keys close
-together, the desired range of values should reside on the small number of
+together, the desired range of values should reside on a small number of
 consecutive dictionary pages, and so reading them is fast and easy. In database
-terminology, this process of *lookup word and walk backwards or forwards* is
-called a *range scan*, and it is the heart of everything Acid does.
+terminology, this *find word, or the next greater word, then walk backwards or
+forwards* operation is called a *range query*. Range queries are not only
+useful for secondary indices, but as we will shortly see, they can also be
+applied powerfully to a record's primary key.
+
+Range queries are the fundamental operation behind all of Acid's features.
+Consequently there is no support for unordered storage engines, and likely
+never will be.
 
 
-Primary Keys
-++++++++++++
+Clustering & Keys
++++++++++++++++++
 
-By default in the SQL data model, very little importance is attached to a
-record's *primary key*, except that it must be unique, and that there is an
-implied index over the primary key. A primary key may usually be of any
-supported column type, or a combination of column types.
+In the SQL data model, little importance is typically attached to a record's
+*primary key*, except that it must be unique, and that there is an implicit
+index covering it. A primary key may be of any supported column type, or a
+combination of column types, however it is traditional to prefer a single
+integer.
+
+Many SQL systems support the concept of *clustering*, where a database can be
+physically arranged according to the order of one of its indices. In some
+versions of SQL Server this clustering behaviour is automatic, and defaults to
+the order of the primary key. Other systems, such as SQLite 3, don't support
+complex clustering, but export a magic internal ``oid`` column that allows
+control of the internal order.
+
+The power of clustering is that it exposes the underlying storage engine
+directly to the user, so that they may customize it to match their
+application's expected behaviour. If the majority of an application's query
+load takes the form of a range query on a particular order, then it might make
+sense to order the storage engine identically, since doing so allows a
+secondary index scan + large number of random lookups to be translated into a
+far smaller number of scans of the main table.
+
+Not only are CPU-intensive lookups avoided, but since the storage engine's
+mandate is to store records with similar keys close together, then disk IO is
+also reduced.
 
 
 
