@@ -365,3 +365,14 @@ the cost of decompression would greatly overshadow the cost of the query.
 
 The batch size can be carefully tuned to allows an application's space
 efficiency to be carefully weighed against its performance goals.
+
+
+.. raw:: html
+
+    <!--
+        Record encodings
+        Models
+        In-process/external performance
+        Manageability
+    -->
+
