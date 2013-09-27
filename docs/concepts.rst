@@ -76,7 +76,7 @@ This has many useful properties, for example, it ensures that writes, even to
 very similar keys, will be evenly distributed across available resources. If
 clients of the engine need to hold a lock on a bucket in order to modify it,
 then uniformly distributing modifications is a powerful way to reduce lock
-contention. Similarly, underlying resources such as a pool of disks will
+contention. Similarly, underlying resources such as a pool of disks might
 benefit from the load spread: clients inserting very similar keys (for example,
 the current time) will have their writes evenly distributed across available
 spindles.
@@ -103,14 +103,13 @@ to the most useful feature of a traditional database.
 Ordered Engines
 ---------------
 
-Where an unordered engine attempts to distribute similar record keys as far
-from each other as possible, an ordered engine could be seen as doing exactly
-the opposite: the keys ``aaaa`` and ``aaab`` are stored specifically so that
-accessing them sequentially (in "dictionary" order) is fast, and so that the
-value for ``aaaa`` is physically located close to the value for ``aaab``. In
-the usual case, looking up the value for ``aaaa`` in an ordered engine will
-likely cause ``aaab`` to be brought into memory as part of the same IO
-operation.
+Where an unordered engine attempts to distribute record keys uniformly, an
+ordered engine could be seen as doing exactly the opposite: the keys ``aaaa``
+and ``aaab`` are stored specifically so that accessing them sequentially (in
+"dictionary" order) is fast, and so that the value for ``aaaa`` is physically
+located close to the value for ``aaab``. In the usual case, looking up the
+value for ``aaaa`` in an ordered engine will likely cause ``aaab`` to be
+brought into memory as part of the same IO operation.
 
     .. csv-table:: The same collection stored in an ordered engine
         :class: pants
@@ -226,12 +225,12 @@ Consider a classical SQL table:
         **10**, Work, 6
 
 Given a *File* record with a *Folder ID* attribute, discovering the file's
-complete path in an SQL database procedures might require one query and lookup
-for each level in the folder hierarchy. Some SQL systems support a ``PIVOT``
-operation that executes the hierarchical lookups on the server, however the SQL
-data model has no type that that would allow expressing the hierarchy directly
-in an indexable (and therefore clusterable) form, so at best the server will
-always be performing lookups instead of scans.
+complete path in a SQL database might require one query and lookup for each
+level in the folder hierarchy. Some SQL systems support a ``PIVOT`` operation
+that executes the hierarchical lookups on the server, however the SQL data
+model has no type that that would allow expressing the hierarchy directly in an
+indexable (and therefore clusterable) form; at best the server will always be
+performing lookups instead of scans.
 
 Now let's see what happens if we discard SQL's restrictions.
 
@@ -249,6 +248,27 @@ Now let's see what happens if we discard SQL's restrictions.
         "**(18231, 2, 1, 2)**", Work, 10
         "**(18231, 3)**", Downloads, 4
         "**(18231, 3, 1)**", Movies, 9
+
+We have replaced the fixed SQL integer primary key with a tuple representation,
+but unlike a SQL compound primary key tuple, this tuple is free to change its
+length. By carefully assigning some small integers at each level of the folder
+structure, we can express the user's folder hierarchy directly in the storage
+engine.
+
+Finding all the user's folders now involves a single range query, with the
+result being returned by the storage engine pre-sorted in the correct order.
+
+To provide a stable, unique ID for each folder, this structure should ideally
+also include a secondary index on the *ID* column. We could also look up the
+folder's key in the secondary ID index, and range query for all keys with the
+folder's key as a prefix. Using a single engine order, we can not only satisfy
+folder enumeration for an entire user account, but also any level of the folder
+subtree, and without defining any further secondary indices.
+
+Another optimization is possible: by prefixing the folder key with the user's
+ID, we eliminate the need to lookup the root folder ID in from some *User*
+record before beginning our scan. We may simply begin scanning the prefix
+**(18231,)** and know that the correct folder structure will be returned.
 
 
 .. raw:: html
