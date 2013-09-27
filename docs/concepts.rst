@@ -19,24 +19,24 @@ collection of tables containing a set of columns and perhaps one or two
 indexes, hidden behind a command language. You ask the database a question
 about the facts held in the tables, and the database responds with a set of
 records answering the question. A client library manages talking to the
-database over the network and all aspects of transforming the database protocol
-and result format into simple types useful from within the user's programming
+database over the network and all aspects of transforming its protocol and
+result format into simple types useful from within the user's programming
 language.
 
-Databases systems provide a huge set of features that are often taken for
+Database systems provide a huge set of features that are often taken for
 granted, underused or misunderstood entirely. A specific example of this is the
 *query planner*: an often large and complex component responsible for deciding
-on the best order to read facts from the tables, and which (if any) indexes
+on the best approach to read facts from the tables, and which (if any) indexes
 defined seem to apply usefully to the query. For the common case of simply
 having some component that knows how to store data, and how to quickly answer
-simple questions about that data, a complete database system might be a rather
+basic questions about that data, a complete database system might be a rather
 large hammer for a small nail, depending on the application.
 
 There is also a high upfront cost associated with using a traditional database
 system. Before data can be stored a *schema* must be designed, and its
 implementation managed somehow. This may entail writing a set of DML scripts
 full of ``CREATE TABLE`` statements, or spending an afternoon reading your
-Object-Relational Mapper's documentation to remember the precise set of
+Object-Relational Mapper's documentation to discover the precise set of
 incantations required to represent a simple string or define a relationship.
 
 This fixed cost is a large part of what originally motivated the use of NoSQL
@@ -167,15 +167,15 @@ consecutive dictionary pages, and so reading them is fast and easy. In database
 terminology, this *find word, or the next greater word, then walk backwards or
 forwards* operation is called a *range query*. Range queries are not only
 useful for secondary indices, but as we will shortly see, they can also be
-applied powerfully to a record's primary key.
+applied to a record's primary key.
 
 Range queries are the fundamental operation behind all of Acid's features.
 Consequently there is no support for unordered storage engines, and likely
 never will be.
 
 
-Clustering & Keys
-+++++++++++++++++
+Clustering I
+++++++++++++
 
 In the SQL data model, little importance is typically attached to a record's
 *primary key*, except that it must be unique, and that there is an implicit
@@ -198,9 +198,52 @@ sense to order the storage engine identically, since doing so allows a
 secondary index scan + large number of random lookups to be translated into a
 far smaller number of scans of the main table.
 
-Not only are CPU-intensive lookups avoided, but since the storage engine's
-mandate is to store records with similar keys close together, then disk IO is
-also reduced.
+Not only can CPU-intensive lookups be avoided, but since the storage engine's
+mandate is to store records with similar keys close together, disk IO is also
+reduced.
+
+
+Clustering II
++++++++++++++
+
+Clustering is not only beneficial to performance, it may also be used to
+express hierarchical entity reliationships directly in the storage engine.
+Consider a classical SQL table:
+
+    .. csv-table:: Disk Folder Structure
+        :class: pants
+        :header: ID, Name, Parent ID
+
+        **1**, Top Level Directory (User 18231), ``NULL``
+        **2**, Music, 1
+        **3**, Pictures, 1
+        **4**, Downloads, 1
+        **5**, Albums, 2
+        **6**, Albums, 3
+        **7**, Pop, 5
+        **8**, Family, 6
+        **9**, Movies, 3
+        **10**, Work, 6
+
+Given a *File* record with a *Folder ID* attribute, discovering the file's
+complete path in an SQL database without resorting to stored procedures might
+require one query and lookup for each level in the folder hierarchy. Now let's
+see what's possible if we step outside the SQL data model:
+
+    .. csv-table:: Non-SQL Folder Structure
+        :class: pants
+        :header: Key, Name
+
+        "**(18231,)**", Top Level Directory (User 18231)
+        "**(18231, 1)**", Music
+        "**(18231, 1, 1)**", Albums
+        "**(18231, 1, 1, 1)**", Pop
+        "**(18231, 2,)**", Pictures
+        "**(18231, 2, 1)**", Family
+        "**(18231, 2, 2)**", Work
+        "**(18231, 3, 1)**", Albums
+        "**(18231, 3,)**", Downloads
+        "**(18231, 3, 1)**", Movies
 
 
 
