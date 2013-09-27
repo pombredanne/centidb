@@ -9,6 +9,8 @@ Errors
 .. autoclass:: acid.errors.Error
     :members:
 
+.. autoclass:: acid.errors.AbortError
+
 .. autoclass:: acid.errors.ConfigError
 
 .. autoclass:: acid.errors.ConstraintError
