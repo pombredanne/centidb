@@ -338,6 +338,9 @@ data as a group, since the redundancy is so high, but in order to do so
 requires that a single key is picked to represent the resulting compression
 batch.
 
+Indistinguishable from magic
+----------------------------
+
 Recall from earlier that regardless of whether a single record is being
 fetched, or a range query is being performed, the initial step in both
 operations is identical: *find this key or the next greater key*. Given the
@@ -360,5 +363,5 @@ cost of decompression. It does not make sense to store records in 1MiB
 compressed groups if the average query fetches a single record of 100 bytes,
 the cost of decompression would greatly overshadow the cost of the query.
 
-Acid allows fine tuning of the size of the batch size, allows an application's
-space efficiency to be carefully weighed against its performance goals.
+The batch size can be carefully tuned to allows an application's space
+efficiency to be carefully weighed against its performance goals.
