@@ -26,11 +26,25 @@ collections, along with any registered encodings and counters. Multiple
 :py:class:`Collections <Collection>` may exist, each managing independent sets
 of records, like an SQL table.
 
-Let's create a ``people`` collection:
+We are almost ready to create collections used store data, but first we need to
+learn how transactions work.
+
+
+Transactions
+++++++++++++
+
+All interactions must occur from within a ``with`` statement, in order to
+ensure the storage engine's resources are correctly cleaned up even during a
+crash. Transactions are provided by the :py:meth:`Store.begin` method, which
+returns a *context manager* object. The transaction only exists for the
+duration of the execution context associated with the context manager.
+
+Now let's create a ``people`` collection from inside a transaction:
 
 ::
 
-    store.add_collection('people')
+    with store.begin(write=True):
+        store.add_collection('people')
 
 Underneath a few interesting things just occurred. Since the engine had no
 ``people`` collection, a key prefix was allocated using :py:meth:`Store.count`,
