@@ -292,13 +292,13 @@ multiple (*compound index*), whatever a collection's index function produces.
     -->
 
 
-Batch Compression
-+++++++++++++++++
+Compression
++++++++++++
 
 Physically ordering the storage engine has one last interesting property, in
-that it may be used to group related data using some strongly localized
-attribute. In the folder example that attribute was the nesting depth in the
-tree, but this is not the only kind of locality that is useful to exploit.
+that it may not only be used to group data logically, but also by some strongly
+redundant attribute. In the folder example the logical attribute was the
+nesting depth in the tree; as we shall see, there is another kind of locality.
 
 To illustrate this, consider:
 
