@@ -104,7 +104,7 @@ Ordered Engines
 ---------------
 
 Where an unordered engine attempts to distribute record keys uniformly, an
-ordered engine could be seen as doing exactly the opposite: the keys ``aaaa``
+ordered engine could be viewed as doing exactly the opposite: the keys ``aaaa``
 and ``aaab`` are stored specifically so that accessing them sequentially (in
 "dictionary" order) is fast, and so that the value for ``aaaa`` is physically
 located close to the value for ``aaab``. In the usual case, looking up the
@@ -228,7 +228,7 @@ Given a *File* record with a *Folder ID* attribute, discovering the file's
 complete path in a SQL database might require one query and lookup for each
 level in the folder hierarchy. Some SQL systems support a ``PIVOT`` operation
 that executes the hierarchical lookups on the server, however the SQL model has
-no type that would allow expressing the hierarchy directly in an indexable (and
+no natural type that would allow expressing the hierarchy in an indexable (and
 therefore clusterable) form; at best the server will always be performing
 lookups instead of scans.
 
@@ -263,8 +263,8 @@ enumerated for a full account, but also any level of the subtree.
 
 One more optimization is visible: by prefixing the folder key with the user ID,
 the need to lookup the root folder ID in some *User* record has been
-eliminated. Knowing just the user ID is sufficient to begin scanning the prefix
-**(18231,)**, producing the correct folder structure.
+eliminated. Knowing just the user ID is sufficient to scan the prefix
+**(18231,)**, producing the desired folder structure.
 
 
 Tuples & Indices
@@ -272,16 +272,18 @@ Tuples & Indices
 
 The power and generality of using a variable length tuple as the storage engine
 key should now be obvious, and is the primary motivation behind Acid. Unlike
-our example tuples above, Acid's key tuples may also contain any combination of
+our example tuples above, key tuples may also contain any combination of
 ``datetime`` instances, UUIDs, bytestrings and Unicode strings, ``True``,
-``False``, and ``None``. When written to the storage engine, Acid's key
+``False``, and ``None``. When written to the storage engine, a special key
 encoding ensures the tuples will maintain an intuitive and predictable order,
 allowing.
 
 Acid's secondary index support reuses the same tuple encoding. An index entry
-need not be a plain integer, but a variable-length tuple containing arbitrary
-combinations of the above types.
-
+need not be a plain integer, but any variable-length tuple containing arbitrary
+combinations of the above types. There is no requirement that a secondary index
+contain exactly one tuple for each record: it may contain zero (*conditional
+index*) or multiple (*compound index*), whatever a collection's index function
+produces.
 
 
 .. raw:: html
