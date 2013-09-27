@@ -364,8 +364,8 @@ cost of decompression. It does not make sense to store records in 1MiB
 compressed groups if the average query fetches a single record of 100 bytes,
 the cost of decompression would greatly overshadow the cost of the query.
 
-The batch size can be carefully tuned to allows an application's space
-efficiency to be carefully weighed against its performance goals.
+The batch size can be carefully tuned to allow an application's space
+efficiency to be weighed against its performance goals.
 
 
 .. raw:: html
