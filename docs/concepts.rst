@@ -373,7 +373,11 @@ efficiency to be weighed against its performance goals.
     <!--
         Record encodings
         Models
-        In-process/external performance
-        Manageability
+        Why???
+            In-process/external performance
+            Manageability
+            Embeddability
+            Increasingly makes sense as application complexity increases
+            etc
     -->
 
