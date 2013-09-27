@@ -368,5 +368,24 @@ class DeleteBugTest:
             assert i is None, i
 
 
+@testlib.register()
+class TransactionAbortTest:
+    def setUp(self):
+        self.store = acid.open('ListEngine')
+
+    def test1(self):
+        def crashy():
+            with self.store.begin():
+                raise Exception()
+        self.assertRaises(Exception, crashy)
+
+    def testok(self):
+        def crashy():
+            with self.store.begin():
+                acid.abort()
+            return 123
+        assert crashy() == 123
+
+
 if __name__ == '__main__':
     testlib.main()

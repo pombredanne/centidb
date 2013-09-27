@@ -26,6 +26,10 @@ class Error(Exception):
         #: The inner exception, if any.
         self.inner = inner
 
+class AbortError(Error):
+    """Used by :py:func:`acid.abort` to trigger graceful abort of the active
+    transaction."""
+
 class ConfigError(Error):
     """Attempt to use a store in a misconfigured state (e.g. missing index
     functions, or incompatible constructor options)."""

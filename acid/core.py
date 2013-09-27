@@ -34,7 +34,7 @@ from acid import errors
 from acid import iterators
 from acid import keylib
 
-__all__ = ['Store', 'Collection', 'Index', 'open']
+__all__ = ['Store', 'Collection', 'Index', 'open', 'abort']
 
 ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
@@ -47,6 +47,11 @@ KIND_INDEX = 1
 KIND_ENCODER = 2
 KIND_COUNTER = 3
 KIND_STRUCT = 4
+
+
+def abort():
+    """Trigger a graceful abort of the active transaction."""
+    raise errors.AbortError('')
 
 
 def open(engine, trace_path=None, **kwargs):
@@ -626,12 +631,15 @@ class TxnContext(object):
         self.local.txn = self.engine.begin(write=self.local.write)
 
     def __exit__(self, exc_type, exc_value, traceback):
+        handled = True
         if exc_type:
             self.local.txn.abort()
+            handled = exc_type is errors.AbortError
         else:
             self.local.txn.commit()
         del self.local.txn
         del self.local.write
+        return handled
 
     def get(self):
         txn = getattr(self.local, 'txn', None)
@@ -679,6 +687,14 @@ class Store(object):
 
             with store.begin(write=True):
                 store['people'].put('me')
+
+        If the execution block completes without raising an exception, then the
+        transaction will be committed. Otherwise it will be aborted, and the
+        exception will be propagated as normal.
+
+        The :py:func:`acid.abort` function may be used anywhere on the stack to
+        gracefully abort the current transaction, and return control to below
+        with ``with:`` block without causing an exception to be raised.
         """
         return self._txn_context.begin()
 
