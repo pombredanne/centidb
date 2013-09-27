@@ -91,6 +91,7 @@ Features:
 .. toctree::
     :maxdepth: 1
 
+    concepts
     intro
     core
     meta
