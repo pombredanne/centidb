@@ -277,11 +277,12 @@ instances, UUIDs, bytestrings and Unicode strings, ``True``, ``False``, and
 ``None``. When written to the storage engine, a special key encoding ensures
 the tuples will maintain an intuitive and predictable order.
 
-Acid's secondary index support reuses this tuple. An index entry need not be a
-plain integer, but any variable-length tuple containing arbitrary combinations
-of the above types. There is no requirement that a secondary index contain
-exactly one tuple for each record: it may contain zero (*conditional index*) or
-multiple (*compound index*), whatever a collection's index function produces.
+Acid's secondary index support reuses this encoding. An index entry need not be
+a plain integer, but any variable-length tuple containing arbitrary
+combinations of the above types. There is no requirement that a secondary index
+contain exactly one tuple for each record: it may contain zero (*conditional
+index*) or multiple (*compound index*), whatever a collection's index function
+produces.
 
 
 .. raw:: html
