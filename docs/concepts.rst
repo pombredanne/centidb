@@ -207,7 +207,7 @@ Clustering II
 +++++++++++++
 
 Clustering is not only beneficial to performance, it may also be used to
-express hierarchical entity reliationships directly in the storage engine.
+express hierarchical entity relationships directly in the storage engine.
 Consider a classical SQL table:
 
     .. csv-table:: Disk Folder Structure
@@ -226,25 +226,29 @@ Consider a classical SQL table:
         **10**, Work, 6
 
 Given a *File* record with a *Folder ID* attribute, discovering the file's
-complete path in an SQL database without resorting to stored procedures might
-require one query and lookup for each level in the folder hierarchy. Now let's
-see what's possible if we step outside the SQL data model:
+complete path in an SQL database procedures might require one query and lookup
+for each level in the folder hierarchy. Some SQL systems support a ``PIVOT``
+operation that executes the hierarchical lookups on the server, however the SQL
+data model has no type that that would allow expressing the hierarchy directly
+in an indexable (and therefore clusterable) form, so at best the server will
+always be performing lookups instead of scans.
+
+Now let's see what happens if we discard SQL's restrictions.
 
     .. csv-table:: Non-SQL Folder Structure
         :class: pants
-        :header: Key, Name
+        :header: Key, Name, ID
 
-        "**(18231,)**", Top Level Directory (User 18231)
-        "**(18231, 1)**", Music
-        "**(18231, 1, 1)**", Albums
-        "**(18231, 1, 1, 1)**", Pop
-        "**(18231, 2,)**", Pictures
-        "**(18231, 2, 1)**", Family
-        "**(18231, 2, 2)**", Work
-        "**(18231, 3, 1)**", Albums
-        "**(18231, 3,)**", Downloads
-        "**(18231, 3, 1)**", Movies
-
+        "**(18231,)**", Top Level Directory (User 18231), 1
+        "**(18231, 1)**", Music, 2
+        "**(18231, 1, 1)**", Albums, 5
+        "**(18231, 1, 1, 1)**", Pop, 7
+        "**(18231, 2,)**", Pictures, 3
+        "**(18231, 2, 1)**", Albums, 5
+        "**(18231, 2, 1, 1)**", Family, 7
+        "**(18231, 2, 1, 2)**", Work, 10
+        "**(18231, 3)**", Downloads, 4
+        "**(18231, 3, 1)**", Movies, 9
 
 
 .. raw:: html
