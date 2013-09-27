@@ -257,7 +257,7 @@ produced by the storage engine pre-sorted in depth order.
 
 Note that to conveniently reference a folder from other data, it is important
 to include a secondary index on the *ID* column. This index allows folders to
-be found by ID, and a range query to be performed on their key prefix. Using a
+be found by ID, and a range query to be performed on their key prefix. With a
 single engine order and no additional indexes, not only can folders be
 enumerated for a full account, but also any level of the subtree.
 
@@ -270,8 +270,8 @@ eliminated. Knowing just the user ID is sufficient to scan the prefix
 Tuples & Indices
 ++++++++++++++++
 
-The power and generality of using a variable length tuple as the storage engine
-key should now be obvious, it is the primary motivation behind Acid. Unlike our
+The power and generality of a variable length tuple as the storage engine key
+should now be obvious, it is the primary motivation behind Acid. Unlike our
 example tuples above, key tuples may contain any combination of ``datetime``
 instances, UUIDs, bytestrings and Unicode strings, ``True``, ``False``, and
 ``None``. When written to the storage engine, a special key encoding ensures
@@ -291,3 +291,74 @@ multiple (*compound index*), whatever a collection's index function produces.
     feature set running on top of a key/value store.
     -->
 
+
+Batch Compression
++++++++++++++++++
+
+Physically ordering the storage engine has one last interesting property, in
+that it may be used to group related data using some strongly localized
+attribute. In the folder example that attribute was the nesting depth in the
+tree, but this is not the only kind of locality that is useful to exploit.
+
+To illustrate this, consider:
+
+    .. csv-table:: Threaded discussion board with redundant English
+        :class: pants
+        :widths: 20, 15, 65
+        :header: Key, User, Text
+
+        "**(18231,)**", 2, Cats are awesome!
+        "**(18231, 1)**", 51, "Yes, I too like cats. I agree they are awesome."
+        "**(18231, 1, 1)**", 452, You are both wrong. Cats are not awesome.
+
+And:
+
+    .. csv-table:: Heavily redundant time-varying data
+        :class: pants
+        :header: Key, Symbol, Qty, Price, Avg
+
+        "**(<11:00:01.001>,)**", GOOG, 100, 500.00, 501.01
+        "**(<11:00:01.007>,)**", GOOG, 50, 500.00, 501.01
+        "**(<11:00:01.020>,)**", GOOG, 100, 499.99, 501.00
+        "**(<11:00:01.022>,)**", GOOG, 100, 500.00, 501.00
+        "**(<11:00:01.029>,)**", GOOG, 100, 500.01, 501.00
+
+
+Notice in the first example how the words *cat* and *awesome* appear
+repeatedly. In the second example, the entire group of records is a
+near-duplicate, the majority of the data remaining static. Consider now the
+applications that would use this data: the discussion board will be rendering
+subtrees sequentially, and the financial data application may be servicing
+chart data requests, again sequentially.
+
+Since both applications generally work with large group of sequential records,
+there is opportunity to amortize the cost of some expensive task over the
+group. In other words, there is a clear opportunity to efficiently compress the
+data as a group, since the redundancy is so high, but in order to do so
+requires that a single key is picked to represent the resulting compression
+batch.
+
+Recall from earlier that regardless of whether a single record is being
+fetched, or a range query is being performed, the initial step in both
+operations is identical: *find this key or the next greater key*. Given the
+keys between **<11:00:01.001>** and **<11:00:01.029>**, if only the uppermost
+key exists, then any attempt to look up a preceeding key will cause the storage
+engine to find the uppermost key instead, at no extra cost.
+
+Using a careful key encoding, we can exploit this property to locate any key in
+a contiguous range that might be compressed as a group, using the same
+operation that would be used if we were searching for it as an individual
+record. When this special batch key is detected, Acid will transparently
+decompress it and step through the compressed records, just as if they were
+stored uncompressed directly in the engine. The decompression step is invisible
+to caller code, regardless of whether it is fetching a single record or
+performing a range query.
+
+There is no inherent restriction on the size of a batch group, only that in
+order to exploit larger groups requires a larger query size to amortize the
+cost of decompression. It does not make sense to store records in 1MiB
+compressed groups if the average query fetches a single record of 100 bytes,
+the cost of decompression would greatly overshadow the cost of the query.
+
+Acid allows fine tuning of the size of the batch size, allows an application's
+space efficiency to be carefully weighed against its performance goals.
