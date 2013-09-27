@@ -298,8 +298,8 @@ Compression
 
 Physically ordering the storage engine has one last interesting property, in
 that it may not only be used to group data logically, but also by some strongly
-redundant attribute. In the folder example the logical attribute was the
-nesting depth in the tree; as we shall see, there is another kind of locality.
+redundant attribute. In the folder example the logical attribute was the tree
+nesting depth; as we will see, there is another kind of locality.
 
 To illustrate this, consider:
 
