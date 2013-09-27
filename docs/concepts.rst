@@ -365,7 +365,10 @@ compressed groups if the average query fetches a single record of 100 bytes,
 the cost of decompression would greatly overshadow the cost of the query.
 
 The batch size can be carefully tuned to allow an application's space
-efficiency to be weighed against its performance goals.
+efficiency to be weighed against its performance goals, and since these
+tunables aren't global settings, the batch size can be varied with the age of
+the data, for example to trade compression ratio against server traffic
+patterns.
 
 
 .. raw:: html
