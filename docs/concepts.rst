@@ -228,7 +228,7 @@ Given a *File* record with a *Folder ID* attribute, discovering the file's
 complete path in a SQL database might require one query and lookup for each
 level in the folder hierarchy. Some SQL systems support a ``PIVOT`` operation
 that executes the hierarchical lookups on the server, however the SQL data
-model has no type that that would allow expressing the hierarchy directly in an
+model has no type that would allow expressing the hierarchy directly in an
 indexable (and therefore clusterable) form; at best the server will always be
 performing lookups instead of scans.
 
@@ -249,26 +249,23 @@ Now let's see what happens if we discard SQL's restrictions.
         "**(18231, 3)**", Downloads, 4
         "**(18231, 3, 1)**", Movies, 9
 
-We have replaced the fixed SQL integer primary key with a tuple representation,
-but unlike a SQL compound primary key tuple, this tuple is free to change its
-length. By carefully assigning some small integers at each level of the folder
-structure, we can express the user's folder hierarchy directly in the storage
-engine.
+The fixed SQL integer key is replaced by a tuple, but unlike a SQL compound
+primary key tuple, this tuple varies in length. By assigning integers at each
+level of the hierarchy, the user's folder structure can be directly expressed
+in the storage engine. Finding the user's folders is now just a range query,
+with the output produced by the storage engine pre-sorted in depth order.
 
-Finding all the user's folders now involves a single range query, with the
-result being returned by the storage engine pre-sorted in the correct order.
+Note that to conveniently reference a folder from other data, it is important
+to include a secondary index on the *ID* column. This index allows folders to
+be found by ID, and a range query to be performed on their key prefix. Using a
+single engine order and no additional indexes, not only can folders be
+enumerated for a full account, but also any level of the subtree.
 
-To provide a stable, unique ID for each folder, this structure should ideally
-also include a secondary index on the *ID* column. We could also look up the
-folder's key in the secondary ID index, and range query for all keys with the
-folder's key as a prefix. Using a single engine order, we can not only satisfy
-folder enumeration for an entire user account, but also any level of the folder
-subtree, and without defining any further secondary indices.
+Another optimization is visible: by prefixing the folder key with the user's
+ID, the need to lookup the root folder ID in some *User* record has been
+eliminated. Knowing just the user ID is sufficied to begin scanning the prefix
+**(18231,)**, producing the correct folder structure.
 
-Another optimization is possible: by prefixing the folder key with the user's
-ID, we eliminate the need to lookup the root folder ID in from some *User*
-record before beginning our scan. We may simply begin scanning the prefix
-**(18231,)** and know that the correct folder structure will be returned.
 
 
 .. raw:: html
