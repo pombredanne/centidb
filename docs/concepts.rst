@@ -147,18 +147,19 @@ entries forms an index.
         **44**, 0
         **81**, 3
 
-Notice what happens when this dictionary is written to the storage engine: we
-are guaranteed that the dictionary's order will be maintained, and so we can
-quickly discover the key for a record containing, say, *44* in its *Age* field.
+Notice what happens when this dictionary is written to an ordered storage
+engine: we are guaranteed that its order will be maintained, and so not only
+can the key for a record containing, say *44* in its *Age* field be found
+quickly, but such a lookup will leave the storage engine positioned on a
+dictionary page containing other nearby ages, too.
+
 To discover which person is aged *44*, all required is to look up the entry for
 *44* in this dictionary, then look up its corresponding value (the original
-record's key) in the original dictionary.
-
-Suppose instead of asking for one record key, we'd like to discover the keys
-for any person between the age of 20 and 40. The database simply asks the
-storage engine to find the page where *20* should be, then begins reading
-forward, noting each record key until an entry with an index key larger than
-*40* is found.
+record's key) in the original dictionary. Suppose instead of asking for one
+record key, we'd like to discover the keys for any person between the age of 20
+and 40. The database simply asks the storage engine to find the page where *20*
+should be, then begins reading forward, noting each record key until an entry
+with an index key larger than *40* is found.
 
 Once again, since the storage engine works hard to keep similar keys close
 together, the desired range of values should reside on a small number of
@@ -192,10 +193,10 @@ control of the internal order.
 The power of clustering is that it exposes the underlying storage engine
 directly to the user, so that they may customize it to match their
 application's expected behaviour. If the majority of an application's query
-load takes the form of a range query on a particular order, then it might make
+load takes the form of a range walk in a particular order, then it might make
 sense to order the storage engine identically, since doing so allows a
 secondary index scan + large number of random lookups to be translated into a
-far smaller number of scans of the main table.
+single scan of the main table.
 
 Not only can CPU-intensive lookups be avoided, but since the storage engine's
 mandate is to store records with similar keys close together, disk IO is also
