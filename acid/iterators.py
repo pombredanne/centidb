@@ -240,9 +240,9 @@ class BatchRangeIterator(Iterator):
         else:
             idx = (len(self.keys) - self._index) - 1
         start = self.offsets[idx]
-        length = self.offsets[idx + 1] - start
+        stop = self.offsets[idx + 1]
         self.key = self.keys[-1 + -idx]
-        self.data = self.concat[start:length]
+        self.data = self.concat[start:stop]
         return True
 
     def forward(self):
