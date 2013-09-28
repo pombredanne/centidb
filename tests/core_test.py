@@ -226,10 +226,10 @@ class IndexTest:
     # iterpairs
     def testIterPairs(self):
         eq(self.both, list(self.i.pairs()))
-        eq(self.both, list(self.i.pairs(68)))
-        eq(self.both, list(self.i.pairs((69, 'dave'))))
-        eq(self.second, list(self.i.pairs((69, 'dave2'))))
-        eq([], list(self.i.pairs(80)))
+        eq(self.both, list(self.i.pairs(lo=68)))
+        eq(self.both, list(self.i.pairs(lo=(69, 'dave'))))
+        eq(self.second, list(self.i.pairs(lo=(69, 'dave2'))))
+        eq([], list(self.i.pairs(lo=80)))
 
         eq(self.both[::-1], list(self.i.pairs(reverse=True)))
 
