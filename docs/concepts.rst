@@ -83,7 +83,7 @@ spindles.
 
     .. csv-table:: Example "order" of a hashed collection keyed by an integer
         :class: pants
-        :header: Key, Forename, Surname, Age, Job
+        :header: Key, Surname, Forename, Age, Job
 
         **3**, Smith, John, 81, Retired
         **0**, Williamson, Martha, 44, Taxi Driver
@@ -113,7 +113,7 @@ brought into memory as part of the same IO operation.
 
     .. csv-table:: The same collection stored in an ordered engine
         :class: pants
-        :header: Key, Forename, Surname, Age, Job
+        :header: Key, Surname, Forename, Age, Job
 
         **0**, Williamson, Martha, 44, Taxi Driver
         **1**, Hull, Simon, 33, Cook
