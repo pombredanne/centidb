@@ -308,7 +308,7 @@ def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
         it.set_prefix(prefix)
     else:
         if lo:
-            it.set_lo(lo, include)
+            it.set_lo(lo)
         if hi:
             it.set_hi(hi, include)
 
