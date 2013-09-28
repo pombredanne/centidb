@@ -94,10 +94,10 @@ spindles.
 Scanning the contents of such an engine is usually possible, however the
 results will not be returned in any meaningful order, and any future changes
 such as insertion or deletion may cause the previous order to change
-unpredictably. Unordered engines optimize for fast fetch or update of
-individual records given their key, but do so by sacrificing an important
-operation: the *range query*. As we will shortly see, range queries are crucial
-to the most useful feature of a traditional database.
+unpredictably. Unordered engines, such as found in Redis, optimize for
+fast fetch or update of individual records given their key, but do so by
+sacrificing an important operation: the *range query*. As we will shortly see,
+range queries are crucial to the most useful feature of a traditional database.
 
 
 Ordered Engines
