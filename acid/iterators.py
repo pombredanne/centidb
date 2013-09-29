@@ -215,11 +215,12 @@ class BatchRangeIterator(Iterator):
             # Get the next record and decode its key. from_raw() returns None
             # if the key's prefix doesn't match self.prefix, which indicates
             # we've reached the end of the collection.
-            keys_raw, self.raw = next(self.it, ('', ''))
-            self.keys = keylib.KeyList.from_raw(keys_raw, self.prefix)
+            phys_key, self.raw = next(self.it, ('', ''))
+            self.keys = keylib.KeyList.from_raw(phys_key, self.prefix)
             if not self.keys:
                 return False
 
+            self.phys_key = phys_key
             lenk = len(self.keys)
             # Single record.
             if lenk == 1:
@@ -244,6 +245,16 @@ class BatchRangeIterator(Iterator):
         self.key = self.keys[-1 + -idx]
         self.data = self.concat[start:stop]
         return True
+
+    def batch_items(self):
+        """Yield `(key, value)` pairs that are present in the current batch.
+        Used to implement batch split, may be removed in future."""
+        for index in xrange(len(self.keys) -1, -1, -1):
+            start = self.offsets[index]
+            stop = self.offsets[index + 1]
+            key = self.keys[-1 + -index]
+            data = self.concat[start:stop]
+            yield keylib.Key(key), data
 
     def forward(self):
         """Begin yielding objects satisfying the :py:class:`Result` interface,
