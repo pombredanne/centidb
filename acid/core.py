@@ -338,10 +338,6 @@ class Collection(object):
     def __getitem__(self, index):
         return self.indices[index]
 
-    def _decompress(self, s):
-        compressor = self.store.get_encoder(s[0])
-        return compressor.unpack(buffer(s, 1))
-
     def _index_keys(self, key, obj):
         """Generate a list of encoded keys representing index entries for `obj`
         existing under `key`."""
@@ -392,7 +388,7 @@ class Collection(object):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
         `default` is provided, return it instead."""
-        it = self._iter(key, None, None, None, False, None, True, None)
+        it = self._iter(key, None, None, None, None, None, None, None)
         for r in it:
             if raw:
                 return r.data
@@ -528,18 +524,19 @@ class Collection(object):
     def _split_batch(self, key):
         """Find the batch `key` belongs to and split it, saving all records
         individually except for `key`."""
-        assert False
-        it = self._iter(key, None, None, None, None, None, None, None)
-        keys, data = next(it, (None, None))
-        assert len(keys) > 1 and key in keys, \
-            'Physical key missing: %r' % (key,)
+        key = keylib.Key(key)
+        txn = self.store._txn_context.get()
+        it = iterators.BatchRangeIterator(txn, self.prefix,
+                                          self.store.get_encoder)
+        it.set_exact(key)
+        assert next(it.forward(), None), 'Physical key missing: %r' % (key,)
 
-        self.store._txn_context.get().delete(phys)
-        objs = self.encoder.loads_many(self._decompress(data))
-        for i, obj in enumerate(objs):
-            this_key = keys[-(1 + i)]
-            if this_key != key:
-                self.put(obj, key=this_key)
+        txn.delete(it.phys_key)
+        packer = encoders.PLAIN
+        packer_prefix = self.store._encoder_prefix.get(encoders.PLAIN)
+        for key_, data in it.batch_items():
+            if key != key_:
+                txn.put(key_.to_raw(self.prefix), packer_prefix + data)
 
     def put(self, rec, packer=None, key=None, blind=False):
         """Create or overwrite a record.
@@ -592,19 +589,17 @@ class Collection(object):
         """Delete any existing record filed under `key`.
         """
         key = keylib.Key(key)
-        it = self._iter(key, None, None, None, None, None, True, None)
-        txn = self.store._txn_context.get()
+        it = self._iter(key, None, None, None, None, None, None, None)
         for r in it:
-            if r.key != key:
-                break
-            obj = self.encoder.unpack(r.key, r.data)
+            txn = self.store._txn_context.get()
             if self.indices:
-                for key_ in self._index_keys(key, obj):
-                    txn.delete(key_)
+                obj = self.encoder.unpack(r.key, r.data)
+                for idx_key in self._index_keys(key, obj):
+                    txn.delete(idx_key)
             if len(r.keys) > 1:
                 self._split_batch(key)
             else:
-                txn.delete(keylib.packs(key, self.prefix))
+                txn.delete(key.to_raw(self.prefix))
 
 
 class TxnContext(object):

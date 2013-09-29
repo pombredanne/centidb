@@ -301,14 +301,51 @@ class BatchTest:
         self.txn.__enter__()
         self.coll = self.store.add_collection('people')
 
-    def testBatch(self):
-        old_len = len(self.e.items)
+    def insert_items(self):
+        self.old_len = len(self.e.items)
         for key, value in self.ITEMS:
             self.coll.put(value, key=key)
-        assert len(self.e.items) == (old_len + len(self.ITEMS))
+        # Should now contain metadata + individual rows
+        assert len(self.e.items) == (self.old_len + len(self.ITEMS))
+
+    def testBatch(self):
+        self.insert_items()
         self.coll.batch(max_recs=len(self.ITEMS))
-        assert len(self.e.items) == (old_len + 1)
+        # Should now contain metadata + 1 batch
+        assert len(self.e.items) == (self.old_len + 1)
+        # Forward iteration should succeed.
         assert list(self.coll.items()) == self.ITEMS
+        # Reverse iteration should succeed.
+        assert list(self.coll.items(reverse=True)) == self.ITEMS[::-1]
+        # Individual get should succeed.
+        for key, val in self.ITEMS:
+            assert self.coll.get(key) == val
+
+    def test_delete(self):
+        self.insert_items()
+        self.coll.batch(max_recs=len(self.ITEMS))
+        # Should now contain metadata + 1 batch
+        assert len(self.e.items) == (self.old_len + 1)
+        # Deletion should trigger split of batch.
+        self.coll.delete(2)
+        # Should now contain metadata + 2 remaining records.
+        assert len(self.e.items) == (self.old_len + 2)
+        # Values shouldn't have changed.
+        assert list(self.coll.items()) == [self.ITEMS[0], self.ITEMS[2]]
+
+    def test_put(self):
+        self.insert_items()
+        self.coll.batch(max_recs=len(self.ITEMS))
+        # Should now contain metadata + 1 batch
+        assert len(self.e.items) == (self.old_len + 1)
+        # Put should trigger split of batch and modification of record.
+        self.coll.put('james', key=2)
+        # Should now contain metadata + 3 individual records
+        assert len(self.e.items) == (self.old_len + 3)
+        # Test for new items.
+        assert list(self.coll.items()) ==\
+            [self.ITEMS[0], ((2,), 'james'), self.ITEMS[2]]
+
 
 
 @testlib.register()
