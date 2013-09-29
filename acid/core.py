@@ -40,7 +40,7 @@ ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
 ITEMGETTER_2 = operator.itemgetter(2)
 ATTRGETTER_KEY = operator.attrgetter('key')
-ATTRGETTER_DATA = operator.attrgetter('key')
+ATTRGETTER_DATA = operator.attrgetter('data')
 
 KIND_TABLE = 0
 KIND_INDEX = 1
