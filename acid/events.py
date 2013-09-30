@@ -131,6 +131,16 @@ def after_replace(func, target=None):
 def on_delete(func, target=None):
     """Mark a function to be called prior to deletion of a record.
 
+    .. caution::
+
+        When applied to a :py:class:`Model <acid.meta.Model>`, fires if
+        :py:meth:`delete <acid.meta.Model.delete>` is invoked for any model
+        with its key set, which is only possible following a load or save.
+
+        However when applied to a :py:class:`Collection <acid.Collection>`,
+        causes :py:meth:`Collection.delete <acid.Collection.delete>` to change
+        behaviour, causing a lookup and decode during deletion.
+
     ::
 
         @acid.events.on_delete
@@ -178,6 +188,16 @@ def after_update(func, target=None):
 
 def after_delete(func, target=None):
     """Mark a function to be called after deletion of a record.
+
+    .. caution::
+
+        When applied to a :py:class:`Model <acid.meta.Model>`, fires if
+        :py:meth:`delete <acid.meta.Model.delete>` is invoked for any model
+        with its key set, which is only possible following a load or save.
+
+        However when applied to a :py:class:`Collection <acid.Collection>`,
+        causes :py:meth:`Collection.delete <acid.Collection.delete>` to change
+        behaviour, causing a lookup and decode during deletion.
 
     ::
 
