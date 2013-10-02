@@ -41,6 +41,7 @@ acid_init_module(const char *name, PyMethodDef *methods)
         }
     }
 
+    Py_INCREF(mod);
     return mod;
 }
 
