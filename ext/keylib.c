@@ -439,14 +439,14 @@ int write_element(struct writer *wtr, PyObject *arg)
 }
 
 /**
- * Encode all the elements from the Python tuple `tup` into `wtr`, returning 1
- * on success or set an exception and return 0 on failure.
+ * Encode all the elements from the Python tuple `tup` into `wtr`, returning 0
+ * on success or set an exception and return -1 on failure.
  */
 static int write_tuple(struct writer *wtr, PyObject *tup)
 {
-    int ret = 1;
-    for(Py_ssize_t i = 0; ret && i < PyTuple_GET_SIZE(tup); i++) {
-        ret = !write_element(wtr, PyTuple_GET_ITEM(tup, i));
+    int ret = 0;
+    for(Py_ssize_t i = 0; (!ret) && i < PyTuple_GET_SIZE(tup); i++) {
+        ret = write_element(wtr, PyTuple_GET_ITEM(tup, i));
     }
     return ret;
 }
@@ -491,35 +491,35 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
     PyObject *tups = PyTuple_GET_ITEM(args, 0);
     PyTypeObject *type = Py_TYPE(tups);
 
-    int ret = 1;
+    int ret = 0;
     if(type != &PyList_Type) {
         if(type == &PyTuple_Type) {
             ret = write_tuple(&wtr, tups);
         } else if(type == KeyType) {
-            ret = !writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
+            ret = writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
         } else {
-            ret = !write_element(&wtr, tups);
+            ret = write_element(&wtr, tups);
         }
     } else {
-        for(int i = 0; ret && i < PyList_GET_SIZE(tups); i++) {
+        for(int i = 0; (!ret) && i < PyList_GET_SIZE(tups); i++) {
             if(i) {
-                ret = !writer_putc(&wtr, KIND_SEP);
+                ret = writer_putc(&wtr, KIND_SEP);
             }
             PyObject *elem = PyList_GET_ITEM(tups, i);
             type = Py_TYPE(elem);
             if(type == &PyTuple_Type) {
                 ret = write_tuple(&wtr, elem);
             } else if(type == KeyType) {
-                ret = !writer_puts(&wtr, (void *) ((Key *)elem)->p,
-                                   Py_SIZE(elem));
+                ret = writer_puts(&wtr, (void *) ((Key *)elem)->p,
+                                  Py_SIZE(elem));
             } else {
-                ret = !write_element(&wtr, elem);
+                ret = write_element(&wtr, elem);
             }
         }
     }
 
     PyObject *packed = writer_fini(&wtr);
-    if(! ret) {
+    if(ret) {
         Py_CLEAR(packed);
     }
     return packed;
@@ -527,34 +527,34 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
 
 /**
  * Decode the varint pointed to by `rdr` into `u64`, XORing read bytes with
- * `xor`. Return 1 on success or set an exception and return 0 on failure.
+ * `xor`. Return 0 on success or set an exception and return -1 on failure.
  */
 static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
 {
     uint8_t ch = 0;
     if(reader_getc(rdr, &ch)) {
-        return 0;
+        return -1;
     }
 
     uint64_t v = 0;
-    int ok = 1;
+    int ret = 0;
 
     ch ^= xor;
     if(ch <= 240) {
         v = ch;
     } else if(ch <= 248) {
-        if((ok = !reader_ensure(rdr, 1))) {
+        if(! (ret = reader_ensure(rdr, 1))) {
             v  = 240;
             v += 256 * (ch - 241);
             v += xor ^ reader_getchar(rdr);
         }
     } else if(ch == 249) {
-        if((ok = !reader_ensure(rdr, 2))) {
+        if(! (ret = reader_ensure(rdr, 2))) {
             v  = 2288;
             v += 256 * (xor ^ reader_getchar(rdr));
             v += xor ^ reader_getchar(rdr);
         }
-    } else if((ok = !reader_ensure(rdr, 8 - (255-ch)))) {
+    } else if(! (ret = reader_ensure(rdr, 8 - (255-ch)))) {
         v = 0;
         if(ch >= 255) {
             v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 56;
@@ -576,7 +576,7 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
         v |= ((uint64_t) (xor ^ reader_getchar(rdr)));
     }
     *u64 = v;
-    return ok;
+    return ret;
 }
 
 /**
@@ -589,7 +589,7 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
 static PyObject *read_int(struct reader *rdr, int negate, uint8_t xor)
 {
     uint64_t u64;
-    if(! read_plain_int(rdr, &u64, xor)) {
+    if(read_plain_int(rdr, &u64, xor)) {
         return NULL;
     }
     PyObject *v = PyLong_FromUnsignedLongLong(u64);
@@ -663,7 +663,7 @@ static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
 {
     uint64_t v;
     uint8_t xor = (kind == KIND_NEG_TIME) ? 0xff : 0;
-    if(! read_plain_int(rdr, &v, xor)) {
+    if(read_plain_int(rdr, &v, xor)) {
         return NULL;
     }
 
@@ -739,7 +739,7 @@ read_element(struct reader *rdr)
         arg = read_int(rdr, 1, 0xff);
         break;
     case KIND_BOOL:
-        if(read_plain_int(rdr, &u64, 0)) {
+        if(! read_plain_int(rdr, &u64, 0)) {
             arg = u64 ? Py_True : Py_False;
             Py_INCREF(arg);
         }
@@ -951,7 +951,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
     struct reader rdr = {s, s+s_len};
 
     uint64_t count;
-    if(! read_plain_int(&rdr, &count, 0)) {
+    if(read_plain_int(&rdr, &count, 0)) {
         return NULL;
     }
 
@@ -967,7 +967,7 @@ static PyObject *py_decode_offsets(PyObject *self, PyObject *args)
 
     for(uint64_t i = 0; i < count; i++) {
         uint64_t offset;
-        if(! read_plain_int(&rdr, &offset, 0)) {
+        if(read_plain_int(&rdr, &offset, 0)) {
             return NULL;
         }
         pos += offset;
