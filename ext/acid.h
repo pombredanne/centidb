@@ -135,6 +135,7 @@ acid_init_module(const char *name, PyMethodDef *methods);
 
 PyTypeObject *acid_init_key_type(void);
 Key *acid_make_key(PyObject *arg);
+PyObject *acid_key_next_greater(Key *self);
 int acid_init_keylib_module(void);
 
 PyTypeObject *

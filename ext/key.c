@@ -249,6 +249,12 @@ key_next_greater(Key *self, PyObject *args, PyObject *kwds)
     return (PyObject *)key;
 }
 
+PyObject *
+acid_key_next_greater(Key *self)
+{
+    return key_next_greater(self, NULL, NULL);
+}
+
 /**
  * Convert a key in to_hex() representation back to a Key instance.
  */
