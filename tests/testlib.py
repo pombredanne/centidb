@@ -108,7 +108,7 @@ class CountingEngine(acid.engines.Engine):
 # packs() & co happens to exist before we get a chance to interfere. It
 # also improves the chance of noticing any not-planned-for speedups related
 # side effects, rather than relying on explicit test coverage.
-# 
+#
 # There are nicer approaches to this (e.g. make_key_encoder()), but these would
 # optimize for the uncommon case of running tests.
 #
