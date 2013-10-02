@@ -622,30 +622,30 @@ static PyObject *read_str(struct reader *rdr)
 
     int shift = 1;
 
-    int ret = !reader_getc(rdr, &lb);
-    if(! ret) {
-        return 0;
+    int ret = reader_getc(rdr, &lb);
+    if(ret) {
+        return NULL;
     }
     if(lb < 0x80) {
         rdr->p--;
         return writer_fini(&wtr);
     }
 
-    while(ret && !reader_getc(rdr, &cb)) {
+    while((!ret) && !reader_getc(rdr, &cb)) {
         if(cb < 0x80) {
             rdr->p--;
             break;
         }
         uint8_t ch = lb << shift;
         ch |= (cb & 0x7f) >> (7 - shift);
-        ret = !writer_putc(&wtr, ch);
+        ret = writer_putc(&wtr, ch);
         if(shift < 7) {
             shift++;
             lb = cb;
         } else {
             shift = 1;
-            ret = !reader_getc(rdr, &lb);
-            if(ret && lb < 0x80) {
+            ret = reader_getc(rdr, &lb);
+            if((!ret) && lb < 0x80) {
                 rdr->p--;
                 break;
             }
@@ -792,7 +792,7 @@ static PyObject *unpack(struct reader *rdr)
             return NULL;
         }
         if(tpos == PyTuple_GET_SIZE(tup)) {
-            if(-1 == _PyTuple_Resize(&tup, PyTuple_GET_SIZE(tup) + 2)) {
+            if(_PyTuple_Resize(&tup, PyTuple_GET_SIZE(tup) + 2)) {
                 Py_DECREF(arg);
                 return NULL;
             }
