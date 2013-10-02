@@ -24,11 +24,24 @@
 
 static PyTypeObject RangeIteratorType;
 
+enum Predicate {
+    PRED_LE;
+    PRED_LT;
+    PRED_GT;
+    PRED_GE;
+};
 
 
 struct RangeIterator {
-    PyObject *it;
+    PyObject *engine;
+    PyObject *prefix;
+    PyObject *tup;
+    Key *lo;
+    Key *hi;
+    Predicate lo_pred;
+    Predicate hi_pred;
 
+    PyObject *it;
 };
 
 
