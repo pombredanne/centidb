@@ -249,10 +249,10 @@ key_next_greater(Key *self, PyObject *args, PyObject *kwds)
     return (PyObject *)key;
 }
 
-PyObject *
+Key *
 acid_key_next_greater(Key *self)
 {
-    return key_next_greater(self, NULL, NULL);
+    return (Key *) key_next_greater(self, NULL, NULL);
 }
 
 /**

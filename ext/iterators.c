@@ -22,17 +22,20 @@
 #include "structmember.h"
 
 
+static PyTypeObject IteratorType;
 static PyTypeObject RangeIteratorType;
 
-enum Predicate {
-    PRED_LE;
-    PRED_LT;
-    PRED_GT;
-    PRED_GE;
-};
+typedef enum {
+    PRED_LE,
+    PRED_LT,
+    PRED_GT,
+    PRED_GE
+} Predicate;
 
 
-struct RangeIterator {
+typedef struct {
+    PyObject_HEAD;
+
     PyObject *engine;
     PyObject *prefix;
     PyObject *tup;
@@ -41,7 +44,150 @@ struct RangeIterator {
     Predicate lo_pred;
     Predicate hi_pred;
 
+    Py_ssize_t max;
     PyObject *it;
+} Iterator;
+
+
+typedef struct {
+    Iterator base;
+} RangeIterator;
+
+
+
+// -------------
+// Iterator Type
+// -------------
+
+
+static PyObject *
+iter_set_lo(Iterator *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *key_obj = NULL;
+    int closed = 1;
+
+    static char *keywords[] = {"key", "closed", NULL};
+    if(PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords,
+                                   &key_obj, &closed)) {
+        return NULL;
+    }
+
+    Py_CLEAR(self->lo);
+    if(! ((self->lo = acid_make_key(key_obj)))) {
+        return NULL;
+    }
+    self->lo_pred = closed ? PRED_LE : PRED_LT;
+    Py_RETURN_NONE;
+}
+
+
+static PyObject *
+iter_set_hi(Iterator *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *key_obj = NULL;
+    int closed = 0;
+
+    static char *keywords[] = {"key", "closed", NULL};
+    if(PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords,
+                                   &key_obj, &closed)) {
+        return NULL;
+    }
+
+    Py_CLEAR(self->hi);
+    if(! ((self->hi = acid_make_key(key_obj)))) {
+        return NULL;
+    }
+    self->hi_pred = closed ? PRED_GE : PRED_GT;
+    Py_RETURN_NONE;
+}
+
+
+static PyObject *
+iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *key_obj = NULL;
+    static char *keywords[] = {"key", NULL};
+    if(PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+                                   &key_obj)) {
+        return NULL;
+    }
+
+    Py_CLEAR(self->lo);
+    if(! ((self->lo = acid_make_key(key_obj)))) {
+        return NULL;
+    }
+
+    Py_CLEAR(self->hi);
+    if(! ((self->hi = acid_key_next_greater(self->lo)))) {
+        return NULL;
+    }
+
+    self->lo_pred = PRED_GE;
+    self->hi_pred = PRED_LT;
+    Py_RETURN_NONE;
+}
+
+
+static PyObject *
+iter_set_exact(Iterator *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *key_obj = NULL;
+    static char *keywords[] = {"key", NULL};
+    if(PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+                                   &key_obj)) {
+        return NULL;
+    }
+
+    Py_CLEAR(self->lo);
+    Py_CLEAR(self->hi);
+    if(! ((self->hi = acid_make_key(key_obj)))) {
+        return NULL;
+    }
+    self->lo = self->hi;
+    Py_INCREF(self->lo);
+    self->lo_pred = PRED_GE;
+    self->hi_pred = PRED_LE;
+    Py_RETURN_NONE;
+}
+
+
+static PyObject *
+iter_set_max(Iterator *self, PyObject *args, PyObject *kwds)
+{
+    static char *keywords[] = {"max_", NULL};
+    if(PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+                                   &self->max)) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+
+static PyObject *
+iter_iter(Iterator *self)
+{
+    Py_INCREF(self);
+    return NULL;
+}
+
+
+static PyMethodDef iter_methods[] = {
+    {"set_lo", (PyCFunction)iter_set_lo, METH_VARARGS|METH_KEYWORDS, ""},
+    {"set_hi", (PyCFunction)iter_set_hi, METH_VARARGS|METH_KEYWORDS, ""},
+    {"set_prefix", (PyCFunction)iter_set_prefix, METH_VARARGS|METH_KEYWORDS, ""},
+    {"set_exact", (PyCFunction)iter_set_exact, METH_VARARGS|METH_KEYWORDS, ""},
+    {"set_max", (PyCFunction)iter_set_max, METH_VARARGS|METH_KEYWORDS, ""},
+    {0, 0, 0, 0}
+};
+
+static PyTypeObject IteratorType = {
+    PyObject_HEAD_INIT(NULL)
+    .tp_name = "acid._iterators.Iterator",
+    .tp_basicsize = sizeof(Iterator),
+    .tp_iter = (getiterfunc) iter_iter,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_doc = "acid._iterators.Iterator",
+    .tp_methods = iter_methods
 };
 
 
@@ -56,34 +202,7 @@ struct RangeIterator {
 static PyObject *
 rangeiter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
-    if(PyTuple_GET_SIZE(args) == 1) {
-        PyObject *arg = PyTuple_GET_ITEM(args, 0);
-        if(Py_TYPE(arg) == &KeyType) {
-            Py_INCREF(arg);
-            return arg;
-        }
-        if(PyTuple_CheckExact(arg)) {
-            args = arg;
-        }
-    }
-
-    struct writer wtr;
-    if(! writer_init(&wtr, 32)) {
-        return NULL;
-    }
-
-    Py_ssize_t len = PyTuple_GET_SIZE(args);
-    for(Py_ssize_t i = 0; i < len; i++) {
-        PyObject *arg = PyTuple_GET_ITEM(args, i);
-        if(! write_element(&wtr, arg)) {
-            writer_abort(&wtr);
-            return NULL;
-        }
-    }
-
-    Key *self = make_private_key(writer_ptr(&wtr) - wtr.pos, wtr.pos);
-    writer_abort(&wtr);
-    return (PyObject *) self;
+    return NULL;
 }
 
 /**
@@ -102,6 +221,7 @@ rangeiter_iter(KeyIter *self)
 static PyObject *
 rangeiter_next(KeyIter *self)
 {
+    return NULL;
 }
 
 /**
@@ -134,18 +254,18 @@ static PyTypeObject RangeIteratorType = {
 
 
 int
-init_iterator_module(void)
+acid_init_iterators_module(void)
 {
     if(PyType_Ready(&RangeIteratorType)) {
         return -1;
     }
 
-    PyObject *mod = acid_init_module("_iterators");
+    PyObject *mod = acid_init_module("_iterators", NULL);
     if(! mod) {
-        return NULL;
+        return -1;
     }
 
-    if(PyModule_AddObject(mod, "RangeIterator", (PyObject *) &RangeIteratorType)) {
+    if(PyModule_AddObject(mod, "Iterator", (PyObject *) &IteratorType)) {
         return -1;
     }
 

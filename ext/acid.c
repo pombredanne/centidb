@@ -72,4 +72,7 @@ init_acid(void)
     if(acid_init_keylib_module()) {
         return;
     }
+    if(acid_init_iterators_module()) {
+        return;
+    }
 }
