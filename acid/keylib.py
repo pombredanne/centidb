@@ -83,7 +83,7 @@ class Key(object):
     elements, and that the representation is as compact as possible. Equality
     tests are implemented as string compares, and so are often faster than
     comparing Python tuples.
-    
+
     Keys may own a private buffer to contain their encoded representation, or
     may borrow it from another object. Since Keys can be constructed directly
     from an encoded representation in a shared buffer, it is possible to work

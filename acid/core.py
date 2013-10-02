@@ -147,7 +147,7 @@ class Index(object):
         """Yield all (tuple, key) pairs in the index, in tuple order. `tuple`
         is the tuple returned by the user's index function, and `key` is the
         key of the matching record.
-        
+
         `Note:` the yielded sequence is a list, not a tuple."""
         it = self._iter(args, lo, hi, prefix, reverse, max, include)
         return (e.keys for e in it)
