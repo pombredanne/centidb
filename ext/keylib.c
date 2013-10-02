@@ -1066,5 +1066,11 @@ acid_init_keylib_module(void)
         PyModule_AddObject(mod, "Key", (PyObject *) KeyType);
     }
 
+    PyTypeObject *KeyListType = acid_init_keylist_type();
+    assert(KeyListType != NULL);
+    if(KeyListType) {
+        PyModule_AddObject(mod, "KeyList", (PyObject *) KeyListType);
+    }
+
     return 0;
 }

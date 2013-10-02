@@ -136,6 +136,8 @@ acid_init_module(const char *name, PyMethodDef *methods);
 PyTypeObject *acid_init_key_type(void);
 int acid_init_keylib_module(void);
 
+PyTypeObject *
+acid_init_keylist_type(void);
 
 Key *acid_make_private_key(uint8_t *p, Py_ssize_t size);
 #ifdef HAVE_MEMSINK

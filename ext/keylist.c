@@ -25,6 +25,22 @@
 static PyTypeObject KeyListType;
 
 
+static PyObject *
+make_key(uint8_t *p, Py_ssize_t length, PyObject *source)
+{
+#ifdef HAVE_MEMSINK
+    Key *out;
+    if(source && ms_is_source(source)) {
+        out = acid_make_shared_key(source, p, length);
+    } else {
+        out = acid_make_private_key(p, length);
+    }
+    return (PyObject *)out;
+#else
+    return (PyObject *)make_private_key(p, length);
+#endif
+}
+
 /**
  * Given a raw bytestring and prefix, return a list of Key instances.
  */
@@ -47,38 +63,38 @@ keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     raw += prefix_len;
     raw_len -= prefix_len;
 
-#ifdef HAVE_MEMSINK
-    Key *out;
-    if(source && ms_is_source(source)) {
-        out = make_shared_key(source, (void *) raw, raw_len);
-    } else {
-        out = make_private_key((void *) raw, raw_len);
+    PyObject *out = PyList_New(0);
+    if(! out) {
+        return NULL;
     }
-    return (PyObject *)out;
-#else
-    return (PyObject *)make_private_key((void *) raw, raw_len);
-#endif
-}
 
-/**
- * Return the length of the tuple pointed to by `rdr`.
- */
-static Py_ssize_t
-keylist_length(KeyList *self)
-{
-    if(self->length == -1) {
-        struct reader rdr = {self->p, self->p + Py_SIZE(self)};
-        int eof = rdr.p == rdr.e;
-        Py_ssize_t len = 0;
-
-        while(! eof) {
-            if(skip_element(&rdr, &eof)) {
-                return -1;
+    struct reader rdr = {(uint8_t *) raw, (uint8_t *) raw + raw_len};
+    int eof = rdr.p == rdr.e;
+    uint8_t *start = rdr.p;
+    while(! eof) {
+        if(acid_skip_element(&rdr, &eof)) {
+            Py_DECREF(out);
+            return NULL;
+        }
+        if(eof && start != rdr.p) {
+            PyObject *key = make_key(start, rdr.p - start, source);
+            if(! key) {
+                Py_DECREF(out);
+                return NULL;
             }
-            len++;
+            if(PyList_Append(out, key)) {
+                Py_DECREF(key);
+                Py_DECREF(out);
+                return NULL;
+            }
+            Py_DECREF(key);
+            rdr.p++;
+            start = rdr.p;
+            eof = 0;
         }
     }
-    return self->length;
+
+    return out;
 }
 
 
@@ -87,10 +103,15 @@ static PyMethodDef keylist_methods[] = {
     {0, 0, 0, 0}
 };
 
+static void keylist_dealloc(void)
+{
+}
+
 static PyTypeObject KeyListType = {
     PyObject_HEAD_INIT(NULL)
     .tp_name = "acid._keylib.KeyList",
-    .tp_basicsize = sizeof(Key),
+    .tp_basicsize = sizeof(PyObject),
+    //.tp_dealloc = keylist_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "acid._keylib.KeyList",
     .tp_methods = keylist_methods,
@@ -98,9 +119,9 @@ static PyTypeObject KeyListType = {
 
 
 PyTypeObject *
-init_keylist_type(void)
+acid_init_keylist_type(void)
 {
-    if(! PyType_Ready(&KeyListType)) {
+    if(PyType_Ready(&KeyListType)) {
         return NULL;
     }
     return &KeyListType;
