@@ -92,8 +92,8 @@ int writer_init(struct writer *wtr, Py_ssize_t initial)
 }
 
 /**
- * Ensure `wtr` contains at least `size` unused bytes. Return 1 on success or
- * set an exception and return 0.
+ * Ensure `wtr` contains at least `size` unused bytes. Return 0 on success or
+ * set an exception and return -1.
  */
 static int writer_need(struct writer *wtr, Py_ssize_t size)
 {
@@ -102,12 +102,12 @@ static int writer_need(struct writer *wtr, Py_ssize_t size)
     Py_ssize_t remain = cursize - wtr->pos;
     if(remain < size) {
         cursize += 5 + (size - remain);
-        if(-1 == _PyString_Resize(&(wtr->s), cursize)) {
+        if(_PyString_Resize(&(wtr->s), cursize)) {
             PyErr_NoMemory();
-            return 0;
+            return -1;
         }
     }
-    return 1;
+    return 0;
 }
 
 /**
@@ -128,30 +128,30 @@ static void writer_putchar(struct writer *wtr, uint8_t ch)
 }
 
 /*
- * Append a byte `o` to `wtr`, growing it as necessary. Return 1 on success or
- * set an exception and return 0 on error.
+ * Append a byte `o` to `wtr`, growing it as necessary. Return 0 on success or
+ * set an exception and return -1 on error.
  */
 static int writer_putc(struct writer *wtr, uint8_t o)
 {
-    int ret = writer_need(wtr, 1);
-    if(ret) {
-        writer_putchar(wtr, o);
+    if(writer_need(wtr, 1)) {
+        return -1;
     }
-    return ret;
+    writer_putchar(wtr, o);
+    return 0;
 }
 
 /**
- * Append a bytestring `s` to the buffer, growing it as necessary. Return 1 on
- * success or set an exception and return 0.
+ * Append a bytestring `s` to the buffer, growing it as necessary. Return 0 on
+ * success or set an exception and return -1.
  */
 static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
 {
-    int ret = writer_need(wtr, size);
-    if(ret) {
-        memcpy(PyString_AS_STRING(wtr->s) + wtr->pos, s, size);
-        wtr->pos += size;
+    if(writer_need(wtr, size)) {
+        return -1;
     }
-    return ret;
+    memcpy(PyString_AS_STRING(wtr->s) + wtr->pos, s, size);
+    wtr->pos += size;
+    return 0;
 }
 
 /**
@@ -181,32 +181,33 @@ void writer_abort(struct writer *wtr)
 /**
  * Encode the unsigned 64-bit integer `v` into `wtr`, optionally prefixing the
  * output with `kind` if nonzero, and XORing all output bytes with `xor` (for
- * negative integers).
+ * negative integers). Return 0 on success or -1 and set an exception on
+ * failure.
  */
 static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
                      uint8_t xor)
 {
-    if(kind && !writer_putc(wtr, kind)) {
-        return 0;
+    if(kind && writer_putc(wtr, kind)) {
+        return -1;
     }
 
-    int ok = 1;
+    int ret = 0;
     if(v <= 240ULL) {
-        ok = writer_putc(wtr, xor ^ v);
+        ret = writer_putc(wtr, xor ^ v);
     } else if(v <= 2287ULL) {
-        if((ok = writer_need(wtr, 2))) {
+        if(! (ret = writer_need(wtr, 2))) {
             v -= 240ULL;
             writer_putchar(wtr, xor ^ (241 + (uint8_t) (v >> 8)));
             writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
     } else if(v <= 67823) {
-        if((ok = writer_need(wtr, 3))) {
+        if(! (ret = writer_need(wtr, 3))) {
             v -= 2288ULL;
             writer_putchar(wtr, xor ^ 0xf9);
             writer_putchar(wtr, xor ^ ((uint8_t) (v >> 8)));
             writer_putchar(wtr, xor ^ ((uint8_t) (v & 0xff)));
         }
-    } else if((ok = writer_need(wtr, 9))) {
+    } else if(! (ret = writer_need(wtr, 9))) {
         // Progressively increment type byte from 24bit case.
         uint8_t *typeptr = writer_ptr(wtr);
         uint8_t type = 0xfa;
@@ -237,7 +238,7 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
         writer_putchar(wtr, xor ^ ((uint8_t) (v)));
         *typeptr = xor ^ type;
     }
-    return ok;
+    return ret;
 }
 
 /**
@@ -257,26 +258,27 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
 
     struct writer wtr;
     if(! writer_init(&wtr, 9)) {
-        if(writer_puts(&wtr, prefix, prefix_len)) {
-            if(write_int(&wtr, v, 0, 0)) {
+        if(! writer_puts(&wtr, prefix, prefix_len)) {
+            if(! write_int(&wtr, v, 0, 0)) {
                 return writer_fini(&wtr);
             }
         }
+        writer_abort(&wtr);
     }
     return NULL;
 }
 
 /**
  * Write `p[0..length]` to `wtr`, optionally prefixed by `kind` if it is
- * nonzero. Return 1 on success, or set an exception and return 0 on failure.
+ * nonzero. Return 0 on success, or set an exception and return -1 on failure.
  */
 static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
                      enum ElementKind kind)
 {
     Py_ssize_t need = length + (kind > 0);
     need = (Py_ssize_t) ceil(need * 1.1428571428571428);
-    if(! writer_need(wtr, need)) {
-        return 0;
+    if(writer_need(wtr, need)) {
+        return -1;
     }
 
     if(kind) {
@@ -302,7 +304,7 @@ static int write_str(struct writer *wtr, uint8_t *restrict p, Py_ssize_t length,
     if(shift > 1) {
         writer_putchar(wtr, 0x80 | trailer);
     }
-    return 1;
+    return 0;
 }
 
 /**
@@ -374,12 +376,12 @@ static int write_time(struct writer *wtr, PyObject *dt)
 
 /**
  * Given some arbitrary Python object `arg`, figure out what it is, and encode
- * it to `wtr`. Return 1 on success, or set an exception and return 0 on
+ * it to `wtr`. Return 0 on success, or set an exception and return -1 on
  * failure.
  */
 int write_element(struct writer *wtr, PyObject *arg)
 {
-    int ret = 0;
+    int ret = -1;
     PyTypeObject *type = Py_TYPE(arg);
 
     if(arg == Py_None) {
@@ -423,7 +425,7 @@ int write_element(struct writer *wtr, PyObject *arg)
         }
         assert(Py_TYPE(ss) == &PyString_Type);
         ret = writer_putc(wtr, KIND_UUID);
-        if(ret) {
+        if(! ret) {
             ret = writer_puts(wtr, PyString_AS_STRING(ss),
                                    PyString_GET_SIZE(ss));
         }
@@ -444,7 +446,7 @@ static int write_tuple(struct writer *wtr, PyObject *tup)
 {
     int ret = 1;
     for(Py_ssize_t i = 0; ret && i < PyTuple_GET_SIZE(tup); i++) {
-        ret = write_element(wtr, PyTuple_GET_ITEM(tup, i));
+        ret = !write_element(wtr, PyTuple_GET_ITEM(tup, i));
     }
     return ret;
 }
@@ -481,7 +483,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
     }
 
     if(prefix) {
-        if(! writer_puts(&wtr, (char *)prefix, prefix_size)) {
+        if(writer_puts(&wtr, (char *)prefix, prefix_size)) {
             return NULL;
         }
     }
@@ -494,24 +496,24 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
         if(type == &PyTuple_Type) {
             ret = write_tuple(&wtr, tups);
         } else if(type == KeyType) {
-            ret = writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
+            ret = !writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
         } else {
-            ret = write_element(&wtr, tups);
+            ret = !write_element(&wtr, tups);
         }
     } else {
         for(int i = 0; ret && i < PyList_GET_SIZE(tups); i++) {
             if(i) {
-                ret = writer_putc(&wtr, KIND_SEP);
+                ret = !writer_putc(&wtr, KIND_SEP);
             }
             PyObject *elem = PyList_GET_ITEM(tups, i);
             type = Py_TYPE(elem);
             if(type == &PyTuple_Type) {
                 ret = write_tuple(&wtr, elem);
             } else if(type == KeyType) {
-                ret = writer_puts(&wtr, (void *) ((Key *)elem)->p,
-                                  Py_SIZE(elem));
+                ret = !writer_puts(&wtr, (void *) ((Key *)elem)->p,
+                                   Py_SIZE(elem));
             } else {
-                ret = write_element(&wtr, elem);
+                ret = !write_element(&wtr, elem);
             }
         }
     }
@@ -636,7 +638,7 @@ static PyObject *read_str(struct reader *rdr)
         }
         uint8_t ch = lb << shift;
         ch |= (cb & 0x7f) >> (7 - shift);
-        ret = writer_putc(&wtr, ch);
+        ret = !writer_putc(&wtr, ch);
         if(shift < 7) {
             shift++;
             lb = cb;

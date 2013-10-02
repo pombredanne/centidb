@@ -129,7 +129,7 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     Py_ssize_t len = PyTuple_GET_SIZE(args);
     for(Py_ssize_t i = 0; i < len; i++) {
         PyObject *arg = PyTuple_GET_ITEM(args, i);
-        if(! write_element(&wtr, arg)) {
+        if(write_element(&wtr, arg)) {
             writer_abort(&wtr);
             return NULL;
         }
@@ -384,7 +384,7 @@ key_richcompare(Key *self, PyObject *other, int op)
         Py_ssize_t remain = Py_SIZE(self);
         uint8_t *kp = self->p;
         while(remain && ti < PyTuple_GET_SIZE(other)) {
-            if(! write_element(&wtr, PyTuple_GET_ITEM(other, ti++))) {
+            if(write_element(&wtr, PyTuple_GET_ITEM(other, ti++))) {
                 writer_abort(&wtr);
                 return NULL;
             }
@@ -484,7 +484,7 @@ key_concat(Key *self, PyObject *other)
             Py_ssize_t len = PyTuple_GET_SIZE(other);
             Py_ssize_t i;
             for(i = 0; i < len; i++) {
-                if(! write_element(&wtr, PyTuple_GET_ITEM(other, i))) {
+                if(write_element(&wtr, PyTuple_GET_ITEM(other, i))) {
                     break;
                 }
             }
