@@ -40,30 +40,31 @@ static PyObject *datetime_utcoffset;
 
 
 /**
- * Read a byte into `*ch` from `rdr`, returning 1 on success or 0 if no bytes
+ * Read a byte into `*ch` from `rdr`, returning 0 on success or -1 if no bytes
  * remain.
  */
 static int reader_getc(struct reader *rdr, uint8_t *ch)
 {
-    int ret = 0;
+    int ret = -1;
     if(rdr->p < rdr->e) {
         *ch = *(rdr->p++);
-        ret = 1;
+        ret = 0;
     }
     return ret;
 }
 
 /**
- * Return 1 if `rdr` has at least `n` bytes left, otherwise set an exception
- * and return 0.
+ * Return 0 if `rdr` has at least `n` bytes left, otherwise set an exception
+ * and return -1.
  */
 static int reader_ensure(struct reader *rdr, Py_ssize_t n)
 {
-    int ret = (rdr->e - rdr->p) >= n;
-    if(! ret) {
+    int ret = 0;
+    if((rdr->e - rdr->p) < n) {
         PyErr_Format(PyExc_ValueError,
             "expected %lld bytes but only %lld remain.",
             (long long) n, (long long) (rdr->e - rdr->p));
+        ret = -1;
     }
     return ret;
 }
@@ -78,12 +79,16 @@ static uint8_t reader_getchar(struct reader *rdr)
 
 /**
  * Initialize a struct writer, used to ease direct construction of a PyString.
+ * Return 0 on success or -1 on error and set an exception.
  */
 int writer_init(struct writer *wtr, Py_ssize_t initial)
 {
+    int ret = 0;
     wtr->pos = 0;
-    wtr->s = PyString_FromStringAndSize(NULL, initial);
-    return wtr->s != NULL;
+    if(! (wtr->s = PyString_FromStringAndSize(NULL, initial))) {
+        ret = -1;
+    }
+    return ret;
 }
 
 /**
@@ -251,7 +256,7 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
     }
 
     struct writer wtr;
-    if(writer_init(&wtr, 9)) {
+    if(! writer_init(&wtr, 9)) {
         if(writer_puts(&wtr, prefix, prefix_len)) {
             if(write_int(&wtr, v, 0, 0)) {
                 return writer_fini(&wtr);
@@ -471,7 +476,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
     }
 
     struct writer wtr;
-    if(! writer_init(&wtr, 20)) {
+    if(writer_init(&wtr, 20)) {
         return NULL;
     }
 
@@ -525,7 +530,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
 static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
 {
     uint8_t ch = 0;
-    if(! reader_getc(rdr, &ch)) {
+    if(reader_getc(rdr, &ch)) {
         return 0;
     }
 
@@ -536,18 +541,18 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
     if(ch <= 240) {
         v = ch;
     } else if(ch <= 248) {
-        if((ok = reader_ensure(rdr, 1))) {
+        if((ok = !reader_ensure(rdr, 1))) {
             v  = 240;
             v += 256 * (ch - 241);
             v += xor ^ reader_getchar(rdr);
         }
     } else if(ch == 249) {
-        if((ok = reader_ensure(rdr, 2))) {
+        if((ok = !reader_ensure(rdr, 2))) {
             v  = 2288;
             v += 256 * (xor ^ reader_getchar(rdr));
             v += xor ^ reader_getchar(rdr);
         }
-    } else if((ok = reader_ensure(rdr, 8 - (255-ch)))) {
+    } else if((ok = !reader_ensure(rdr, 8 - (255-ch)))) {
         v = 0;
         if(ch >= 255) {
             v |= ((uint64_t) (xor ^ reader_getchar(rdr))) << 56;
@@ -602,7 +607,7 @@ static PyObject *read_str(struct reader *rdr)
 {
     struct writer wtr;
 
-    if(! writer_init(&wtr, 20)) {
+    if(writer_init(&wtr, 20)) {
         return NULL;
     }
     // 0-byte string at end of key.
@@ -615,7 +620,7 @@ static PyObject *read_str(struct reader *rdr)
 
     int shift = 1;
 
-    int ret = reader_getc(rdr, &lb);
+    int ret = !reader_getc(rdr, &lb);
     if(! ret) {
         return 0;
     }
@@ -624,7 +629,7 @@ static PyObject *read_str(struct reader *rdr)
         return writer_fini(&wtr);
     }
 
-    while(ret && reader_getc(rdr, &cb)) {
+    while(ret && !reader_getc(rdr, &cb)) {
         if(cb < 0x80) {
             rdr->p--;
             break;
@@ -637,7 +642,7 @@ static PyObject *read_str(struct reader *rdr)
             lb = cb;
         } else {
             shift = 1;
-            ret = reader_getc(rdr, &lb);
+            ret = !reader_getc(rdr, &lb);
             if(ret && lb < 0x80) {
                 rdr->p--;
                 break;
@@ -692,7 +697,7 @@ static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
  */
 static PyObject *read_uuid(struct reader *rdr)
 {
-    if(! reader_ensure(rdr, 16)) {
+    if(reader_ensure(rdr, 16)) {
         return NULL;
     }
     PyObject *s = PyString_FromStringAndSize((const char *)rdr->p, 16);

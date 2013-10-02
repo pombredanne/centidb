@@ -122,7 +122,7 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     }
 
     struct writer wtr;
-    if(! writer_init(&wtr, 32)) {
+    if(writer_init(&wtr, 32)) {
         return NULL;
     }
 
@@ -376,7 +376,7 @@ key_richcompare(Key *self, PyObject *other, int op)
         }
     } else if(Py_TYPE(other) == &PyTuple_Type) {
         struct writer wtr;
-        if(! writer_init(&wtr, 64)) {
+        if(writer_init(&wtr, 64)) {
             return NULL;
         }
 
@@ -477,7 +477,7 @@ key_concat(Key *self, PyObject *other)
             memcpy(out->p + Py_SIZE(self), ((Key *)other)->p, Py_SIZE(other));
         }
     } else if(PyTuple_CheckExact(other)) {
-        if(writer_init(&wtr, Py_SIZE(self) * 2)) {
+        if(! writer_init(&wtr, Py_SIZE(self) * 2)) {
             memcpy(writer_ptr(&wtr), self->p, Py_SIZE(self));
             wtr.pos += Py_SIZE(self);
 
