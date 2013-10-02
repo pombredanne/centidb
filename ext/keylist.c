@@ -48,7 +48,7 @@ static PyObject *
 keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
     char *prefix = "";
-    char *raw;
+    uint8_t *raw;
     PyObject *source = NULL;
     Py_ssize_t prefix_len = 0;
     Py_ssize_t raw_len;
@@ -71,13 +71,15 @@ keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     struct reader rdr = {(uint8_t *) raw, (uint8_t *) raw + raw_len};
     int eof = rdr.p == rdr.e;
     uint8_t *start = rdr.p;
+    // TODO: fix this mess.
     while(! eof) {
         if(acid_skip_element(&rdr, &eof)) {
             Py_DECREF(out);
             return NULL;
         }
         if(eof && start != rdr.p) {
-            PyObject *key = make_key(start, rdr.p - start, source);
+            int nudge = (rdr.p == rdr.e) ? 0 : 1;
+            PyObject *key = make_key(start, rdr.p - start - nudge, source);
             if(! key) {
                 Py_DECREF(out);
                 return NULL;
@@ -88,9 +90,8 @@ keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
                 return NULL;
             }
             Py_DECREF(key);
-            rdr.p++;
             start = rdr.p;
-            eof = 0;
+            eof = rdr.p == rdr.e;
         }
     }
 
