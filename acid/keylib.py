@@ -30,7 +30,8 @@ import time
 import uuid
 
 
-__all__ = ['Key', 'invert', 'unpacks', 'packs', 'unpack_int', 'pack_int']
+__all__ = ['Key', 'KeyList', 'invert', 'unpacks', 'packs', 'unpack_int',
+           'pack_int']
 
 KIND_NULL = 0x0f
 KIND_NEG_INTEGER = 0x14
