@@ -308,7 +308,7 @@ class BatchTest:
         # Should now contain metadata + individual rows
         assert len(self.e.items) == (self.old_len + len(self.ITEMS))
 
-    def testBatch(self):
+    def test_batch(self):
         self.insert_items()
         self.coll.batch(max_recs=len(self.ITEMS))
         # Should now contain metadata + 1 batch
