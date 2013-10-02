@@ -48,7 +48,7 @@ Features:
         transparently maintains a compact record encoding, and provides a
         convenient ORM-like storage interface familiar to many developers.
 
-    :ref:`Record Mutation Events <events>`
+    :ref:`Mutation Events <events>`
 
         Functions can be registered for invocation prior to or after any
         create, update, replacement, or deletion. A function may modify the
