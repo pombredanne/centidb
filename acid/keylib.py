@@ -29,8 +29,6 @@ import sys
 import time
 import uuid
 
-from acid import cryptlib
-
 
 __all__ = ['Key', 'invert', 'unpacks', 'packs', 'unpack_int', 'pack_int']
 
@@ -110,33 +108,21 @@ class Key(object):
     def __init__(self, *args):
         pass
 
-    def to_str(self, secret=None):
-        """Return :py:func:`to_raw('') <to_raw>` encoded as URL-safe base64. If
-        `secret` is provided, additionally encrypt and authenticate the value
-        so the raw key cannot be easily observed or modified."""
-        if secret:
-            return cryptlib.wrap(secret, self.to_raw())
-        return cryptlib.encode(self.to_raw())
+    def to_str(self):
+        """Return :py:func:`to_raw('') <to_raw>` encoded as hex."""
+        return self.to_raw().encode('hex')
 
     @classmethod
-    def from_str(cls, s, secret=None):
-        """Construct a Key from its raw form wrapped in URL-safe base64. If
-        `secret` is provided, additionally authenticate and decrypt the value
-        using the same `secret` provided to :py:meth:`to_str`. Return ``None``
-        if the key cannot be decoded."""
+    def from_str(cls, s):
+        """Construct a Key from its raw form wrapped in hex. Return ``None`` if
+        the key cannot be decoded."""
+        key = None
         try:
-            key = None
-            if secret:
-                raw = cryptlib.unwrap(secret, s)
-                if not raw:
-                    return
-                key = cls.from_raw(raw)
-            else:
-                key = cls.from_raw(cryptlib.decode(s))
+            key = cls.from_raw(s.decode('hex'))
             len(key) # Trigger full decoding.
-            return key
         except ValueError:
-            return None
+            pass
+        return key
 
     @classmethod
     def from_raw(cls, packed, prefix=None, source=None):
