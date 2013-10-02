@@ -137,4 +137,10 @@ PyTypeObject *init_key_type(void);
 int init_keylib_module(void);
 
 
+Key *acid_make_private_key(uint8_t *p, Py_ssize_t size);
+#ifdef HAVE_MEMSINK
+Key *acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size);
+#endif
+
+
 #endif /* !ACID_H */

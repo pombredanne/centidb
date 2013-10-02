@@ -29,8 +29,8 @@ static PyTypeObject KeyIterType;
 /**
  * Construct a KEY_PRIVATE Key from `p[0..size]` and return it.
  */
-static Key *
-make_private_key(uint8_t *p, Py_ssize_t size)
+Key *
+acid_make_private_key(uint8_t *p, Py_ssize_t size)
 {
     Key *self = PyObject_NewVar(Key, &KeyType, size);
     if(self) {
@@ -48,8 +48,8 @@ make_private_key(uint8_t *p, Py_ssize_t size)
 /**
  * Construct a KEY_SHARED Key from ...
  */
-static Key *
-make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
+Key *
+acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
 {
     Key *self = PyObject_NewVar(Key, &KeyType, sizeof(SharedKeyInfo));
     // TODO: relies on arch padding rules?
@@ -135,7 +135,7 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         }
     }
 
-    Key *self = make_private_key(writer_ptr(&wtr) - wtr.pos, wtr.pos);
+    Key *self = acid_make_private_key(writer_ptr(&wtr) - wtr.pos, wtr.pos);
     writer_abort(&wtr);
     return (PyObject *) self;
 }
@@ -227,7 +227,7 @@ key_next_greater(Key *self, PyObject *args, PyObject *kwds)
     }
 
     Py_ssize_t goodlen = (l + 1) - self->p;
-    Key *key = make_private_key(self->p, goodlen);
+    Key *key = acid_make_private_key(self->p, goodlen);
     if(key) {
         key->p[goodlen - 1]++;
     }
@@ -253,7 +253,7 @@ key_from_hex(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     Key *self = NULL;
     PyObject *decoded = PyObject_CallMethod(hex, "decode", "s", "hex");
     if(decoded) {
-        self = make_private_key((void *) PyString_AS_STRING(decoded),
+        self = acid_make_private_key((void *) PyString_AS_STRING(decoded),
                                 PyString_GET_SIZE(decoded));
         Py_DECREF(decoded);
     }
@@ -285,13 +285,13 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 #ifdef HAVE_MEMSINK
     Key *out;
     if(source && ms_is_source(source)) {
-        out = make_shared_key(source, (void *) raw, raw_len);
+        out = acid_make_shared_key(source, (void *) raw, raw_len);
     } else {
-        out = make_private_key((void *) raw, raw_len);
+        out = acid_make_private_key((void *) raw, raw_len);
     }
     return (PyObject *)out;
 #else
-    return (PyObject *)make_private_key((void *) raw, raw_len);
+    return (PyObject *)acid_make_private_key((void *) raw, raw_len);
 #endif
 }
 
@@ -471,7 +471,7 @@ key_concat(Key *self, PyObject *other)
     struct writer wtr;
 
     if(Py_TYPE(other) == &KeyType) {
-        out = make_private_key(NULL, Py_SIZE(self) + Py_SIZE(other));
+        out = acid_make_private_key(NULL, Py_SIZE(self) + Py_SIZE(other));
         if(out) {
             memcpy(out->p, self->p, Py_SIZE(self));
             memcpy(out->p + Py_SIZE(self), ((Key *)other)->p, Py_SIZE(other));
@@ -490,7 +490,7 @@ key_concat(Key *self, PyObject *other)
             }
             if(i == len) { // success
                 uint8_t *ptr = writer_ptr(&wtr) - wtr.pos;
-                out = make_private_key(ptr, wtr.pos);
+                out = acid_make_private_key(ptr, wtr.pos);
             }
             writer_abort(&wtr);
         }
