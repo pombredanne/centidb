@@ -141,6 +141,21 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 }
 
 /**
+ * Attempt to convert an object to a Key, if it is not already a Key.
+ */
+Key *
+acid_make_key(PyObject *obj)
+{
+    PyObject *tmp = PyTuple_Pack(1, obj);
+    PyObject *out = NULL;
+    if(tmp) {
+        out = key_new(&KeyType, tmp, NULL);
+        Py_DECREF(tmp);
+    }
+    return (Key *) out;
+}
+
+/**
  * Destroy the key by deallocating any private memory, and decrementing the
  * refcount on any shared buffer.
  */
