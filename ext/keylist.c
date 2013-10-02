@@ -37,7 +37,7 @@ make_key(uint8_t *p, Py_ssize_t length, PyObject *source)
     }
     return (PyObject *)out;
 #else
-    return (PyObject *)make_private_key(p, length);
+    return (PyObject *)acid_make_private_key(p, length);
 #endif
 }
 
@@ -104,15 +104,10 @@ static PyMethodDef keylist_methods[] = {
     {0, 0, 0, 0}
 };
 
-static void keylist_dealloc(void)
-{
-}
-
 static PyTypeObject KeyListType = {
     PyObject_HEAD_INIT(NULL)
     .tp_name = "acid._keylib.KeyList",
     .tp_basicsize = sizeof(PyObject),
-    //.tp_dealloc = keylist_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "acid._keylib.KeyList",
     .tp_methods = keylist_methods,
