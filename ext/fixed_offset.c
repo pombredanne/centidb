@@ -106,7 +106,7 @@ static PyTypeObject FixedOffsetType = {
 
 
 PyTypeObject *
-init_fixed_offset_type(void)
+acid_init_fixed_offset_type(void)
 {
     PyDateTime_IMPORT;
 
@@ -124,7 +124,7 @@ init_fixed_offset_type(void)
 
 
 PyObject *
-get_fixed_offset(int offset_secs)
+acid_get_fixed_offset(int offset_secs)
 {
     int idx = UTCOFFSET_SHIFT + (offset_secs / UTCOFFSET_DIV);
     PyObject *info = instances[idx];

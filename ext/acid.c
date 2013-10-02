@@ -53,7 +53,7 @@ init_acid(void)
         return;
     }
 
-    if(init_keylib_module()) {
+    if(acid_init_keylib_module()) {
         return;
     }
 }

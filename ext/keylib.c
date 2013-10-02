@@ -81,7 +81,7 @@ static uint8_t reader_getchar(struct reader *rdr)
  * Initialize a struct writer, used to ease direct construction of a PyString.
  * Return 0 on success or -1 on error and set an exception.
  */
-int writer_init(struct writer *wtr, Py_ssize_t initial)
+int acid_writer_init(struct writer *wtr, Py_ssize_t initial)
 {
     int ret = 0;
     wtr->pos = 0;
@@ -114,7 +114,7 @@ static int writer_need(struct writer *wtr, Py_ssize_t size)
  * Return a pointer to the current write position. The pointer is valid as long
  * as writer_need() is never indirectly called.
  */
-uint8_t *writer_ptr(struct writer *wtr)
+uint8_t *acid_writer_ptr(struct writer *wtr)
 {
     return (uint8_t *) &(PyString_AS_STRING(wtr->s)[wtr->pos]);
 }
@@ -159,7 +159,7 @@ static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
  * finalize(). Return a new reference to the string on success or sets an
  * exception and returns NULL on failure.
  */
-static PyObject *writer_fini(struct writer *wtr)
+static PyObject *acid_writer_fini(struct writer *wtr)
 {
     PyObject *o = wtr->s;
     if(o) {
@@ -172,7 +172,7 @@ static PyObject *writer_fini(struct writer *wtr)
 /**
  * Discard the partially built string and clear the writer.
  */
-void writer_abort(struct writer *wtr)
+void acid_writer_abort(struct writer *wtr)
 {
     Py_CLEAR(wtr->s);
     wtr->pos = 0;
@@ -209,7 +209,7 @@ static int write_int(struct writer *wtr, uint64_t v, enum ElementKind kind,
         }
     } else if(! (ret = writer_need(wtr, 9))) {
         // Progressively increment type byte from 24bit case.
-        uint8_t *typeptr = writer_ptr(wtr);
+        uint8_t *typeptr = acid_writer_ptr(wtr);
         uint8_t type = 0xfa;
         writer_putchar(wtr, 0);
 
@@ -257,13 +257,13 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
     }
 
     struct writer wtr;
-    if(! writer_init(&wtr, 9)) {
+    if(! acid_writer_init(&wtr, 9)) {
         if(! writer_puts(&wtr, prefix, prefix_len)) {
             if(! write_int(&wtr, v, 0, 0)) {
-                return writer_fini(&wtr);
+                return acid_writer_fini(&wtr);
             }
         }
-        writer_abort(&wtr);
+        acid_writer_abort(&wtr);
     }
     return NULL;
 }
@@ -379,7 +379,7 @@ static int write_time(struct writer *wtr, PyObject *dt)
  * it to `wtr`. Return 0 on success, or set an exception and return -1 on
  * failure.
  */
-int write_element(struct writer *wtr, PyObject *arg)
+int acid_write_element(struct writer *wtr, PyObject *arg)
 {
     int ret = -1;
     PyTypeObject *type = Py_TYPE(arg);
@@ -446,7 +446,7 @@ static int write_tuple(struct writer *wtr, PyObject *tup)
 {
     int ret = 0;
     for(Py_ssize_t i = 0; (!ret) && i < PyTuple_GET_SIZE(tup); i++) {
-        ret = write_element(wtr, PyTuple_GET_ITEM(tup, i));
+        ret = acid_write_element(wtr, PyTuple_GET_ITEM(tup, i));
     }
     return ret;
 }
@@ -478,7 +478,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
     }
 
     struct writer wtr;
-    if(writer_init(&wtr, 20)) {
+    if(acid_writer_init(&wtr, 20)) {
         return NULL;
     }
 
@@ -498,7 +498,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
         } else if(type == KeyType) {
             ret = writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
         } else {
-            ret = write_element(&wtr, tups);
+            ret = acid_write_element(&wtr, tups);
         }
     } else {
         for(int i = 0; (!ret) && i < PyList_GET_SIZE(tups); i++) {
@@ -513,12 +513,12 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
                 ret = writer_puts(&wtr, (void *) ((Key *)elem)->p,
                                   Py_SIZE(elem));
             } else {
-                ret = write_element(&wtr, elem);
+                ret = acid_write_element(&wtr, elem);
             }
         }
     }
 
-    PyObject *packed = writer_fini(&wtr);
+    PyObject *packed = acid_writer_fini(&wtr);
     if(ret) {
         Py_CLEAR(packed);
     }
@@ -609,12 +609,12 @@ static PyObject *read_str(struct reader *rdr)
 {
     struct writer wtr;
 
-    if(writer_init(&wtr, 20)) {
+    if(acid_writer_init(&wtr, 20)) {
         return NULL;
     }
     // 0-byte string at end of key.
     if(! (rdr->p - rdr->e)) {
-        return writer_fini(&wtr);
+        return acid_writer_fini(&wtr);
     }
 
     uint8_t lb = 0;
@@ -628,7 +628,7 @@ static PyObject *read_str(struct reader *rdr)
     }
     if(lb < 0x80) {
         rdr->p--;
-        return writer_fini(&wtr);
+        return acid_writer_fini(&wtr);
     }
 
     while((!ret) && !reader_getc(rdr, &cb)) {
@@ -651,7 +651,7 @@ static PyObject *read_str(struct reader *rdr)
             }
         }
     }
-    return writer_fini(&wtr);
+    return acid_writer_fini(&wtr);
 }
 
 /**
@@ -668,7 +668,7 @@ static PyObject *read_time(struct reader *rdr, enum ElementKind kind)
     }
 
     int offset_secs = (((int) v & 0x7f) - UTCOFFSET_SHIFT) * UTCOFFSET_DIV;
-    PyObject *fixed_offset = get_fixed_offset(offset_secs);
+    PyObject *fixed_offset = acid_get_fixed_offset(offset_secs);
     if(! fixed_offset) {
         return NULL;
     }
@@ -719,7 +719,7 @@ static PyObject *read_uuid(struct reader *rdr)
  * setting an exception on failure.
  */
 PyObject *
-read_element(struct reader *rdr)
+acid_read_element(struct reader *rdr)
 {
     PyObject *tmp;
     PyObject *arg = NULL;
@@ -786,7 +786,7 @@ static PyObject *unpack(struct reader *rdr)
             rdr->p++;
             break;
         }
-        PyObject *arg = read_element(rdr);
+        PyObject *arg = acid_read_element(rdr);
         if(! arg) {
             Py_DECREF(tup);
             return NULL;
@@ -809,7 +809,7 @@ static PyObject *unpack(struct reader *rdr)
  * on error.
  */
 int
-skip_element(struct reader *rdr, int *eof)
+acid_skip_element(struct reader *rdr, int *eof)
 {
     uint8_t xor = 0;
     int ret = 0;
@@ -1039,7 +1039,7 @@ static PyMethodDef KeylibMethods[] = {
  * Do all required to initialize the module.
  */
 int
-init_keylib_module(void)
+acid_init_keylib_module(void)
 {
     PyDateTime_IMPORT;
 
@@ -1056,12 +1056,12 @@ init_keylib_module(void)
         return -1;
     }
 
-    PyTypeObject *fixed_offset = init_fixed_offset_type();
+    PyTypeObject *fixed_offset = acid_init_fixed_offset_type();
     if(fixed_offset) {
         PyModule_AddObject(mod, "FixedOffset", (PyObject *) fixed_offset);
     }
 
-    KeyType = init_key_type();
+    KeyType = acid_init_key_type();
     if(KeyType) {
         PyModule_AddObject(mod, "Key", (PyObject *) KeyType);
     }

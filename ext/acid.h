@@ -119,22 +119,22 @@ typedef struct {
 #define UTCOFFSET_SHIFT 64
 #define UTCOFFSET_DIV (15 * 60)
 
-int writer_init(struct writer *wtr, Py_ssize_t initial);
-uint8_t *writer_ptr(struct writer *wtr);
-void writer_abort(struct writer *wtr);
-int write_element(struct writer *wtr, PyObject *arg);
-PyObject *read_element(struct reader *rdr);
-int skip_element(struct reader *rdr, int *eof);
+int acid_writer_init(struct writer *wtr, Py_ssize_t initial);
+uint8_t *acid_writer_ptr(struct writer *wtr);
+void acid_writer_abort(struct writer *wtr);
+int acid_write_element(struct writer *wtr, PyObject *arg);
+PyObject *acid_read_element(struct reader *rdr);
+int acid_skip_element(struct reader *rdr, int *eof);
 
 
-PyTypeObject *init_fixed_offset_type(void);
-PyObject *get_fixed_offset(int offset_secs);
+PyTypeObject *acid_init_fixed_offset_type(void);
+PyObject *acid_get_fixed_offset(int offset_secs);
 
 PyObject *
 acid_init_module(const char *name, PyMethodDef *methods);
 
-PyTypeObject *init_key_type(void);
-int init_keylib_module(void);
+PyTypeObject *acid_init_key_type(void);
+int acid_init_keylib_module(void);
 
 
 Key *acid_make_private_key(uint8_t *p, Py_ssize_t size);

@@ -122,21 +122,21 @@ key_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     }
 
     struct writer wtr;
-    if(writer_init(&wtr, 32)) {
+    if(acid_writer_init(&wtr, 32)) {
         return NULL;
     }
 
     Py_ssize_t len = PyTuple_GET_SIZE(args);
     for(Py_ssize_t i = 0; i < len; i++) {
         PyObject *arg = PyTuple_GET_ITEM(args, i);
-        if(write_element(&wtr, arg)) {
-            writer_abort(&wtr);
+        if(acid_write_element(&wtr, arg)) {
+            acid_writer_abort(&wtr);
             return NULL;
         }
     }
 
-    Key *self = acid_make_private_key(writer_ptr(&wtr) - wtr.pos, wtr.pos);
-    writer_abort(&wtr);
+    Key *self = acid_make_private_key(acid_writer_ptr(&wtr) - wtr.pos, wtr.pos);
+    acid_writer_abort(&wtr);
     return (PyObject *) self;
 }
 
@@ -376,7 +376,7 @@ key_richcompare(Key *self, PyObject *other, int op)
         }
     } else if(Py_TYPE(other) == &PyTuple_Type) {
         struct writer wtr;
-        if(writer_init(&wtr, 64)) {
+        if(acid_writer_init(&wtr, 64)) {
             return NULL;
         }
 
@@ -384,11 +384,11 @@ key_richcompare(Key *self, PyObject *other, int op)
         Py_ssize_t remain = Py_SIZE(self);
         uint8_t *kp = self->p;
         while(remain && ti < PyTuple_GET_SIZE(other)) {
-            if(write_element(&wtr, PyTuple_GET_ITEM(other, ti++))) {
-                writer_abort(&wtr);
+            if(acid_write_element(&wtr, PyTuple_GET_ITEM(other, ti++))) {
+                acid_writer_abort(&wtr);
                 return NULL;
             }
-            uint8_t *p = writer_ptr(&wtr) - wtr.pos;
+            uint8_t *p = acid_writer_ptr(&wtr) - wtr.pos;
             Py_ssize_t minsz = (remain < wtr.pos) ? remain : wtr.pos;
             if((cmpres = memcmp(kp, p, minsz))) {
                 break;
@@ -398,7 +398,7 @@ key_richcompare(Key *self, PyObject *other, int op)
             wtr.pos = 0;
         }
 
-        writer_abort(&wtr);
+        acid_writer_abort(&wtr);
         if(! cmpres) {
             if(remain) {
                 cmpres = 1;
@@ -453,7 +453,7 @@ key_length(Key *self)
     Py_ssize_t len = 0;
 
     while(! eof) {
-        if(skip_element(&rdr, &eof)) {
+        if(acid_skip_element(&rdr, &eof)) {
             return -1;
         }
         len++;
@@ -477,22 +477,22 @@ key_concat(Key *self, PyObject *other)
             memcpy(out->p + Py_SIZE(self), ((Key *)other)->p, Py_SIZE(other));
         }
     } else if(PyTuple_CheckExact(other)) {
-        if(! writer_init(&wtr, Py_SIZE(self) * 2)) {
-            memcpy(writer_ptr(&wtr), self->p, Py_SIZE(self));
+        if(! acid_writer_init(&wtr, Py_SIZE(self) * 2)) {
+            memcpy(acid_writer_ptr(&wtr), self->p, Py_SIZE(self));
             wtr.pos += Py_SIZE(self);
 
             Py_ssize_t len = PyTuple_GET_SIZE(other);
             Py_ssize_t i;
             for(i = 0; i < len; i++) {
-                if(write_element(&wtr, PyTuple_GET_ITEM(other, i))) {
+                if(acid_write_element(&wtr, PyTuple_GET_ITEM(other, i))) {
                     break;
                 }
             }
             if(i == len) { // success
-                uint8_t *ptr = writer_ptr(&wtr) - wtr.pos;
+                uint8_t *ptr = acid_writer_ptr(&wtr) - wtr.pos;
                 out = acid_make_private_key(ptr, wtr.pos);
             }
-            writer_abort(&wtr);
+            acid_writer_abort(&wtr);
         }
     } else {
         PyErr_Format(PyExc_TypeError, "Key.add only accepts tuples or Keys.");
@@ -537,7 +537,7 @@ key_subscript(Key *self, PyObject *key)
             eof |= i < 0;
         }
         while(i-- && !eof) {
-            if(skip_element(&rdr, &eof)) {
+            if(acid_skip_element(&rdr, &eof)) {
                 return NULL;
             }
         }
@@ -545,7 +545,7 @@ key_subscript(Key *self, PyObject *key)
             PyErr_SetString(PyExc_IndexError, "Key index out of range");
             return NULL;
         }
-        return read_element(&rdr);
+        return acid_read_element(&rdr);
     }
 }
 
@@ -591,7 +591,7 @@ static PyTypeObject KeyType = {
 
 
 PyTypeObject *
-init_key_type(void)
+acid_init_key_type(void)
 {
     if(PyType_Ready(&KeyIterType)) {
         return NULL;
@@ -644,7 +644,7 @@ keyiter_next(KeyIter *self)
 
     uint8_t *p = self->key->p + self->pos;
     struct reader rdr = {p, p + (size - self->pos)};
-    PyObject *elem = read_element(&rdr);
+    PyObject *elem = acid_read_element(&rdr);
     self->pos = (rdr.p - self->key->p);
     return elem;
 }
