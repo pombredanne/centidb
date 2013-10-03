@@ -38,7 +38,6 @@ typedef struct {
 
     PyObject *engine;
     PyObject *prefix;
-    PyObject *tup;
     Key *lo;
     Key *hi;
     Predicate lo_pred;
@@ -60,6 +59,47 @@ typedef struct {
 // -------------
 
 
+// Not exposed to Python.
+static Iterator *
+iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
+{
+    PyObject *engine = NULL;
+    PyObject *prefix = NULL;
+
+    static char *keywords[] = {"engine", "prefix", NULL};
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "OS", keywords,
+                                     &engine, &prefix)) {
+        return NULL;
+    }
+
+    Iterator *self = PyObject_New(Iterator, cls);
+    if(self) {
+        Py_INCREF(engine);
+        self->engine = engine;
+        Py_INCREF(prefix);
+        self->prefix = prefix;
+        self->lo = NULL;
+        self->hi = NULL;
+        self->lo_pred = PRED_LE;
+        self->hi_pred = PRED_GE;
+        self->max = -1;
+        self->it = NULL;
+    }
+    return self;
+}
+
+
+static void
+iter_clear(Iterator *self)
+{
+    Py_CLEAR(self->engine);
+    Py_CLEAR(self->prefix);
+    Py_CLEAR(self->lo);
+    Py_CLEAR(self->hi);
+    Py_CLEAR(self->it);
+}
+
+
 static PyObject *
 iter_set_lo(Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -67,8 +107,8 @@ iter_set_lo(Iterator *self, PyObject *args, PyObject *kwds)
     int closed = 1;
 
     static char *keywords[] = {"key", "closed", NULL};
-    if(PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords,
-                                   &key_obj, &closed)) {
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords,
+                                     &key_obj, &closed)) {
         return NULL;
     }
 
@@ -88,8 +128,8 @@ iter_set_hi(Iterator *self, PyObject *args, PyObject *kwds)
     int closed = 0;
 
     static char *keywords[] = {"key", "closed", NULL};
-    if(PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords,
-                                   &key_obj, &closed)) {
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords,
+                                     &key_obj, &closed)) {
         return NULL;
     }
 
@@ -107,8 +147,8 @@ iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
 {
     PyObject *key_obj = NULL;
     static char *keywords[] = {"key", NULL};
-    if(PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
-                                   &key_obj)) {
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+                                     &key_obj)) {
         return NULL;
     }
 
@@ -133,8 +173,8 @@ iter_set_exact(Iterator *self, PyObject *args, PyObject *kwds)
 {
     PyObject *key_obj = NULL;
     static char *keywords[] = {"key", NULL};
-    if(PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
-                                   &key_obj)) {
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+                                     &key_obj)) {
         return NULL;
     }
 
@@ -155,19 +195,22 @@ static PyObject *
 iter_set_max(Iterator *self, PyObject *args, PyObject *kwds)
 {
     static char *keywords[] = {"max_", NULL};
-    if(PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
-                                   &self->max)) {
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+                                     &self->max)) {
         return NULL;
     }
     Py_RETURN_NONE;
 }
 
 
+/**
+ * Satisfy the iterator protocol by returning a reference to ourself.
+ */
 static PyObject *
 iter_iter(Iterator *self)
 {
     Py_INCREF(self);
-    return NULL;
+    return self;
 }
 
 
@@ -202,18 +245,12 @@ static PyTypeObject IteratorType = {
 static PyObject *
 rangeiter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
-    return NULL;
+    RangeIterator *self = (RangeIterator *) iter_new(cls, args, kwds);
+    if(self) {
+    }
+    return (PyObject *)self;
 }
 
-/**
- * Satisfy the iterator protocol by returning a reference to ourself.
- */
-static PyObject *
-rangeiter_iter(KeyIter *self)
-{
-    Py_INCREF((PyObject *) self);
-    return (PyObject *) self;
-}
 
 /**
  * Satify the iterator protocol by returning the next element from the key.
@@ -224,29 +261,60 @@ rangeiter_next(KeyIter *self)
     return NULL;
 }
 
+
 /**
  * Do all required to destroy the instance.
  */
 static void
 rangeiter_dealloc(KeyIter *self)
 {
+    iter_clear((Iterator *) self);
     PyObject_Del(self);
+}
+
+
+static int
+
+
+static PyObject *
+rangeiter_forward(RangeIterator *self)
+{
+    PyObject *key;
+    if(self->base.lo) {
+        if(! ((key = acid_key_to_raw(self->base.lo, self->base.prefix)))) {
+            return NULL;
+        }
+    } else {
+        key = self->base.prefix;
+        Py_INCREF(key);
+    }
+    if(! key) {
+        return NULL;
+    }
+
+    if(! ((self->base.it = PyObject_CallMethodObjArgs(self->base.engine, "iter",
+                                                      key, Py_False, NULL)))) {
+        Py_DECREF(key);
+        return NULL;
+    }
+
 }
 
 
 static PyMethodDef rangeiter_methods[] = {
     {"next", (PyCFunction)rangeiter_next, METH_NOARGS, ""},
+    {"forward", (PyCFunction)rangeiter_forward, METH_NOARGS, ""},
     {0, 0, 0, 0}
 };
 
 static PyTypeObject RangeIteratorType = {
     PyObject_HEAD_INIT(NULL)
+    .tp_base = &IteratorType,
     .tp_new = rangeiter_new,
+    .tp_dealloc = (destructor) rangeiter_dealloc,
     .tp_name = "acid._iterators.RangeIterator",
     .tp_basicsize = sizeof(RangeIterator),
-    .tp_iter = (getiterfunc) rangeiter_iter,
     .tp_iternext = (iternextfunc) rangeiter_next,
-    .tp_dealloc = (destructor) rangeiter_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "acid._iterators.RangeIterator",
     .tp_methods = rangeiter_methods
@@ -256,6 +324,9 @@ static PyTypeObject RangeIteratorType = {
 int
 acid_init_iterators_module(void)
 {
+    if(PyType_Ready(&IteratorType)) {
+        return -1;
+    }
     if(PyType_Ready(&RangeIteratorType)) {
         return -1;
     }
@@ -266,6 +337,9 @@ acid_init_iterators_module(void)
     }
 
     if(PyModule_AddObject(mod, "Iterator", (PyObject *) &IteratorType)) {
+        return -1;
+    }
+    if(PyModule_AddObject(mod, "RangeIterator", (PyObject *) &RangeIteratorType)) {
         return -1;
     }
 
