@@ -44,10 +44,22 @@
 #   define Py_TYPE(ob) (((PyObject*)(ob))->ob_type)
 #endif
 
+/** Initial preallocation for lists during _keylib.unpacks(). */
 #define LIST_START_SIZE 4
+
+/** Initial preallocation for tuples during _keylib.unpack(). */
 #define TUPLE_START_SIZE 3
 
+/** Granularity of UTC offset for KIND_DATETIME. */
+#define UTCOFFSET_DIV (15 * 60)
 
+/** Added to UTC offset after division to produce an unsigned int. */
+#define UTCOFFSET_SHIFT 64
+
+
+/**
+ * Enumeration of possible key element types.
+ */
 enum ElementKind
 {
     KIND_NULL = 15,
@@ -62,62 +74,84 @@ enum ElementKind
     KIND_SEP = 102
 };
 
-
+/**
+ * Represents a bounded slice of memory to be read from. Various
+ * acid_reader_*() functions use this interface.
+ */
 struct reader
 {
+    /** Current read position. */
     uint8_t *p;
+    /** Position of last byte. */
     uint8_t *e;
 };
 
-
+/**
+ * Represent a partially constructed, resizable PyString to be written to.
+ * Various acid_writer_*() functions use this interface.
+ */
 struct writer
 {
+    /** Pointer to partially constructed PyString. Reference to this must only
+     * be taken via acid_writer_finalize(). */
     PyObject *s;
+    /** Current write offset. */
     Py_ssize_t pos;
 };
 
+/**
+ * Current storage mode for a Key instance.
+ */
 enum KeyFlags {
-    // Key is stored in a shared buffer.
+    /** Key is stored in a shared buffer. */
     KEY_SHARED = 1,
-    // Key was stored in a shared buffer, but the buffer expired, so we copied
-    // it to a new heap allocation.
+    /** Key was stored in a shared buffer, but the buffer expired, so we copied
+     * it to a new heap allocation. */
     KEY_COPIED = 2,
-    // Key was created uniquely for this instance, buffer was included in
-    // instance allocation during construction time.
+    /** Key was created uniquely for this instance, buffer was included in
+     * instance allocation during construction time. */
     KEY_PRIVATE = 4
 };
 
+/**
+ * Key instance structure. The key is contained in `p[0..Py_SIZE(key)]`.
+ */
 typedef struct {
     PyObject_VAR_HEAD
+    /** Cached key hash value; initially -1 for "unknown". */
     long hash;
-    // Size is tracked in Py_SIZE(Key).
+    /** Key storage mode. */
     enum KeyFlags flags;
-    // In all cases, points to data.
+    /** In all modes, pointer to start of key. */
     uint8_t *p;
 } Key;
 
-// Structure allocated as the variable part of Key when KEY_SHARED.
+/**
+ * Shared Key information structure. During acid_make_shared_key(), this is
+ * allocated as the "variable data" part of the PyVarObject. On shared buffer
+ * invalidation, its memory may be reused to store the copied key value if it
+ * will fit.
+ */
 typedef struct {
-    // If KEY_SHARED, strong reference to source object.
+    /** Strong reference to the source object. */
     PyObject *source;
 #ifdef HAVE_MEMSINK
-    // Linked list of consumers monitoring source.
+    /** Linked list of consumers monitoring `source`. */
     struct ms_node sink_node;
 #endif
 } SharedKeyInfo;
 
-
+/**
+ * KeyIterator instance structure.
+ */
 typedef struct {
     PyObject_HEAD
-    // Key we're iterating over.
+    /** Strong reference to Key being iterated. */
     Key *key;
-    // Current position into key->p.
+    /** Current offset into `key->p`. */
     Py_ssize_t pos;
 } KeyIter;
 
-
-#define UTCOFFSET_SHIFT 64
-#define UTCOFFSET_DIV (15 * 60)
 
 int acid_writer_init(struct writer *wtr, Py_ssize_t initial);
 uint8_t *acid_writer_ptr(struct writer *wtr);
