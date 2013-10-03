@@ -18,19 +18,23 @@
 #include "datetime.h"
 #include "structmember.h"
 
-
-// Array of pointer to instance of tzinfo implementing our fixed offset types.
-// Only one needs to be created per offset.
+/** Array of cached FixedOffset instances, initially NULL. */
 static PyObject *instances[128];
-// timedelta(0, 0, 0)
+/** timedelta(0, 0, 0) */
 static PyObject *zero_delta;
 
+/**
+ * FixedOffset instance structure.
+ */
 typedef struct {
     PyObject_HEAD
+    /** Signed offset from UTC in seconds. */
     int offset_secs;
 } FixedOffset;
 
-
+/**
+ * FixedOffset(seconds).
+ */
 static int
 fixedoffset_init(FixedOffset *self, PyObject *args, PyObject *kwds)
 {
@@ -43,14 +47,18 @@ fixedoffset_init(FixedOffset *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
-
+/**
+ * FixedOffset.utcoffset() -> int.
+ */
 static PyObject *
 fixedoffset_utcoffset(FixedOffset *self, PyObject *args)
 {
     return PyDelta_FromDSU(0, self->offset_secs, 0);
 }
 
-
+/**
+ * FixedOffset.dst() -> timedelta(0, 0).
+ */
 static PyObject *
 fixedoffset_dst(FixedOffset *self, PyObject *args)
 {
@@ -58,7 +66,9 @@ fixedoffset_dst(FixedOffset *self, PyObject *args)
     return zero_delta;
 }
 
-
+/**
+ * FixedOffset.tzname() -> "<[+/-]HH:MM>".
+ */
 static PyObject *
 fixedoffset_tzname(FixedOffset *self, PyObject *args)
 {
@@ -78,7 +88,9 @@ fixedoffset_tzname(FixedOffset *self, PyObject *args)
     return PyString_FromString(tmp);
 }
 
-
+/**
+ * FixedOffset.__repr__() -> "<[+/-]HH:MM>".
+ */
 static PyObject *
 fixedoffset_repr(FixedOffset *self)
 {
@@ -104,7 +116,10 @@ static PyTypeObject FixedOffsetType = {
     .tp_methods = offset_methods
 };
 
-
+/**
+ * Do all required to initialize the FixedOffset type, and return a borrowed
+ * reference to it.
+ */
 PyTypeObject *
 acid_init_fixed_offset_type(void)
 {
@@ -122,7 +137,10 @@ acid_init_fixed_offset_type(void)
     return &FixedOffsetType;
 }
 
-
+/**
+ * Return a new reference to the FixedOffset representing `offset_secs`, or
+ * return NULL and set an exception on failure.
+ */
 PyObject *
 acid_get_fixed_offset(int offset_secs)
 {
