@@ -58,7 +58,7 @@
 
 
 /**
- * Enumeration of possible key element types.
+ * Key element types.
  */
 enum ElementKind
 {
@@ -72,6 +72,30 @@ enum ElementKind
     KIND_NEG_TIME = 91,
     KIND_TIME = 92,
     KIND_SEP = 102
+};
+
+/**
+ * Represent an iterator predicate.
+ */
+typedef enum {
+    PRED_LE,
+    PRED_LT,
+    PRED_GT,
+    PRED_GE
+} Predicate;
+
+/**
+ * Storage mode for a Key instance.
+ */
+enum KeyFlags {
+    /** Key is stored in a shared buffer. */
+    KEY_SHARED = 1,
+    /** Key was stored in a shared buffer, but the buffer expired, so we copied
+     * it to a new heap allocation. */
+    KEY_COPIED = 2,
+    /** Key was created uniquely for this instance, buffer was included in
+     * instance allocation during construction time. */
+    KEY_PRIVATE = 4
 };
 
 /**
@@ -100,21 +124,28 @@ struct writer
 };
 
 /**
- * Current storage mode for a Key instance.
+ * Shared Key information structure. During acid_make_shared_key(), this is
+ * allocated as the "variable data" part of the Key PyVarObject. On shared
+ * buffer invalidation, its memory may be reused to store the copied key value
+ * if it fits.
  */
-enum KeyFlags {
-    /** Key is stored in a shared buffer. */
-    KEY_SHARED = 1,
-    /** Key was stored in a shared buffer, but the buffer expired, so we copied
-     * it to a new heap allocation. */
-    KEY_COPIED = 2,
-    /** Key was created uniquely for this instance, buffer was included in
-     * instance allocation during construction time. */
-    KEY_PRIVATE = 4
-};
+typedef struct {
+    /** Strong reference to the source object. */
+    PyObject *source;
+#ifdef HAVE_MEMSINK
+    /** Linked list of consumers monitoring `source`. */
+    struct ms_node sink_node;
+#endif
+} SharedKeyInfo;
+
+
+// -------------------
+// Instance structures
+// -------------------
+
 
 /**
- * Key instance structure. The key is contained in `p[0..Py_SIZE(key)]`.
+ * _keylib.Key. The key is contained in `p[0..Py_SIZE(key)]`.
  */
 typedef struct {
     PyObject_VAR_HEAD
@@ -127,22 +158,7 @@ typedef struct {
 } Key;
 
 /**
- * Shared Key information structure. During acid_make_shared_key(), this is
- * allocated as the "variable data" part of the PyVarObject. On shared buffer
- * invalidation, its memory may be reused to store the copied key value if it
- * will fit.
- */
-typedef struct {
-    /** Strong reference to the source object. */
-    PyObject *source;
-#ifdef HAVE_MEMSINK
-    /** Linked list of consumers monitoring `source`. */
-    struct ms_node sink_node;
-#endif
-} SharedKeyInfo;
-
-/**
- * KeyIterator instance structure.
+ * _keylib.KeyIterator.
  */
 typedef struct {
     PyObject_HEAD
@@ -151,6 +167,55 @@ typedef struct {
     /** Current offset into `key->p`. */
     Py_ssize_t pos;
 } KeyIter;
+
+/**
+ * _iterators.Iterator.
+ */
+typedef struct {
+    PyObject_HEAD;
+
+    /** Strong reference to engine to be iterated. */
+    PyObject *engine;
+    /** Strong reference to MemSink source, or NULL. */
+    PyObject *source;
+    /** String reference to PyString collection prefix. */
+    PyObject *prefix;
+    /** Lower bound, or NULL for no lower bound. */
+    Key *lo;
+    /** Upper bound, or NULL for no upper bound. */
+    Key *hi;
+    /** If `lo`, predicate to match lower bound. */
+    Predicate lo_pred;
+    /** If `hi`, predicate to match upper bound. */
+    Predicate hi_pred;
+    /** If >=0, maximum elements to yield, otherwise <0. */
+    Py_ssize_t max;
+    /** The underlying storage engine iterator. */
+    PyObject *it;
+    /** Last tuple yielded by `it', or NULL. */
+    PyObject *tup;
+    /** If 1, next() should fetch new tuple from `it' before yielding. */
+    int started;
+    /** List of keys decoded from the current physical engine key, or NULL. */
+    PyObject *keys;
+    /* Borrowed reference to next() stop key, or NULL for no stop key. */
+    PyObject *stop;
+    /** If `stop`, predicate to use to test stop key. */
+    Predicate stop_pred;
+} Iterator;
+
+/**
+ * _iterators.RangeIterator.
+ */
+typedef struct {
+    /** Base Iterator fields. */
+    Iterator base;
+} RangeIterator;
+
+
+// ----------
+// Prototypes
+// ----------
 
 
 int acid_writer_init(struct writer *wtr, Py_ssize_t initial);
