@@ -60,16 +60,14 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         self->engine = engine;
         Py_INCREF(prefix);
         self->prefix = prefix;
-        self->lo = NULL;
-        self->hi = NULL;
-        self->lo_pred = PRED_LE;
-        self->hi_pred = PRED_GE;
+        self->lo.key = NULL;
+        self->hi.key = NULL;
+        self->stop = NULL;
         self->max = -1;
         self->it = NULL;
         self->tup = NULL;
         self->started = 0;
         self->keys = NULL;
-        self->stop = NULL;
 
         if(! ((self->source = PyObject_GetAttrString(engine, "source")))) {
             if(PyErr_Occurred()) {
@@ -80,6 +78,19 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         }
     }
     return self;
+}
+
+/**
+ * Set or replace a bound.
+ */
+static void set_bound(Bound *bound, Key *key, Predicate pred)
+{
+    Py_CLEAR(bound->key);
+    if(key) {
+        Py_INCREF(key);
+    }
+    bound->key = key;
+    bound->pred = pred;
 }
 
 /**
@@ -134,8 +145,8 @@ iter_clear(Iterator *self)
     Py_CLEAR(self->engine);
     Py_CLEAR(self->prefix);
     Py_CLEAR(self->source);
-    Py_CLEAR(self->lo);
-    Py_CLEAR(self->hi);
+    Py_CLEAR(self->lo.key);
+    Py_CLEAR(self->hi.key);
     Py_CLEAR(self->it);
     Py_CLEAR(self->tup);
     Py_CLEAR(self->keys);
@@ -157,11 +168,11 @@ iter_set_lo(Iterator *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    Py_CLEAR(self->lo);
-    if(! ((self->lo = acid_make_key(key_obj)))) {
+    set_bound(&self->lo, acid_make_key(key_obj),
+              closed ? PRED_LE : PRED_LT);
+    if(! self->lo.key) {
         return NULL;
     }
-    self->lo_pred = closed ? PRED_LE : PRED_LT;
     Py_RETURN_NONE;
 }
 
@@ -180,11 +191,11 @@ iter_set_hi(Iterator *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    Py_CLEAR(self->hi);
-    if(! ((self->hi = acid_make_key(key_obj)))) {
+    set_bound(&self->hi, acid_make_key(key_obj),
+              closed ? PRED_GE : PRED_GT);
+    if(! self->hi.key) {
         return NULL;
     }
-    self->hi_pred = closed ? PRED_GE : PRED_GT;
     Py_RETURN_NONE;
 }
 
@@ -201,18 +212,11 @@ iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    Py_CLEAR(self->lo);
-    if(! ((self->lo = acid_make_key(key_obj)))) {
+    set_bound(&self->lo, acid_make_key(key_obj), PRED_GE);
+    set_bound(&self->hi, acid_key_next_greater(self->lo.key), PRED_LT);
+    if(! (self->lo.key && self->hi.key)) {
         return NULL;
     }
-
-    Py_CLEAR(self->hi);
-    if(! ((self->hi = acid_key_next_greater(self->lo)))) {
-        return NULL;
-    }
-
-    self->lo_pred = PRED_GE;
-    self->hi_pred = PRED_LT;
     Py_RETURN_NONE;
 }
 
@@ -229,15 +233,11 @@ iter_set_exact(Iterator *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    Py_CLEAR(self->lo);
-    Py_CLEAR(self->hi);
-    if(! ((self->hi = acid_make_key(key_obj)))) {
+    set_bound(&self->lo, acid_make_key(key_obj), PRED_GE);
+    set_bound(&self->hi, self->lo.key, PRED_LE);
+    if(! self->lo.key) {
         return NULL;
     }
-    self->lo = self->hi;
-    Py_INCREF(self->lo);
-    self->lo_pred = PRED_GE;
-    self->hi_pred = PRED_LE;
     Py_RETURN_NONE;
 }
 
@@ -375,24 +375,28 @@ rangeiter_dealloc(KeyIter *self)
  * and `predicate`, otherwise 0.
  */
 static int
-test_pred(Key *key, Predicate predicate, uint8_t *s, Py_ssize_t len)
+test_bound(Bound *bound, uint8_t *s, Py_ssize_t len)
 {
-    int rc = acid_memcmp(key->p, Py_SIZE(key), s, len);
-
-    int out;
-    switch(predicate) {
-    case PRED_LE:
-        out = rc <= 0;
-        break;
-    case PRED_LT:
-        out = rc < 0;
-        break;
-    case PRED_GT:
-        out = rc > 0;
-        break;
-    case PRED_GE:
-        out = rc >= 0;
-        break;
+    int out = 1;
+    if(bound) {
+        Key *key = bound->key;
+        if(key) {
+            int rc = acid_memcmp(key->p, Py_SIZE(key), s, len);
+            switch(bound->pred) {
+            case PRED_LE:
+                out = rc <= 0;
+                break;
+            case PRED_LT:
+                out = rc < 0;
+                break;
+            case PRED_GT:
+                out = rc > 0;
+                break;
+            case PRED_GE:
+                out = rc >= 0;
+                break;
+            }
+        }
     }
     return out;
 }
@@ -423,8 +427,7 @@ rangeiter_next(RangeIterator *self)
     }
 
     Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
-    if(self->base.stop &&
-       !test_pred(self->base.stop, self->base.stop_pred, k->p, Py_SIZE(k))) {
+    if(! test_bound(self->base.stop, k->p, Py_SIZE(k))) {
         Py_CLEAR(self->base.it);
         Py_CLEAR(self->base.tup);
         Py_CLEAR(self->base.keys);
@@ -441,10 +444,10 @@ static PyObject *
 rangeiter_forward(RangeIterator *self)
 {
     PyObject *key;
-    if(self->base.lo) {
+    if(self->base.lo.key) {
         uint8_t *prefix = (uint8_t *) PyString_AS_STRING(self->base.prefix);
         Py_ssize_t prefix_len = PyString_GET_SIZE(self->base.prefix);
-        if(! ((key = acid_key_to_raw(self->base.lo, prefix, prefix_len)))) {
+        if(! ((key = acid_key_to_raw(self->base.lo.key, prefix, prefix_len)))) {
             return NULL;
         }
     } else {
@@ -462,15 +465,13 @@ rangeiter_forward(RangeIterator *self)
     if(! iter_step(&self->base)) {
         /* When lo(closed=False), skip the start key. */
         Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
-        if(self->base.lo && self->base.lo_pred == PRED_LT &&
-           !test_pred(self->base.lo, self->base.lo_pred, k->p, Py_SIZE(k))) {
+        if(! test_bound(&self->base.lo, k->p, Py_SIZE(k))) {
             iter_step(&self->base);
         }
     }
 
     self->base.started = 0;
-    self->base.stop = self->base.hi;
-    self->base.stop_pred = self->base.hi_pred;
+    self->base.stop = &self->base.hi;
     Py_INCREF(self);
     return (PyObject *)self;
 }
@@ -484,8 +485,8 @@ rangeiter_reverse(RangeIterator *self)
     uint8_t *prefix = (uint8_t *) PyString_AS_STRING(self->base.prefix);
     Py_ssize_t prefix_len = PyString_GET_SIZE(self->base.prefix);
     PyObject *key;
-    if(self->base.hi) {
-        if(! ((key = acid_key_to_raw(self->base.hi, prefix, prefix_len)))) {
+    if(self->base.hi.key) {
+        if(! ((key = acid_key_to_raw(self->base.hi.key, prefix, prefix_len)))) {
             return NULL;
         }
     } else {
@@ -514,16 +515,14 @@ rangeiter_reverse(RangeIterator *self)
             continue;
         }
         Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
-        if(self->base.hi &&
-           !test_pred(self->base.hi, self->base.hi_pred, k->p, Py_SIZE(k))) {
+        if(! test_bound(&self->base.hi, k->p, Py_SIZE(k))) {
             continue;
         }
         break;
     }
 
     self->base.started = 0;
-    self->base.stop = self->base.lo;
-    self->base.stop_pred = self->base.lo_pred;
+    self->base.stop = &self->base.lo;
     Py_INCREF(self);
     return (PyObject *)self;
 }

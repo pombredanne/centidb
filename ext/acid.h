@@ -57,6 +57,10 @@
 #define UTCOFFSET_SHIFT 64
 
 
+// Forward declarations.
+struct Key;
+
+
 /**
  * Key element types.
  */
@@ -83,6 +87,16 @@ typedef enum {
     PRED_GT,
     PRED_GE
 } Predicate;
+
+/**
+ * Represent a (Key, Predicate) pair.
+ */
+typedef struct {
+    /** Strong reference, or NULL if bound inactive. */
+    struct Key *key;
+    /** Match predicate. */
+    Predicate pred;
+} Bound;
 
 /**
  * Storage mode for a Key instance.
@@ -147,7 +161,7 @@ typedef struct {
 /**
  * _keylib.Key. The key is contained in `p[0..Py_SIZE(key)]`.
  */
-typedef struct {
+typedef struct Key {
     PyObject_VAR_HEAD
     /** Cached key hash value; initially -1 for "unknown". */
     long hash;
@@ -180,14 +194,12 @@ typedef struct {
     PyObject *source;
     /** String reference to PyString collection prefix. */
     PyObject *prefix;
-    /** Lower bound, or NULL for no lower bound. */
-    Key *lo;
-    /** Upper bound, or NULL for no upper bound. */
-    Key *hi;
-    /** If `lo`, predicate to match lower bound. */
-    Predicate lo_pred;
-    /** If `hi`, predicate to match upper bound. */
-    Predicate hi_pred;
+    /** Lower bound. */
+    Bound lo;
+    /** Upper bound. */
+    Bound hi;
+    /* Points to `hi' or `lo', or NULL for no stop bound. */
+    Bound *stop;
     /** If >=0, maximum elements to yield, otherwise <0. */
     Py_ssize_t max;
     /** The underlying storage engine iterator. */
@@ -198,10 +210,6 @@ typedef struct {
     int started;
     /** List of keys decoded from the current physical engine key, or NULL. */
     PyObject *keys;
-    /* Borrowed reference to next() stop key, or NULL for no stop key. */
-    Key *stop;
-    /** If `stop`, predicate to use to test stop key. */
-    Predicate stop_pred;
 } Iterator;
 
 /**
