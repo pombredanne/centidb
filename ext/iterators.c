@@ -90,41 +90,38 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 static int
 iter_step(Iterator *self)
 {
+    Py_CLEAR(self->keys);
+    Py_CLEAR(self->tup);
     if(! self->it) {
-        goto stop;
+        return -1;
     }
 
-    Py_CLEAR(self->tup);
     if(! ((self->tup = PyIter_Next(self->it)))) {
         Py_CLEAR(self->it);
-        goto stop;
+        return -1;
     }
 
     if(! (PyTuple_CheckExact(self->tup) &&
           PyTuple_GET_SIZE(self->tup) == 2)) {
         PyErr_SetString(PyExc_TypeError,
             "Engine.iter() must yield (key, value) strings or buffers.");
-        goto stop;
+        return -1;
     }
 
     struct reader rdr;
     if(acid_make_reader(&rdr, PyTuple_GET_ITEM(self->tup, 0))) {
-        goto stop;
+        return -1;
     }
 
     Py_ssize_t prefix_len = PyString_GET_SIZE(self->prefix);
     if(((rdr.e - rdr.p) < prefix_len) ||
         memcmp(rdr.p, PyString_AS_STRING(self->prefix), prefix_len)) {
-        goto stop;
+        return -1;
     }
 
     rdr.p += prefix_len;
     self->keys = acid_keylist_from_raw(rdr.p, rdr.e-rdr.p, self->source);
     return 0;
-
-stop:
-    Py_CLEAR(self->tup);
-    return -1;
 }
 
 /**
@@ -428,7 +425,9 @@ rangeiter_next(RangeIterator *self)
     Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
     if(self->base.stop &&
        !test_pred(self->base.stop, self->base.stop_pred, k->p, Py_SIZE(k))) {
-        iter_clear(&self->base);
+        Py_CLEAR(self->base.it);
+        Py_CLEAR(self->base.tup);
+        Py_CLEAR(self->base.keys);
         return NULL;
     }
     Py_INCREF(self);
