@@ -183,13 +183,14 @@ key_dealloc(Key *self)
 
 
 PyObject *
-acid_key_to_raw(Key *self, uint8_t *prefix, Py_ssize_t prefix_len)
+acid_key_to_raw(Key *self, Slice *prefix)
 {
+    Py_ssize_t prefix_len = prefix->e - prefix->p;
     Py_ssize_t need = prefix_len + Py_SIZE(self);
     PyObject *str = PyString_FromStringAndSize(NULL, need);
     if(str) {
         char *p = PyString_AS_STRING(str);
-        memcpy(p, prefix, prefix_len);
+        memcpy(p, prefix->p, prefix_len);
         memcpy(p + prefix_len, self->p, Py_SIZE(self));
     }
     return str;
@@ -204,12 +205,13 @@ acid_key_to_raw(Key *self, uint8_t *prefix, Py_ssize_t prefix_len)
 static PyObject *
 key_to_raw(Key *self, PyObject *args)
 {
-    uint8_t *prefix = NULL;
+    uint8_t *prefix_s = NULL;
     Py_ssize_t prefix_len = 0;
-    if(! PyArg_ParseTuple(args, "|z#", &prefix, &prefix_len)) {
+    if(! PyArg_ParseTuple(args, "|z#", &prefix_s, &prefix_len)) {
         return NULL;
     }
-    return acid_key_to_raw(self, prefix, prefix_len);
+    Slice prefix = {prefix_s, prefix_s+prefix_len};
+    return acid_key_to_raw(self, &prefix);
 }
 
 /**
@@ -235,7 +237,9 @@ key_to_hex(Key *self, PyObject *args, PyObject *kwds)
 static PyObject *
 key_next_greater(Key *self, PyObject *args, PyObject *kwds)
 {
-    Py_ssize_t goodlen = acid_next_greater(self->p, Py_SIZE(self));
+    Slice slice;
+    acid_key_as_slice(&slice, self);
+    Py_ssize_t goodlen = acid_next_greater(&slice);
     // All bytes are 0xff, should never happen.
     if(goodlen == -1) {
         Py_RETURN_NONE;

@@ -114,15 +114,15 @@ enum KeyFlags {
 
 /**
  * Represents a bounded slice of memory to be read from. Various
- * acid_reader_*() functions use this interface.
+ * acid_slice_*() functions use this interface.
  */
-struct reader
+typedef struct reader
 {
     /** Current read position. */
     uint8_t *p;
     /** Position of last byte. */
     uint8_t *e;
-};
+} Slice;
 
 /**
  * Represent a partially constructed, resizable PyString to be written to.
@@ -243,12 +243,19 @@ acid_init_module(const char *name, PyMethodDef *methods);
 PyTypeObject *acid_init_key_type(void);
 Key *acid_make_key(PyObject *arg);
 Key *acid_key_next_greater(Key *self);
-PyObject *acid_key_to_raw(Key *self, uint8_t *prefix, Py_ssize_t prefix_len);
+PyObject *acid_key_to_raw(Key *self, Slice *prefix);
 
+int
+acid_make_reader(Slice *rdr, PyObject *buf);
+void
+acid_string_as_slice(Slice *slice, PyObject *str);
+void
+acid_key_as_slice(Slice *slice, Key *key);
 Py_ssize_t
-acid_next_greater(uint8_t *p, Py_ssize_t len);
+acid_next_greater(Slice *slice);
 PyObject *
-acid_next_greater_str(uint8_t *p, Py_ssize_t len);
+acid_next_greater_str(Slice *slice);
+int acid_memcmp(Slice *s1, Slice *s2);
 
 int acid_init_keylib_module(void);
 int acid_init_iterators_module(void);
@@ -263,11 +270,5 @@ Key *acid_make_private_key(uint8_t *p, Py_ssize_t size);
 #ifdef HAVE_MEMSINK
 Key *acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size);
 #endif
-
-int
-acid_make_reader(struct reader *rdr, PyObject *buf);
-
-int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
-                uint8_t *s2, Py_ssize_t s2len);
 
 #endif /* !ACID_H */

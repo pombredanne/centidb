@@ -375,13 +375,16 @@ rangeiter_dealloc(KeyIter *self)
  * and `predicate`, otherwise 0.
  */
 static int
-test_bound(Bound *bound, uint8_t *s, Py_ssize_t len)
+test_bound(Bound *bound, uint8_t *p, Py_ssize_t len)
 {
     int out = 1;
     if(bound) {
         Key *key = bound->key;
         if(key) {
-            int rc = acid_memcmp(key->p, Py_SIZE(key), s, len);
+            Slice key_slice;
+            acid_key_as_slice(&key_slice, key);
+            Slice slice = {p, p+len};
+            int rc = acid_memcmp(&key_slice, &slice);
             switch(bound->pred) {
             case PRED_LE:
                 out = rc <= 0;
@@ -445,11 +448,9 @@ rangeiter_forward(RangeIterator *self)
 {
     PyObject *key;
     if(self->base.lo.key) {
-        uint8_t *prefix = (uint8_t *) PyString_AS_STRING(self->base.prefix);
-        Py_ssize_t prefix_len = PyString_GET_SIZE(self->base.prefix);
-        if(! ((key = acid_key_to_raw(self->base.lo.key, prefix, prefix_len)))) {
-            return NULL;
-        }
+        Slice prefix;
+        acid_string_as_slice(&prefix, self->base.prefix);
+        key = acid_key_to_raw(self->base.lo.key, &prefix);
     } else {
         key = self->base.prefix;
         Py_INCREF(key);
@@ -482,15 +483,13 @@ rangeiter_forward(RangeIterator *self)
 static PyObject *
 rangeiter_reverse(RangeIterator *self)
 {
-    uint8_t *prefix = (uint8_t *) PyString_AS_STRING(self->base.prefix);
-    Py_ssize_t prefix_len = PyString_GET_SIZE(self->base.prefix);
+    Slice prefix;
+    acid_string_as_slice(&prefix, self->base.prefix);
     PyObject *key;
     if(self->base.hi.key) {
-        if(! ((key = acid_key_to_raw(self->base.hi.key, prefix, prefix_len)))) {
-            return NULL;
-        }
+        key = acid_key_to_raw(self->base.hi.key, &prefix);
     } else {
-        key = acid_next_greater_str(prefix, prefix_len);
+        key = acid_next_greater_str(&prefix);
     }
 
     // TODO: may "return without exception set" if next_greater failed.

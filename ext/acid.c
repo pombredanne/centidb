@@ -51,14 +51,37 @@ acid_make_reader(struct reader *rdr, PyObject *buf)
 }
 
 /**
+ * Convert exactly a PyString into a Slice. No error checking occurs.
+ */
+void
+acid_string_as_slice(Slice *slice, PyObject *str)
+{
+    uint8_t *p = (uint8_t *)PyString_AS_STRING(str);
+    slice->p = p;
+    slice->e = p + PyString_GET_SIZE(str);
+}
+
+/*
+ * Convert exactly a Key to a Slice. No error checking occurs.
+ */
+void
+acid_key_as_slice(Slice *slice, Key *key)
+{
+    slice->p = key->p;
+    slice->e = key->p + Py_SIZE(key);
+}
+
+/**
  * Compare the longest possible prefix of 2 strings. If both prefixes match,
  * return -1 if `s1` is shorter than `s2`, 1 if `s1` is longer than `s2`, and 0
  * if both strings are of equal length and identical.
  */
-int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
-                uint8_t *s2, Py_ssize_t s2len)
+int
+acid_memcmp(Slice *s1, Slice *s2)
 {
-    int rc = memcmp(s1, s2, (s1len < s2len) ? s1len : s2len);
+    Py_ssize_t s1len = s1->e - s1->p;
+    Py_ssize_t s2len = s2->e - s2->p;
+    int rc = memcmp(s1->p, s2->p, (s1len < s2len) ? s1len : s2len);
     if(! rc) {
         if(s1len < s2len) {
             rc = -1;
@@ -74,13 +97,10 @@ int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
  * Returns -1 if entire string is 0xff bytes, or offset of last non-0xff byte.
  */
 Py_ssize_t
-acid_next_greater(uint8_t *p, Py_ssize_t len)
+acid_next_greater(Slice *slice)
 {
-    uint8_t *orig = p;
-    uint8_t *e = p + len;
     uint8_t *l = NULL;
-
-    for(uint8_t *p = orig; p < e; p++) {
+    for(uint8_t *p = slice->p; p < slice->e; p++) {
         if(*p != 0xff) {
             l = p;
         }
@@ -90,7 +110,7 @@ acid_next_greater(uint8_t *p, Py_ssize_t len)
     if(! l) {
         return -1;
     }
-    return (l + 1) - orig;
+    return (l + 1) - slice->p;
 }
 
 /**
@@ -98,9 +118,9 @@ acid_next_greater(uint8_t *p, Py_ssize_t len)
  * with the last non-0xff incremented by 1. Return NULL on failure.
  */
 PyObject *
-acid_next_greater_str(uint8_t *p, Py_ssize_t len)
+acid_next_greater_str(Slice *slice)
 {
-    Py_ssize_t goodlen = acid_next_greater(p, len);
+    Py_ssize_t goodlen = acid_next_greater(slice);
     if(goodlen == -1) {
         return NULL;
     }
@@ -108,7 +128,7 @@ acid_next_greater_str(uint8_t *p, Py_ssize_t len)
     PyObject *str = PyString_FromStringAndSize(NULL, goodlen);
     if(str) {
         uint8_t *dst = (uint8_t *)PyString_AS_STRING(str);
-        memcpy(dst, p, goodlen);
+        memcpy(dst, slice->p, goodlen);
         dst[goodlen - 1]++;
     }
     return str;
