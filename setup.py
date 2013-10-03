@@ -36,7 +36,7 @@ if hasattr(platform, 'python_implementation'):
 else:
     use_cpython = True
 
-extra_compile_args = ['-std=c99']
+extra_compile_args = ['-std=c99', '-O0']
 if memsink:
     extra_compile_args += ['-DHAVE_MEMSINK',
                            '-I' + os.path.dirname(memsink.__file__)]
@@ -46,7 +46,7 @@ if use_cpython:
     ext_modules = [
         Extension("_acid", sources=[
             'ext/acid.c', 'ext/keylib.c', 'ext/key.c', 'ext/keylist.c',
-            'ext/fixed_offset.c', #'ext/iterators.c'
+            'ext/fixed_offset.c', 'ext/iterators.c'
         ], extra_compile_args=extra_compile_args)
     ]
 

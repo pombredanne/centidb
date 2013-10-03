@@ -96,6 +96,7 @@ iter_step(Iterator *self)
 
     Py_CLEAR(self->tup);
     if(! ((self->tup = PyIter_Next(self->it)))) {
+        Py_CLEAR(self->it);
         goto stop;
     }
 
@@ -490,12 +491,10 @@ rangeiter_reverse(RangeIterator *self)
         }
     } else {
         key = acid_next_greater_str(prefix, prefix_len);
-        DEBUG("dude abiding %p", key)
     }
 
     // TODO: may "return without exception set" if next_greater failed.
     if(! key) {
-        DEBUG("dude abides")
         return NULL;
     }
 
@@ -509,14 +508,18 @@ rangeiter_reverse(RangeIterator *self)
         return NULL;
     }
 
+    // TODO FIXME I DONT EVEN
     /* When hi(closed=False), skip the start key. */
-    Key *k;
-    while(! (self->base.keys &&
-             ((k = (Key *)PyList_GET_ITEM(self->base.keys, 0),
-              test_pred(self->base.hi, self->base.hi_pred, k->p, Py_SIZE(k)))))) {
-        if(iter_step(&self->base) && !self->base.it) {
-            return NULL;
+    for(; self->base.it; iter_step(&self->base)) {
+        if(! self->base.keys) {
+            continue;
         }
+        Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
+        if(self->base.hi &&
+           !test_pred(self->base.hi, self->base.hi_pred, k->p, Py_SIZE(k))) {
+            continue;
+        }
+        break;
     }
 
     self->base.started = 0;
