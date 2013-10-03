@@ -403,7 +403,7 @@ test_pred(Key *key, Predicate predicate, uint8_t *s, Py_ssize_t len)
 static PyObject *
 rangeiter_next(RangeIterator *self)
 {
-    if(! self->base.it) {
+    if(! (self->base.it && self->base.keys)) {
         return NULL;
     }
     if(! self->base.max--) {
