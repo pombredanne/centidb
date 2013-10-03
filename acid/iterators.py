@@ -335,7 +335,7 @@ def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
         return it.forward()
 
 
-if acid._use_speedups:
+if 0 and acid._use_speedups:
     try:
         from acid._iterators import *
     except ImportError:
