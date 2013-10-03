@@ -123,7 +123,9 @@ static PyTypeObject KeyListType = {
 PyTypeObject *
 acid_init_keylist_type(void)
 {
+#ifdef HAVE_MEMSINK
     MemSink_IMPORT;
+#endif
 
     if(PyType_Ready(&KeyListType)) {
         return NULL;
