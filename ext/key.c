@@ -234,21 +234,12 @@ key_to_hex(Key *self, PyObject *args, PyObject *kwds)
 static PyObject *
 key_next_greater(Key *self, PyObject *args, PyObject *kwds)
 {
-    uint8_t *e = self->p + Py_SIZE(self);
-    uint8_t *l = NULL;
-
-    for(uint8_t *p = self->p; p < e; p++) {
-        if(*p != 0xff) {
-            l = p;
-        }
-    }
-
+    Py_ssize_t goodlen = acid_next_greater(self->p, Py_SIZE(self));
     // All bytes are 0xff, should never happen.
-    if(! l) {
+    if(goodlen == -1) {
         Py_RETURN_NONE;
     }
 
-    Py_ssize_t goodlen = (l + 1) - self->p;
     Key *key = acid_make_private_key(self->p, goodlen);
     if(key) {
         key->p[goodlen - 1]++;

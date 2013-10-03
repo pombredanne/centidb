@@ -66,6 +66,44 @@ int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
 }
 
 
+Py_ssize_t
+acid_next_greater(uint8_t *p, Py_ssize_t len)
+{
+    uint8_t *orig = p;
+    uint8_t *e = p + len;
+    uint8_t *l = NULL;
+
+    for(uint8_t *p = orig; p < e; p++) {
+        if(*p != 0xff) {
+            l = p;
+        }
+    }
+
+    // All bytes are 0xff, should never happen.
+    if(! l) {
+        return -1;
+    }
+    return (l + 1) - orig;
+}
+
+
+PyObject *
+acid_next_greater_str(uint8_t *p, Py_ssize_t len)
+{
+    Py_ssize_t goodlen = acid_next_greater(self->p, Py_SIZE(self));
+    if(goodlen == -1) {
+        return NULL;
+    }
+
+    PyObject *str = PyString_FromStringAndSize(p, goodlen);
+    if(str) {
+        ((uint8_t *)PyString_AS_STRING(str))[goodlen - 1]++;
+    }
+
+    return str;
+}
+
+
 PyObject *
 acid_init_module(const char *name, PyMethodDef *methods)
 {
