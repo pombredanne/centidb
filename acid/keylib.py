@@ -29,6 +29,8 @@ import sys
 import time
 import uuid
 
+import acid
+
 
 __all__ = ['Key', 'KeyList', 'invert', 'unpacks', 'packs', 'unpack_int',
            'pack_int']
@@ -678,7 +680,9 @@ def unpack(s, prefix=None):
     return unpacks(s, prefix, True)
 
 
-try:
-    from acid._keylib import *
-except ImportError:
-    pass
+
+if acid._use_speedups:
+    try:
+        from acid._keylib import *
+    except ImportError:
+        pass

@@ -20,6 +20,7 @@ Iterator implementations.
 
 from __future__ import absolute_import
 
+import acid
 import acid.core
 from acid import keylib
 
@@ -299,7 +300,7 @@ class BatchRangeIterator(Iterator):
         if not go:
             go = self._step()
 
-        # When lo(closed=False), skip the start key.
+        # When hi(closed=False), skip the start key.
         while go and not self._hi_pred(self.key):
             go = self._step()
 
@@ -332,3 +333,10 @@ def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
         return it.reverse()
     else:
         return it.forward()
+
+
+if acid._use_speedups:
+    try:
+        from acid._iterators import *
+    except ImportError:
+        pass

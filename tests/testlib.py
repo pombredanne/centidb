@@ -115,7 +115,7 @@ class CountingEngine(acid.engines.Engine):
 
 def _reload_acid():
     for key in sys.modules.keys():
-        if 'acid' in key:
+        if 'acid' in key and '_' not in key:
             del sys.modules[key]
     global acid
     import acid

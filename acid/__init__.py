@@ -15,12 +15,15 @@
 #
 
 from __future__ import absolute_import
-
-# Hack: disable speedups while testing or reading docstrings.
 import os
 import sys
-if os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
-        os.getenv('ACID_NO_SPEEDUPS') is None:
+
+# Hack: disable speedups while testing or reading docstrings.
+_use_speedups = (
+    os.path.basename(sys.argv[0]) not in ('sphinx-build', 'pydoc') and \
+    os.getenv('ACID_NO_SPEEDUPS') is None)
+
+if _use_speedups:
     try:
         import acid._acid
     except ImportError:
