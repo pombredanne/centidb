@@ -45,6 +45,9 @@ typedef struct {
 
     Py_ssize_t max;
     PyObject *it;
+
+    PyObject *tup; // Last tuple yielded by `it'.
+    PyObject *keys; // Current set of decoded keys.
 } Iterator;
 
 
@@ -84,6 +87,8 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         self->hi_pred = PRED_GE;
         self->max = -1;
         self->it = NULL;
+        self->tup = NULL;
+        self->keys = NULL;
     }
     return self;
 }
@@ -97,6 +102,8 @@ iter_clear(Iterator *self)
     Py_CLEAR(self->lo);
     Py_CLEAR(self->hi);
     Py_CLEAR(self->it);
+    Py_CLEAR(self->tup);
+    Py_CLEAR(self->keys);
 }
 
 
@@ -274,6 +281,62 @@ rangeiter_dealloc(KeyIter *self)
 
 
 static int
+test_pred(Key *key, Predicate pred, uint8_t *s, Py_ssize_t len)
+{
+    int rc = acid_memcmp(key->s, Py_SIZE(key), s, len);
+
+    int out;
+    switch(pred) {
+    case PRED_LE:
+        out = rc <= 0;
+        break;
+    case PRED_LT:
+        out = rc < 0;
+        break;
+    case PRED_GT:
+        out = rc > 0;
+        break;
+    case PRED_GE:
+        out = rc >= 0;
+        break;
+    }
+    return out;
+}
+
+
+static int
+rangeiter_step(RangeIterator *self)
+{
+    if(! self->base.it) {
+        return -1;
+    }
+
+    Py_CLEAR(self->base.tup);
+    self->base.tup = PyIter_Next(self->base.it);
+    if(! self->base.tup) {
+        return -1;
+    }
+
+    if(! (PyTuple_CheckExact(self->base.tup) &&
+          PyTuple_GET_SIZE(self->base.tup) == 2)) {
+        PyErr_SetString(PyExc_TypeError,
+            "Engine.iter() must yield (key, value) strings or buffers.");
+        return NULL;
+    }
+
+    struct reader krdr;
+    if(acid_make_reader(&rdr, PyTuple_GET_ITEM(self->base.tup, 0))) {
+        return -1;
+    }
+
+    if((krdr.e - krdr.p) < PyString_GET_SIZE(self->base.prefix)) {
+        Py_CLEAR(self->base.tup);
+        Py_CLEAR(self->base.it);
+        return NULL;
+    }
+
+    self->base.keys = acid
+}
 
 
 static PyObject *
