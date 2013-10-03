@@ -153,7 +153,7 @@ Key *acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size);
 #endif
 
 int
-acid_strptr(uint8_t **s, Py_ssize_t *len, PyObject *buf);
+acid_make_reader(struct reader *rdr, PyObject *buf);
 
 int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
                 uint8_t *s2, Py_ssize_t s2len);
