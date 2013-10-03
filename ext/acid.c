@@ -18,6 +18,54 @@
 #include "acid.h"
 
 
+/**
+ * Given some Python object, try to get at its raw data. For string or bytes
+ * objects, this is the object value. For Unicode objects, this is the UTF-8
+ * representation of the object value. For all other objects, attempt to invoke
+ * the Python 2.x buffer protocol.
+ */
+int
+acid_make_reader(struct reader *rdr, PyObject *buf)
+{
+    uint8_t *s;
+    Py_ssize_t len;
+
+    if(PyBytes_CheckExact(buf)) {
+        s = PyBytes_AS_STRING(buf);
+        len = PyBytes_GET_SIZE(buf);
+    }
+#if PY_MAJOR_VERSION >= 3
+    else if(PyUnicode_CheckExact(buf)) {
+        if(! ((s = PyUnicode_AsUTF8AndSize(buf, &len)))) {
+            return -1;
+        }
+    }
+#endif
+    else if(PyObject_AsReadBuffer(buf, (const void **)&s, &len)) {
+        return -1;
+    }
+
+    rdr->p = s;
+    rdr->e = s + len;
+    return 0;
+}
+
+
+int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
+                uint8_t *s2, Py_ssize_t s2len)
+{
+    int rc = memcmp(s1, s2, (s1len < s2len) ? s1len : s2len);
+    if(! rc) {
+        if(s1len < s2len) {
+            rc = -1;
+        } else if(s1len > s2len) {
+            rc = 1;
+        }
+    }
+    return rc;
+}
+
+
 PyObject *
 acid_init_module(const char *name, PyMethodDef *methods)
 {

@@ -144,11 +144,18 @@ int acid_init_iterators_module(void);
 
 PyTypeObject *
 acid_init_keylist_type(void);
+PyObject *
+acid_keylist_from_raw(uint8_t *raw, Py_ssize_t raw_len, PyObject *source);
 
 Key *acid_make_private_key(uint8_t *p, Py_ssize_t size);
 #ifdef HAVE_MEMSINK
 Key *acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size);
 #endif
 
+int
+acid_strptr(uint8_t **s, Py_ssize_t *len, PyObject *buf);
+
+int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
+                uint8_t *s2, Py_ssize_t s2len);
 
 #endif /* !ACID_H */

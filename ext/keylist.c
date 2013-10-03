@@ -41,28 +41,10 @@ make_key(uint8_t *p, Py_ssize_t length, PyObject *source)
 #endif
 }
 
-/**
- * Given a raw bytestring and prefix, return a list of Key instances.
- */
-static PyObject *
-keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
+
+PyObject *
+acid_keylist_from_raw(uint8_t *raw, Py_ssize_t raw_len, PyObject *source)
 {
-    char *prefix = "";
-    uint8_t *raw;
-    PyObject *source = NULL;
-    Py_ssize_t prefix_len = 0;
-    Py_ssize_t raw_len;
-
-    if(! PyArg_ParseTuple(args, "s#|s#O", &raw, &raw_len,
-                          &prefix, &prefix_len, &source)) {
-        return NULL;
-    }
-    if(raw_len < prefix_len || memcmp(prefix, raw, prefix_len)) {
-        Py_RETURN_NONE;
-    }
-    raw += prefix_len;
-    raw_len -= prefix_len;
-
     PyObject *out = PyList_New(0);
     if(! out) {
         return NULL;
@@ -96,6 +78,31 @@ keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     }
 
     return out;
+}
+
+
+/**
+ * Given a raw bytestring and prefix, return a list of Key instances.
+ */
+static PyObject *
+keylist_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
+{
+    char *prefix = "";
+    uint8_t *raw;
+    PyObject *source = NULL;
+    Py_ssize_t prefix_len = 0;
+    Py_ssize_t raw_len;
+
+    if(! PyArg_ParseTuple(args, "s#|s#O", &raw, &raw_len,
+                          &prefix, &prefix_len, &source)) {
+        return NULL;
+    }
+    if(raw_len < prefix_len || memcmp(prefix, raw, prefix_len)) {
+        Py_RETURN_NONE;
+    }
+    raw += prefix_len;
+    raw_len -= prefix_len;
+    return acid_keylist_from_raw(raw, raw_len, source);
 }
 
 
