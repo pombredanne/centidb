@@ -199,7 +199,7 @@ typedef struct {
     /** List of keys decoded from the current physical engine key, or NULL. */
     PyObject *keys;
     /* Borrowed reference to next() stop key, or NULL for no stop key. */
-    PyObject *stop;
+    Key *stop;
     /** If `stop`, predicate to use to test stop key. */
     Predicate stop_pred;
 } Iterator;
