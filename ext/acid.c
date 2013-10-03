@@ -31,7 +31,7 @@ acid_make_reader(struct reader *rdr, PyObject *buf)
     Py_ssize_t len;
 
     if(PyBytes_CheckExact(buf)) {
-        s = PyBytes_AS_STRING(buf);
+        s = (uint8_t *)PyBytes_AS_STRING(buf);
         len = PyBytes_GET_SIZE(buf);
     }
 #if PY_MAJOR_VERSION >= 3
@@ -100,12 +100,12 @@ acid_next_greater(uint8_t *p, Py_ssize_t len)
 PyObject *
 acid_next_greater_str(uint8_t *p, Py_ssize_t len)
 {
-    Py_ssize_t goodlen = acid_next_greater(self->p, Py_SIZE(self));
+    Py_ssize_t goodlen = acid_next_greater(p, len);
     if(goodlen == -1) {
         return NULL;
     }
 
-    PyObject *str = PyString_FromStringAndSize(p, goodlen);
+    PyObject *str = PyString_FromStringAndSize((char *)p, goodlen);
     if(str) {
         ((uint8_t *)PyString_AS_STRING(str))[goodlen - 1]++;
     }
