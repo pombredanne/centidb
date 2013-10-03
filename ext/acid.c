@@ -105,9 +105,11 @@ acid_next_greater_str(uint8_t *p, Py_ssize_t len)
         return NULL;
     }
 
-    PyObject *str = PyString_FromStringAndSize((char *)p, goodlen);
+    PyObject *str = PyString_FromStringAndSize(NULL, goodlen);
     if(str) {
-        ((uint8_t *)PyString_AS_STRING(str))[goodlen - 1]++;
+        uint8_t *dst = (uint8_t *)PyString_AS_STRING(str);
+        memcpy(dst, p, goodlen);
+        dst[goodlen - 1]++;
     }
     return str;
 }
