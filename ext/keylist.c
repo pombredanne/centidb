@@ -18,10 +18,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define USING_MEMSINK
 #include "acid.h"
 #include "structmember.h"
 
-
+// Forward declarations.
 static PyTypeObject KeyListType;
 
 
@@ -40,7 +41,6 @@ make_key(uint8_t *p, Py_ssize_t length, PyObject *source)
     return (PyObject *)acid_make_private_key(p, length);
 #endif
 }
-
 
 PyObject *
 acid_keylist_from_raw(uint8_t *raw, Py_ssize_t raw_len, PyObject *source)
@@ -79,7 +79,6 @@ acid_keylist_from_raw(uint8_t *raw, Py_ssize_t raw_len, PyObject *source)
 
     return out;
 }
-
 
 /**
  * Given a raw bytestring and prefix, return a list of Key instances.
@@ -124,6 +123,8 @@ static PyTypeObject KeyListType = {
 PyTypeObject *
 acid_init_keylist_type(void)
 {
+    MemSink_IMPORT;
+
     if(PyType_Ready(&KeyListType)) {
         return NULL;
     }

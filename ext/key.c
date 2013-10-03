@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define USING_MEMSINK
 #include "acid.h"
 #include "structmember.h"
 
