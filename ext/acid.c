@@ -50,7 +50,11 @@ acid_make_reader(struct reader *rdr, PyObject *buf)
     return 0;
 }
 
-
+/**
+ * Compare the longest possible prefix of 2 strings. If both prefixes match,
+ * return -1 if `s1` is shorter than `s2`, 1 if `s1` is longer than `s2`, and 0
+ * if both strings are of equal length and identical.
+ */
 int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
                 uint8_t *s2, Py_ssize_t s2len)
 {
@@ -65,7 +69,10 @@ int acid_memcmp(uint8_t *s1, Py_ssize_t s1len,
     return rc;
 }
 
-
+/**
+ * Find the longest prefix of `p[0..len]` that does not end with a 0xff byte.
+ * Returns -1 if entire string is 0xff bytes, or offset of last non-0xff byte.
+ */
 Py_ssize_t
 acid_next_greater(uint8_t *p, Py_ssize_t len)
 {
@@ -86,7 +93,10 @@ acid_next_greater(uint8_t *p, Py_ssize_t len)
     return (l + 1) - orig;
 }
 
-
+/**
+ * Like acid_next_greater(), except return a PyString containing the prefix
+ * with the last non-0xff incremented by 1. Return NULL on failure.
+ */
 PyObject *
 acid_next_greater_str(uint8_t *p, Py_ssize_t len)
 {
@@ -99,11 +109,15 @@ acid_next_greater_str(uint8_t *p, Py_ssize_t len)
     if(str) {
         ((uint8_t *)PyString_AS_STRING(str))[goodlen - 1]++;
     }
-
     return str;
 }
 
-
+/**
+ * Arrange for a acid._`name` submodule to be created and inserted into
+ * sys.modules. `methods` is a NULL-terminated PyMethodDef array of methods to
+ * include in the module. Return a new reference to the module on success, or
+ * NULL on failure.
+ */
 PyObject *
 acid_init_module(const char *name, PyMethodDef *methods)
 {
@@ -146,7 +160,9 @@ acid_init_module(const char *name, PyMethodDef *methods)
     return mod;
 }
 
-
+/**
+ * Initialize the acid._acid extension and all included submodules.
+ */
 PyMODINIT_FUNC
 init_acid(void)
 {
