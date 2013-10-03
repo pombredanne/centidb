@@ -124,7 +124,7 @@ class SqliteEngine(object):
         self.db = sqlite3.connect(self.PATH)
 
     def make_coll(self, use_indices):
-        self.db.execute('CREATE TABLE stuff(stub, name, location)')
+        self.db.execute('CREATE TABLE stuff(id INTEGER PRIMARY KEY, stub, name, location)')
         if use_indices:
             self.db.execute('CREATE INDEX foo ON stuff(name)')
             self.db.execute('CREATE INDEX bar ON stuff(location)')
@@ -137,11 +137,9 @@ class SqliteEngine(object):
     def insert(self, words, upper, stub, blind):
         c = self.db.cursor()
         for i in xrange(len(words)):
-            c.execute('INSERT INTO stuff VALUES(?, ?, ?)',
-                      (stub, words[i], upper[i]))
-        print 'commit'
+            c.execute('INSERT INTO stuff VALUES(?, ?, ?, ?)',
+                      (i, stub, words[i], upper[i]))
         self.db.commit()
-        print 'done'
 
     def randget_idx(self, words):
         c = self.db.cursor()
@@ -152,7 +150,7 @@ class SqliteEngine(object):
     def randget_id(self, words, upper):
         c = self.db.cursor()
         for i in xrange(len(words)):
-            c.execute('SELECT * FROM stuff WHERE oid = ?', (i,))
+            c.execute('SELECT * FROM stuff WHERE id = ?', (i,))
             next(c)
 
 
@@ -215,7 +213,7 @@ def x():
     ids = range(len(words))
     random.shuffle(ids)
 
-    engines = [LmdbEngine, SkiplistEngine] #, SqliteEngine]
+    engines = [LmdbEngine, SkiplistEngine, SqliteEngine]
     if plyvel:
         engines += [PlyvelEngine]
     if pymongo:
