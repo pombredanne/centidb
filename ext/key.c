@@ -180,6 +180,21 @@ key_dealloc(Key *self)
     PyObject_Del(self);
 }
 
+
+PyObject *
+acid_key_to_raw(Key *self, uint8_t *prefix, Py_ssize_t prefix_len)
+{
+    Py_ssize_t need = prefix_len + Py_SIZE(self);
+    PyObject *str = PyString_FromStringAndSize(NULL, need);
+    if(str) {
+        char *p = PyString_AS_STRING(str);
+        memcpy(p, prefix, prefix_len);
+        memcpy(p + prefix_len, self->p, Py_SIZE(self));
+    }
+    return str;
+}
+
+
 /**
  * Return a new string representing the raw bytes in this key. Requires a
  * "prefix" parameter, which may be the empty string, representing the prefix
@@ -193,15 +208,7 @@ key_to_raw(Key *self, PyObject *args)
     if(! PyArg_ParseTuple(args, "|z#", &prefix, &prefix_len)) {
         return NULL;
     }
-
-    Py_ssize_t need = prefix_len + Py_SIZE(self);
-    PyObject *str = PyString_FromStringAndSize(NULL, need);
-    if(str) {
-        char *p = PyString_AS_STRING(str);
-        memcpy(p, prefix, prefix_len);
-        memcpy(p + prefix_len, self->p, Py_SIZE(self));
-    }
-    return str;
+    return acid_key_to_raw(self, prefix, prefix_len);
 }
 
 /**
