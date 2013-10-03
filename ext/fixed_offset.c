@@ -20,6 +20,7 @@
 
 /** Array of cached FixedOffset instances, initially NULL. */
 static PyObject *instances[128];
+
 /** timedelta(0, 0, 0) */
 static PyObject *zero_delta;
 
