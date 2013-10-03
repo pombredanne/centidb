@@ -21,40 +21,9 @@
 #include "acid.h"
 #include "structmember.h"
 
-
+// Forward declarations.
 static PyTypeObject IteratorType;
 static PyTypeObject RangeIteratorType;
-
-typedef enum {
-    PRED_LE,
-    PRED_LT,
-    PRED_GT,
-    PRED_GE
-} Predicate;
-
-
-typedef struct {
-    PyObject_HEAD;
-
-    PyObject *engine;
-    PyObject *prefix;
-    Key *lo;
-    Key *hi;
-    Predicate lo_pred;
-    Predicate hi_pred;
-
-    Py_ssize_t max;
-    PyObject *it;
-
-    PyObject *tup; // Last tuple yielded by `it'.
-    PyObject *keys; // Current set of decoded keys.
-} Iterator;
-
-
-typedef struct {
-    Iterator base;
-} RangeIterator;
-
 
 
 // -------------
@@ -62,7 +31,11 @@ typedef struct {
 // -------------
 
 
-// Not exposed to Python.
+/**
+ * Iterator(engine, prefix). 
+ *
+ * Not exposed to Python.
+ */
 static Iterator *
 iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
@@ -72,6 +45,12 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     static char *keywords[] = {"engine", "prefix", NULL};
     if(! PyArg_ParseTupleAndKeywords(args, kwds, "OS", keywords,
                                      &engine, &prefix)) {
+        return NULL;
+    }
+
+    if(! PyString_GET_SIZE(prefix)) {
+        // next_greater() would fail in this case.
+        PyErr_SetString(PyExc_ValueError, "'prefix' cannot be 0 bytes.");
         return NULL;
     }
 
@@ -88,25 +67,86 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         self->max = -1;
         self->it = NULL;
         self->tup = NULL;
+        self->started = 0;
         self->keys = NULL;
+        self->stop = NULL;
+
+        if(! ((self->source = PyObject_GetAttrString(engine, "source")))) {
+            if(PyErr_Occurred()) {
+                PyErr_Clear();
+            }
+        } else if(self->source == Py_None) {
+            Py_CLEAR(self->source);
+        }
     }
     return self;
 }
 
+/**
+ * Fetch the next tuple from the physical iterator, ensuring it's of the right
+ * type, and that the key is within the collection prefix. Return 0 on success,
+ * or -1 on exhaustion or error. Use PyErr_Occurred() on -1 to test for error.
+ */
+static int
+iter_step(Iterator *self)
+{
+    if(! self->it) {
+        goto stop;
+    }
 
+    Py_CLEAR(self->tup);
+    if(! ((self->tup = PyIter_Next(self->it)))) {
+        goto stop;
+    }
+
+    if(! (PyTuple_CheckExact(self->tup) &&
+          PyTuple_GET_SIZE(self->tup) == 2)) {
+        PyErr_SetString(PyExc_TypeError,
+            "Engine.iter() must yield (key, value) strings or buffers.");
+        goto stop;
+    }
+
+    struct reader rdr;
+    if(acid_make_reader(&rdr, PyTuple_GET_ITEM(self->tup, 0))) {
+        goto stop;
+    }
+
+    Py_ssize_t prefix_len = PyString_GET_SIZE(self->prefix);
+    if(((rdr.e - rdr.p) < prefix_len) ||
+        memcmp(rdr.p, PyString_AS_STRING(self->prefix), prefix_len)) {
+        goto stop;
+    }
+
+    rdr.p += prefix_len;
+    self->keys = acid_keylist_from_raw(rdr.p, rdr.e-rdr.p, self->source);
+    return 0;
+
+stop:
+    Py_CLEAR(self->tup);
+    return -1;
+}
+
+/**
+ * Clear any references from the iterator to child objects. The iterator may be
+ * safely deallocated afterwards.
+ */
 static void
 iter_clear(Iterator *self)
 {
     Py_CLEAR(self->engine);
     Py_CLEAR(self->prefix);
+    Py_CLEAR(self->source);
     Py_CLEAR(self->lo);
     Py_CLEAR(self->hi);
     Py_CLEAR(self->it);
     Py_CLEAR(self->tup);
     Py_CLEAR(self->keys);
+    self->stop = NULL;
 }
 
-
+/**
+ * Iterator.set_lo().
+ */
 static PyObject *
 iter_set_lo(Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -127,7 +167,9 @@ iter_set_lo(Iterator *self, PyObject *args, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-
+/**
+ * Iterator.set_hi().
+ */
 static PyObject *
 iter_set_hi(Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -148,7 +190,9 @@ iter_set_hi(Iterator *self, PyObject *args, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-
+/**
+ * Iterator.set_prefix().
+ */
 static PyObject *
 iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -174,7 +218,9 @@ iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-
+/**
+ * Iterator.set_exact().
+ */
 static PyObject *
 iter_set_exact(Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -197,7 +243,9 @@ iter_set_exact(Iterator *self, PyObject *args, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-
+/**
+ * Iterator.set_max().
+ */
 static PyObject *
 iter_set_max(Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -209,7 +257,6 @@ iter_set_max(Iterator *self, PyObject *args, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-
 /**
  * Satisfy the iterator protocol by returning a reference to ourself.
  */
@@ -217,9 +264,65 @@ static PyObject *
 iter_iter(Iterator *self)
 {
     Py_INCREF(self);
-    return self;
+    return (PyObject *) self;
 }
 
+/**
+ * Setup the underlying iterator. Return 0 on success or -1 and set an
+ * exception on error.
+ */
+static int
+iter_start(Iterator *self, PyObject *key, int reverse)
+{
+    /* Not using PyObject_CallMethod it produces crap exceptions */
+    PyObject *func = PyObject_GetAttrString(self->engine, "iter");
+    if(! func) {
+        return -1;
+    }
+
+    Py_CLEAR(self->it);
+    PyObject *py_reverse = reverse ? Py_True : Py_False;
+    self->it = PyObject_CallFunction(func, "OO", key, py_reverse);
+    Py_DECREF(func);
+    Py_DECREF(key);
+    if(! self->it) {
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * Getter for `Iterator.keys`.
+ */
+static PyObject *iter_get_keys(Iterator *self)
+{
+    PyObject *out = Py_None;
+    if(self->keys) {
+        out = self->keys;
+    }
+    Py_INCREF(out);
+    return out;
+}
+
+/**
+ * Getter for `Iterator.data'.
+ */
+static PyObject *iter_get_data(Iterator *self)
+{
+    PyObject *out = Py_None;
+    if(self->tup) {
+        out = PyTuple_GET_ITEM(self->tup, 1);
+    }
+    Py_INCREF(out);
+    return out;
+}
+
+
+static PyGetSetDef iter_props[] = {
+    {"keys", (getter)iter_get_keys, NULL, "", NULL},
+    {"data", (getter)iter_get_data, NULL, "", NULL},
+    {NULL, NULL, NULL, NULL, NULL}
+};
 
 static PyMethodDef iter_methods[] = {
     {"set_lo", (PyCFunction)iter_set_lo, METH_VARARGS|METH_KEYWORDS, ""},
@@ -237,7 +340,8 @@ static PyTypeObject IteratorType = {
     .tp_iter = (getiterfunc) iter_iter,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "acid._iterators.Iterator",
-    .tp_methods = iter_methods
+    .tp_methods = iter_methods,
+    .tp_getset = iter_props
 };
 
 
@@ -247,7 +351,7 @@ static PyTypeObject IteratorType = {
 
 
 /**
- * Construct a RangeIterator from provided arguments.
+ * RangeIterator(engine, prefix).
  */
 static PyObject *
 rangeiter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
@@ -258,19 +362,8 @@ rangeiter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     return (PyObject *)self;
 }
 
-
 /**
- * Satify the iterator protocol by returning the next element from the key.
- */
-static PyObject *
-rangeiter_next(KeyIter *self)
-{
-    return NULL;
-}
-
-
-/**
- * Do all required to destroy the instance.
+ * RangeIterator.__del__().
  */
 static void
 rangeiter_dealloc(KeyIter *self)
@@ -279,14 +372,17 @@ rangeiter_dealloc(KeyIter *self)
     PyObject_Del(self);
 }
 
-
+/**
+ * Return 1 if the encoded key presented by `s[0..len]` matches the given `key`
+ * and `predicate`, otherwise 0.
+ */
 static int
-test_pred(Key *key, Predicate pred, uint8_t *s, Py_ssize_t len)
+test_pred(Key *key, Predicate predicate, uint8_t *s, Py_ssize_t len)
 {
-    int rc = acid_memcmp(key->s, Py_SIZE(key), s, len);
+    int rc = acid_memcmp(key->p, Py_SIZE(key), s, len);
 
     int out;
-    switch(pred) {
+    switch(predicate) {
     case PRED_LE:
         out = rc <= 0;
         break;
@@ -303,70 +399,138 @@ test_pred(Key *key, Predicate pred, uint8_t *s, Py_ssize_t len)
     return out;
 }
 
-
-static int
-rangeiter_step(RangeIterator *self)
+/**
+ * RangeIterator.next().
+ */
+static PyObject *
+rangeiter_next(RangeIterator *self)
 {
     if(! self->base.it) {
-        return -1;
+        return NULL;
     }
-
-    Py_CLEAR(self->base.tup);
-    self->base.tup = PyIter_Next(self->base.it);
-    if(! self->base.tup) {
-        return -1;
-    }
-
-    if(! (PyTuple_CheckExact(self->base.tup) &&
-          PyTuple_GET_SIZE(self->base.tup) == 2)) {
-        PyErr_SetString(PyExc_TypeError,
-            "Engine.iter() must yield (key, value) strings or buffers.");
+    if(! self->base.max--) {
+        iter_clear(&self->base);
         return NULL;
     }
 
-    struct reader krdr;
-    if(acid_make_reader(&rdr, PyTuple_GET_ITEM(self->base.tup, 0))) {
-        return -1;
+    /* First iteration was done by forward()/reverse(). */
+    if(! self->base.started) {
+        self->base.started = 1;
+        Py_INCREF(self);
+        return (PyObject *)self;
     }
 
-    if((krdr.e - krdr.p) < PyString_GET_SIZE(self->base.prefix)) {
-        Py_CLEAR(self->base.tup);
-        Py_CLEAR(self->base.it);
+    if(iter_step(&self->base)) {
         return NULL;
     }
 
-    self->base.keys = acid
+    Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
+    if(self->base.stop &&
+       !test_pred(self->base.stop, self->base.stop_pred, k->p, Py_SIZE(k))) {
+        iter_clear(&self->base);
+        return NULL;
+    }
+    Py_INCREF(self);
+    return (PyObject *)self;
 }
 
-
+/**
+ * RangeIterator.forward().
+ */
 static PyObject *
 rangeiter_forward(RangeIterator *self)
 {
     PyObject *key;
     if(self->base.lo) {
-        if(! ((key = acid_key_to_raw(self->base.lo, self->base.prefix)))) {
+        uint8_t *prefix = (uint8_t *) PyString_AS_STRING(self->base.prefix);
+        Py_ssize_t prefix_len = PyString_GET_SIZE(self->base.prefix);
+        if(! ((key = acid_key_to_raw(self->base.lo, prefix, prefix_len)))) {
             return NULL;
         }
     } else {
         key = self->base.prefix;
         Py_INCREF(key);
     }
+
     if(! key) {
         return NULL;
     }
-
-    if(! ((self->base.it = PyObject_CallMethodObjArgs(self->base.engine, "iter",
-                                                      key, Py_False, NULL)))) {
-        Py_DECREF(key);
+    if(iter_start(&self->base, key, 0)) {
         return NULL;
     }
 
+    if(! iter_step(&self->base)) {
+        /* When lo(closed=False), skip the start key. */
+        Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
+        if(self->base.lo && self->base.lo_pred == PRED_LT &&
+           !test_pred(self->base.lo, self->base.lo_pred, k->p, Py_SIZE(k))) {
+            iter_step(&self->base);
+        }
+    }
+
+    self->base.started = 0;
+    self->base.stop = self->base.hi;
+    self->base.stop_pred = self->base.hi_pred;
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+/**
+ * RangeIterator.reverse().
+ */
+static PyObject *
+rangeiter_reverse(RangeIterator *self)
+{
+    uint8_t *prefix = (uint8_t *) PyString_AS_STRING(self->base.prefix);
+    Py_ssize_t prefix_len = PyString_GET_SIZE(self->base.prefix);
+    PyObject *key;
+    if(self->base.hi) {
+        if(! ((key = acid_key_to_raw(self->base.hi, prefix, prefix_len)))) {
+            return NULL;
+        }
+    } else {
+        key = acid_next_greater_str(prefix, prefix_len);
+        DEBUG("dude abiding %p", key)
+    }
+
+    // TODO: may "return without exception set" if next_greater failed.
+    if(! key) {
+        DEBUG("dude abides")
+        return NULL;
+    }
+
+    if(iter_start(&self->base, key, 1)) {
+        return NULL;
+    }
+
+    /* Fetch the first key. If _step() returns false, then we may have seeked
+     * to first record of next prefix, so skip first returned result. */
+    if(iter_step(&self->base) && !self->base.it) {
+        return NULL;
+    }
+
+    /* When hi(closed=False), skip the start key. */
+    Key *k;
+    while(! (self->base.keys &&
+             ((k = (Key *)PyList_GET_ITEM(self->base.keys, 0),
+              test_pred(self->base.hi, self->base.hi_pred, k->p, Py_SIZE(k)))))) {
+        if(iter_step(&self->base) && !self->base.it) {
+            return NULL;
+        }
+    }
+
+    self->base.started = 0;
+    self->base.stop = self->base.lo;
+    self->base.stop_pred = self->base.lo_pred;
+    Py_INCREF(self);
+    return (PyObject *)self;
 }
 
 
 static PyMethodDef rangeiter_methods[] = {
     {"next", (PyCFunction)rangeiter_next, METH_NOARGS, ""},
     {"forward", (PyCFunction)rangeiter_forward, METH_NOARGS, ""},
+    {"reverse", (PyCFunction)rangeiter_reverse, METH_NOARGS, ""},
     {0, 0, 0, 0}
 };
 
@@ -383,7 +547,10 @@ static PyTypeObject RangeIteratorType = {
     .tp_methods = rangeiter_methods
 };
 
-
+/**
+ * Do all required to initialize acid._iterators, returning 0 on success or -1
+ * on error.
+ */
 int
 acid_init_iterators_module(void)
 {
