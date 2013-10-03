@@ -114,11 +114,16 @@ class CountingEngine(acid.engines.Engine):
 #
 
 def _reload_acid():
-    for key in sys.modules.keys():
-        if 'acid' in key and '_' not in key:
-            del sys.modules[key]
+    # FIXME find the proper way to do this.
     global acid
-    import acid
+    for _ in xrange(2):
+        for key in sys.modules.keys():
+            if key.startswith('acid.') and '_' not in key:
+                n = key[5:]
+                setattr(acid, n, reload(getattr(acid, n)))
+                sys.modules[key] = getattr(acid, n)
+        acid = reload(acid)
+        sys.modules['acid'] = acid
 
 
 class PythonMixin:
