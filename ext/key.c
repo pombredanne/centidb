@@ -33,11 +33,17 @@ static PyTypeObject KeyIterType;
 Key *
 acid_make_private_key(uint8_t *p, Py_ssize_t size)
 {
-    Key *self = PyObject_NewVar(Key, &KeyType, size);
+    if(size > KEY_MAXSIZE) {
+        PyErr_SetString(PyExc_ValueError, "Key is too long .");
+        return NULL;
+    }
+
+    Key *self = PyObject_Malloc(sizeof(Key) + size);
     if(self) {
-        self->hash = -1;
+        PyObject_Init((PyObject *)self, &KeyType);
+        Key_SIZE(self) = size;
         self->flags = KEY_PRIVATE;
-        self->p = (uint8_t *) &self[1];
+        self->p = ((uint8_t *) self) + sizeof(Key);
         if(p) {
             memcpy(self->p, p, size);
         }
@@ -52,19 +58,23 @@ acid_make_private_key(uint8_t *p, Py_ssize_t size)
 Key *
 acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
 {
-    Key *self = PyObject_NewVar(Key, &KeyType, sizeof(SharedKeyInfo));
-    // TODO: relies on arch padding rules?
-    SharedKeyInfo *info = (void *) &self[1];
+    if(size > KEY_MAXSIZE) {
+        PyErr_SetString(PyExc_ValueError, "Key is too long .");
+        return NULL;
+    }
+
+    Key *self = PyObject_Malloc(sizeof(Key) + sizeof(SharedKeyInfo));
+    // TODO: relies on arch padding rules
     if(self) {
+        PyObject_Init((PyObject *)self, &KeyType);
         if(ms_listen(source, (PyObject *) self)) {
-            PyObject_Del(self);
+            PyObject_Free(self);
             return NULL;
         }
-        self->hash = -1;
         self->flags = KEY_SHARED;
         self->p = p;
         Key_SIZE(self) = size;
-        info->source = source;
+        Key_INFO(self)->source = source;
         Py_INCREF(source);
     }
     return self;
@@ -77,18 +87,15 @@ acid_make_shared_key(PyObject *source, uint8_t *p, Py_ssize_t size)
 static int invalidate_shared_key(PyObject *source, PyObject *sink)
 {
     Key *self = (Key *)sink;
-    // TODO: relies on arch padding rules?
-    SharedKeyInfo *info = (void *) &self[1];
-
     assert(self->flags == KEY_SHARED);
-    PyObject *tmp_source = info->source;
+    PyObject *tmp_source = Key_INFO(self)->source;
     Py_ssize_t size = Key_SIZE(self);
     uint8_t *p;
 
     // Reuse the 12-24 bytes previously used for ShareKeyInfo if the key fits
     // in there, otherwise make a new heap allocation.
     if(size < sizeof(SharedKeyInfo)) {
-        p = (void *)info;
+        p = (void *)Key_INFO(self);
         self->flags = KEY_PRIVATE;
     } else {
         if(! ((p = malloc(size)))) {
@@ -104,6 +111,21 @@ static int invalidate_shared_key(PyObject *source, PyObject *sink)
     return 0;
 }
 #endif
+
+/**
+ * Calculate key size.
+ */
+static PyObject *
+key_sizeof(Key *self)
+{
+    size_t sz = sizeof(Key);
+    if(self->flags == KEY_SHARED) {
+        sz += sizeof(SharedKeyInfo);
+    } else {
+        sz += Key_SIZE(self);
+    }
+    return PyInt_FromSize_t(sz);
+}
 
 /**
  * Construct a Key from a sequence.
@@ -163,14 +185,14 @@ acid_make_key(PyObject *obj)
 static void
 key_dealloc(Key *self)
 {
-    SharedKeyInfo *info = (void *) &self[1];
 
     switch(self->flags) {
-    case KEY_SHARED:
+    case KEY_SHARED: {
 #ifdef HAVE_MEMSINK
-        ms_cancel(info->source, (PyObject *)self);
-        Py_DECREF(info->source);
+        ms_cancel(Key_INFO(self)->source, (PyObject *)self);
+        Py_DECREF(Key_INFO(self)->source);
 #endif
+        }
         break;
     case KEY_COPIED:
         free(self->p);
@@ -178,7 +200,7 @@ key_dealloc(Key *self)
     case KEY_PRIVATE:
         break;
     }
-    PyObject_Del(self);
+    PyObject_Free(self);
 }
 
 
@@ -363,18 +385,11 @@ key_iter(Key *self)
 static long
 key_hash(Key *self)
 {
-    long h = self->hash;
-    if(h == -1) {
-        uint8_t *p = self->p;
-        uint8_t *e = self->p + Key_SIZE(self);
-        h = 0;
-        while(p < e) {
-            h = (1000003 * h) ^ *p++;
-        }
-        if(h == -1) {
-            h--;
-        }
-        self->hash = h;
+    uint8_t *p = self->p;
+    uint8_t *e = self->p + Key_SIZE(self);
+    long h = 0;
+    while(p < e) {
+        h = (1000003 * h) ^ *p++;
     }
     return h;
 }
@@ -587,6 +602,7 @@ static PyMappingMethods key_mapping_methods = {
 };
 
 static PyMethodDef key_methods[] = {
+    {"__sizeof__",  (PyCFunction)key_sizeof,   METH_NOARGS, ""},
     {"from_hex",    (PyCFunction)key_from_hex, METH_VARARGS|METH_CLASS, ""},
     {"from_raw",    (PyCFunction)key_from_raw, METH_VARARGS|METH_CLASS, ""},
     {"to_raw",      (PyCFunction)key_to_raw,   METH_VARARGS,            ""},

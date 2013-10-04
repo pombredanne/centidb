@@ -36,7 +36,7 @@ if hasattr(platform, 'python_implementation'):
 else:
     use_cpython = True
 
-extra_compile_args = ['-std=c99', '-O0']
+extra_compile_args = ['-std=c99']
 if memsink:
     extra_compile_args += ['-DHAVE_MEMSINK',
                            '-I' + os.path.dirname(memsink.__file__)]
