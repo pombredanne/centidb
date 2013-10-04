@@ -51,8 +51,8 @@ static const char *hexster(uint8_t *s, Py_ssize_t len)
                   (int) PyString_GET_SIZE(x)));
 
 #define DUMPKEY(x) \
-    DEBUG("Key is len %d '%s'", (int) Py_SIZE(x), \
-          hexster(x->p, (int) Py_SIZE(x)))
+    DEBUG("Key is len %d '%s'", (int) Key_SIZE(x), \
+          hexster(x->p, (int) Key_SIZE(x)))
 
 
 
@@ -456,7 +456,7 @@ rangeiter_next(RangeIterator *self)
     }
 
     Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
-    if(! test_bound(self->base.stop, k->p, Py_SIZE(k))) {
+    if(! test_bound(self->base.stop, k->p, Key_SIZE(k))) {
         Py_CLEAR(self->base.it);
         Py_CLEAR(self->base.tup);
         Py_CLEAR(self->base.keys);
@@ -490,7 +490,7 @@ rangeiter_forward(RangeIterator *self)
     if(! iter_step(&self->base)) {
         /* When lo(closed=False), skip the start key. */
         Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
-        if(! test_bound(&self->base.lo, k->p, Py_SIZE(k))) {
+        if(! test_bound(&self->base.lo, k->p, Key_SIZE(k))) {
             iter_step(&self->base);
         }
     }
@@ -533,7 +533,7 @@ rangeiter_reverse(RangeIterator *self)
             continue;
         }
         Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
-        if(! test_bound(&self->base.hi, k->p, Py_SIZE(k))) {
+        if(! test_bound(&self->base.hi, k->p, Key_SIZE(k))) {
             continue;
         }
         break;

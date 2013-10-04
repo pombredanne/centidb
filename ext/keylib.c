@@ -496,7 +496,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
         if(type == &PyTuple_Type) {
             ret = write_tuple(&wtr, tups);
         } else if(type == KeyType) {
-            ret = writer_puts(&wtr, (void *) ((Key *)tups)->p, Py_SIZE(tups));
+            ret = writer_puts(&wtr, (void *) ((Key *)tups)->p, Key_SIZE(tups));
         } else {
             ret = acid_write_element(&wtr, tups);
         }
@@ -511,7 +511,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
                 ret = write_tuple(&wtr, elem);
             } else if(type == KeyType) {
                 ret = writer_puts(&wtr, (void *) ((Key *)elem)->p,
-                                  Py_SIZE(elem));
+                                  Key_SIZE(elem));
             } else {
                 ret = acid_write_element(&wtr, elem);
             }

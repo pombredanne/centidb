@@ -68,7 +68,7 @@ void
 acid_key_as_slice(Slice *slice, Key *key)
 {
     slice->p = key->p;
-    slice->e = key->p + Py_SIZE(key);
+    slice->e = key->p + Key_SIZE(key);
 }
 
 /**

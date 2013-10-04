@@ -159,7 +159,7 @@ typedef struct {
 
 
 /**
- * _keylib.Key. The key is contained in `p[0..Py_SIZE(key)]`.
+ * _keylib.Key. The key is contained in `p[0..Key_SIZE(key)]`.
  */
 typedef struct Key {
     PyObject_VAR_HEAD
@@ -170,6 +170,9 @@ typedef struct Key {
     /** In all modes, pointer to start of key. */
     uint8_t *p;
 } Key;
+
+#define Key_SIZE(k) Py_SIZE(k)
+
 
 /**
  * _keylib.KeyIterator.
