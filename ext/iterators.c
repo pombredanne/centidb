@@ -566,6 +566,72 @@ static PyTypeObject RangeIteratorType = {
 };
 
 /**
+ * acid._iterators.from_args().
+ */
+static PyObject *
+py_from_args(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *o;
+
+    if(PyTuple_GET_SIZE(args) != 9) {
+        PyErr_SetString(PyExc_TypeError, "from_args requires 9 parameters.");
+        return NULL;
+    }
+
+    Iterator *it = (Iterator *)PyTuple_GET_ITEM(args, 0);
+    if(! PyObject_IsInstance((PyObject *)it, (PyObject *)&IteratorType)) {
+        PyErr_SetString(PyExc_TypeError, "from_args arg #1 must be Iterator.");
+        return NULL;
+    }
+
+    // key=
+    if(((o = PyTuple_GET_ITEM(args, 1))) != Py_None) {
+        set_bound(&it->lo, acid_make_key(o), PRED_LE);
+        set_bound(&it->hi, it->lo.key, PRED_GE);
+        if(! it->lo.key) {
+            return NULL;
+        }
+        return PyObject_CallMethod((PyObject *)it, "forward", "");
+    // prefix=
+    } else if(((o = PyTuple_GET_ITEM(args, 4))) != Py_None) {
+        set_bound(&it->lo, acid_make_key(o), PRED_GE);
+        set_bound(&it->hi, acid_key_next_greater(it->lo.key), PRED_LT);
+        if(! (it->lo.key && it->hi.key)) {
+            return NULL;
+        }
+    } else {
+        int include = PyObject_IsTrue(PyTuple_GET_ITEM(args, 7));
+        if(((o = PyTuple_GET_ITEM(args, 2))) != Py_None) {
+            set_bound(&it->lo, acid_make_key(o), PRED_LE);
+            if(! it->lo.key) {
+                return NULL;
+            }
+        }
+        if(((o = PyTuple_GET_ITEM(args, 3))) != Py_None) {
+            set_bound(&it->hi, acid_make_key(o), include ? PRED_GE : PRED_GT);
+            if(! it->hi.key) {
+                return NULL;
+            }
+        }
+    }
+
+    if(((o = PyTuple_GET_ITEM(args, 6))) != Py_None) {
+        it->max = PyNumber_AsSsize_t(o, NULL);
+    }
+    o = PyTuple_GET_ITEM(args, 5);
+    char *meth = PyObject_IsTrue(o) ? "reverse" : "forward";
+    return PyObject_CallMethod((PyObject *)it, meth, "");
+}
+
+/**
+ * Table of functions exported in the acid._iterators module.
+ */
+static PyMethodDef IteratorsMethods[] = {
+    {"from_args", py_from_args, METH_VARARGS, "from_args"},
+    {NULL, NULL, 0, NULL}
+};
+
+/**
  * Do all required to initialize acid._iterators, returning 0 on success or -1
  * on error.
  */
@@ -579,7 +645,7 @@ acid_init_iterators_module(void)
         return -1;
     }
 
-    PyObject *mod = acid_init_module("_iterators", NULL);
+    PyObject *mod = acid_init_module("_iterators", /*IteratorsMethods*/0);
     if(! mod) {
         return -1;
     }
