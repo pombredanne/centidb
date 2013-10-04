@@ -564,7 +564,7 @@ class LmdbEngine(Engine):
 
     def begin(self, write=False):
         assert not self.txn
-        return LmdbEngine(self.env, self.env.begin(write=write))
+        return LmdbEngine(self.env, self.env.begin(write=write, buffers=True))
 
     def abort(self):
         self.txn.abort()
