@@ -467,7 +467,6 @@ rangeiter_next(RangeIterator *self)
     return (PyObject *)self;
 }
 
-
 /**
  * RangeIterator.forward().
  */
@@ -518,11 +517,7 @@ rangeiter_reverse(RangeIterator *self)
     }
 
     // TODO: may "return without exception set" if next_greater failed.
-    if(! key) {
-        return NULL;
-    }
-
-    if(iter_start(&self->base, key, 1)) {
+    if(! (key && !iter_start(&self->base, key, 1))) {
         return NULL;
     }
 
@@ -532,7 +527,6 @@ rangeiter_reverse(RangeIterator *self)
         return NULL;
     }
 
-    // TODO FIXME I DONT EVEN
     /* When hi(closed=False), skip the start key. */
     for(; self->base.it; iter_step(&self->base)) {
         if(! self->base.keys) {
@@ -550,7 +544,6 @@ rangeiter_reverse(RangeIterator *self)
     Py_INCREF(self);
     return (PyObject *)self;
 }
-
 
 static PyMethodDef rangeiter_methods[] = {
     {"next", (PyCFunction)rangeiter_next, METH_NOARGS, ""},
