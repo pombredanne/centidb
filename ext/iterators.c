@@ -119,7 +119,6 @@ static void set_bound(Bound *bound, Key *key, Predicate pred)
     if(key) {
         Py_INCREF(key);
     }
-    DUMPKEY(key);
     bound->key = key;
     bound->pred = pred;
 }
