@@ -37,9 +37,7 @@ from acid import keylib
 
 __all__ = ['Store', 'Collection', 'Index', 'open', 'abort']
 
-ITEMGETTER_0 = operator.itemgetter(0)
 ITEMGETTER_1 = operator.itemgetter(1)
-ITEMGETTER_2 = operator.itemgetter(2)
 ATTRGETTER_KEY = operator.attrgetter('key')
 ATTRGETTER_DATA = operator.attrgetter('data')
 
@@ -276,7 +274,7 @@ class Collection(object):
         and does not need explicitly set in that case.
         """
         self.info['blind'] = bool(blind)
-        self.store.set_info2(KIND_TABLE, self.info['name'], self.info)
+        self.store.set_meta(KIND_TABLE, self.info['name'], self.info)
 
     def add_index(self, name, func):
         """Associate an index with the collection. Index metadata will be
@@ -324,7 +322,7 @@ class Collection(object):
         """
         assert name not in self.indices
         info_name = 'index:%s:%s' % (self.info['name'], name)
-        info = self.store.get_index_info(info_name, self.info['name'])
+        info = self.store.get_index_meta(info_name, self.info['name'])
         index = Index(self, info, func)
         self.indices[name] = index
         return index
@@ -707,20 +705,41 @@ class Store(object):
         else:
             return func()
 
-    def get_info2(self, kind, name):
+    def get_meta(self, kind, name):
+        """Fetch a dictionary of metadata for the named object. `kind` may be
+        any of the following :py:mod:`acid.core` constants:
+
+            ``acid.core.KIND_TABLE``
+            ``acid.core.KIND_INDEX``
+            ``acid.core.KIND_ENCODER``
+            ``acid.core.KIND_COUNTER``
+            ``acid.core.KIND_STRUCT``
+        """
         func = lambda: list(self._meta.items(prefix=(kind, name)))
         return dict((a, v) for (n, k, a,), (v,) in self.in_txn(func))
 
-    def set_info2(self, kind, name, dct):
-        def _set_info_txn():
+    def set_meta(self, kind, name, dct):
+        """Replace the stored metadata for `name` using `dct`."""
+        def _set_meta_txn():
             for key in list(self._meta.keys(prefix=(kind, name))):
                 self._meta.delete(key)
             for key, value in dct.iteritems():
                 self._meta.put(value, key=(kind, name, key))
-        return self.in_txn(_set_info_txn)
+        return self.in_txn(_set_meta_txn)
+
+    def get_index_meta(self, name, index_for):
+        dct = self.get_meta(KIND_INDEX, name)
+        if not dct:
+            idx = self.count('\x00collections_idx', init=10)
+            dct = {'idx': idx, 'index_for': index_for}
+            self.set_meta(KIND_INDEX, name, dct)
+        return dct
 
     def rename_collection(self, old, new):
-        if self.get_info2(KIND_TABLE, name):
+        """Rename the collection named `old` to `new`. Any existing
+        :py:class:`Collection` instances will be updated. Raises
+        :py:class:`acid.errors.NameInUse` on error."""
+        if self.get_meta(KIND_TABLE, name):
             raise errors.NameInUse('collection %r already exists.' % (new,))
         coll = self[old]
         info = self.get_info(KIND_TABLE, name)
@@ -728,7 +747,7 @@ class Store(object):
 
     def add_collection(self, name, **kwargs):
         """Shorthand for `acid.Collection(self, **kwargs)`."""
-        old = self.get_info2(KIND_TABLE, name)
+        old = self.get_meta(KIND_TABLE, name)
         encoder = kwargs.get('encoder', encoders.PICKLE)
         new = {'name': name, 'encoder': encoder.name}
         if old:
@@ -738,26 +757,18 @@ class Store(object):
                                              (key, value, new[key]))
         else:
             new['idx'] = self.count('\x00collections_idx', init=10)
-            self.set_info2(KIND_TABLE, name, new)
+            self.set_meta(KIND_TABLE, name, new)
         return self.__getitem__(name, kwargs)
 
     def __getitem__(self, name, kwargs={}):
         try:
             return self._colls[name]
         except KeyError:
-            info = self.get_info2(KIND_TABLE, name)
+            info = self.get_meta(KIND_TABLE, name)
             if not info:
                 raise
             self._colls[name] = Collection(self, info, **kwargs)
             return self._colls[name]
-
-    def get_index_info(self, name, index_for):
-        dct = self.get_info2(KIND_INDEX, name)
-        if not dct:
-            idx = self.count('\x00collections_idx', init=10)
-            dct = {'idx': idx, 'index_for': index_for}
-            self.set_info2(KIND_INDEX, name, dct)
-        return dct
 
     def add_encoder(self, encoder):
         """Register an :py:class:`acid.encoders.Encoder` so that
@@ -765,12 +776,12 @@ class Store(object):
         try:
             return self._encoder_prefix[encoder]
         except KeyError:
-            dct = self.get_info2(KIND_ENCODER, encoder.name)
+            dct = self.get_meta(KIND_ENCODER, encoder.name)
             idx = dct.get('idx')
             if not dct:
                 idx = self.count('\x00encoder_idx', init=10)
                 assert idx <= 240
-                self.set_info2(KIND_ENCODER, encoder.name, {'idx': idx})
+                self.set_meta(KIND_ENCODER, encoder.name, {'idx': idx})
             self._encoder_prefix[encoder] = keylib.pack_int(idx)
             self._prefix_encoder[keylib.pack_int(idx)] = encoder
             return self._encoder_prefix[encoder]
