@@ -29,6 +29,7 @@ import sys
 import threading
 import warnings
 
+import acid
 from acid import encoders
 from acid import errors
 from acid import iterators
@@ -812,7 +813,8 @@ class Store(object):
             self._meta.put(value + n, key=key)
         return 0L + value
 
-try:
-    from acid._keylib import decode_offsets
-except ImportError:
-    pass
+if acid._use_speedups:
+    try:
+        from acid._keylib import decode_offsets
+    except ImportError:
+        pass
