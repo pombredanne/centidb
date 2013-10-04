@@ -26,6 +26,36 @@ static PyTypeObject IteratorType;
 static PyTypeObject RangeIteratorType;
 
 
+static char nibble(int n)
+{
+    return (n >= 10) ? ('a' + (n - 10)) : ('0' + n);
+}
+
+static const char *hexster(uint8_t *s, Py_ssize_t len)
+{
+    static uint8_t buf[512];
+    uint8_t *p = buf;
+    for(int i = 0; i < len; i++) {
+        *p++ = nibble((s[i] & 0xF0) >> 4);
+        *p++ = nibble((s[i] & 0xF));
+        *p++ = ' ';
+    }
+    buf[len ? ((3 * len) - 1) : 0] = '\0';
+    return (char *)buf;
+}
+
+
+#define DUMPSTR(x) \
+    DEBUG("Str is len %d '%s'", (int) PyString_GET_SIZE(x), \
+          hexster(PyString_AS_STRING(x), \
+                  (int) PyString_GET_SIZE(x)));
+
+#define DUMPKEY(x) \
+    DEBUG("Key is len %d '%s'", (int) Py_SIZE(x), \
+          hexster(x->p, (int) Py_SIZE(x)))
+
+
+
 // -------------
 // Iterator Type
 // -------------
@@ -89,6 +119,7 @@ static void set_bound(Bound *bound, Key *key, Predicate pred)
     if(key) {
         Py_INCREF(key);
     }
+    DUMPKEY(key);
     bound->key = key;
     bound->pred = pred;
 }
@@ -248,7 +279,7 @@ static PyObject *
 iter_set_max(Iterator *self, PyObject *args, PyObject *kwds)
 {
     static char *keywords[] = {"max_", NULL};
-    if(! PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords,
+    if(! PyArg_ParseTupleAndKeywords(args, kwds, "n", keywords,
                                      &self->max)) {
         return NULL;
     }
@@ -421,11 +452,9 @@ rangeiter_next(RangeIterator *self)
     /* First iteration was done by forward()/reverse(). */
     if(! self->base.started) {
         self->base.started = 1;
-        Py_INCREF(self);
-        return (PyObject *)self;
-    }
-
-    if(iter_step(&self->base)) {
+        DEBUG("starting")
+    } else if(iter_step(&self->base)) {
+        DEBUG("step failed")
         return NULL;
     }
 
@@ -436,9 +465,11 @@ rangeiter_next(RangeIterator *self)
         Py_CLEAR(self->base.keys);
         return NULL;
     }
+
     Py_INCREF(self);
     return (PyObject *)self;
 }
+
 
 /**
  * RangeIterator.forward().
@@ -456,10 +487,7 @@ rangeiter_forward(RangeIterator *self)
         Py_INCREF(key);
     }
 
-    if(! key) {
-        return NULL;
-    }
-    if(iter_start(&self->base, key, 0)) {
+    if(! (key && !iter_start(&self->base, key, 0))) {
         return NULL;
     }
 
@@ -468,6 +496,7 @@ rangeiter_forward(RangeIterator *self)
         Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
         if(! test_bound(&self->base.lo, k->p, Py_SIZE(k))) {
             iter_step(&self->base);
+            DEBUG("nudged")
         }
     }
 
