@@ -264,8 +264,8 @@ iter_set_exact(Iterator *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    set_bound(&self->lo, acid_make_key(key_obj), PRED_GE);
-    set_bound(&self->hi, self->lo.key, PRED_LE);
+    set_bound(&self->lo, acid_make_key(key_obj), PRED_LE);
+    set_bound(&self->hi, self->lo.key, PRED_GE);
     if(! self->lo.key) {
         return NULL;
     }
@@ -452,9 +452,7 @@ rangeiter_next(RangeIterator *self)
     /* First iteration was done by forward()/reverse(). */
     if(! self->base.started) {
         self->base.started = 1;
-        DEBUG("starting")
     } else if(iter_step(&self->base)) {
-        DEBUG("step failed")
         return NULL;
     }
 
@@ -496,7 +494,6 @@ rangeiter_forward(RangeIterator *self)
         Key *k = (Key *)PyList_GET_ITEM(self->base.keys, 0);
         if(! test_bound(&self->base.lo, k->p, Py_SIZE(k))) {
             iter_step(&self->base);
-            DEBUG("nudged")
         }
     }
 
