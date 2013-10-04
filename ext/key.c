@@ -43,9 +43,9 @@ acid_make_private_key(uint8_t *p, Py_ssize_t size)
         PyObject_Init((PyObject *)self, &KeyType);
         Key_SIZE(self) = size;
         self->flags = KEY_PRIVATE;
-        self->p = ((uint8_t *) self) + sizeof(Key);
+        self->p = ((uint8_t *) self) + sizeof(Key) + KEY_PREFIX_SLACK;
         if(p) {
-            memcpy(self->p, p, size);
+            memcpy(self->p + KEY_PREFIX_SLACK, p, size);
         }
     }
     return self;
@@ -104,7 +104,7 @@ static int invalidate_shared_key(PyObject *source, PyObject *sink)
         self->flags = KEY_COPIED;
     }
 
-    memcpy(p, self->p, Key_SIZE(self));
+    memcpy(p, Key_DATA(self), Key_SIZE(self));
     self->p = p;
     // Deref and forget the source object.
     Py_DECREF(tmp_source);
@@ -213,7 +213,7 @@ acid_key_to_raw(Key *self, Slice *prefix)
     if(str) {
         char *p = PyString_AS_STRING(str);
         memcpy(p, prefix->p, prefix_len);
-        memcpy(p + prefix_len, self->p, Key_SIZE(self));
+        memcpy(p + prefix_len, Key_DATA(self), Key_SIZE(self));
     }
     return str;
 }
@@ -243,7 +243,8 @@ static PyObject *
 key_to_hex(Key *self, PyObject *args, PyObject *kwds)
 {
     PyObject *out = NULL;
-    PyObject *raw = PyString_FromStringAndSize((void *)self->p, Key_SIZE(self));
+    PyObject *raw = PyString_FromStringAndSize((char *)Key_DATA(self),
+                                                       Key_SIZE(self));
     if(raw) {
         out = PyObject_CallMethod(raw, "encode", "s", "hex");
         Py_DECREF(raw);
@@ -267,9 +268,9 @@ key_next_greater(Key *self, PyObject *args, PyObject *kwds)
         Py_RETURN_NONE;
     }
 
-    Key *key = acid_make_private_key(self->p, goodlen);
+    Key *key = acid_make_private_key(Key_DATA(self), goodlen);
     if(key) {
-        key->p[goodlen - 1]++;
+        Key_DATA(key)[goodlen - 1]++;
     }
     return (PyObject *)key;
 }
@@ -385,8 +386,8 @@ key_iter(Key *self)
 static long
 key_hash(Key *self)
 {
-    uint8_t *p = self->p;
-    uint8_t *e = self->p + Key_SIZE(self);
+    uint8_t *p = Key_DATA(self);
+    uint8_t *e = Key_SIZE(self) + p;
     long h = 0;
     while(p < e) {
         h = (1000003 * h) ^ *p++;
@@ -403,9 +404,9 @@ key_richcompare(Key *self, PyObject *other, int op)
     int cmpres = 0;
     if(Py_TYPE(other) == &KeyType) {
         Py_ssize_t s1 = Key_SIZE(self);
-        Py_ssize_t s2 = Key_SIZE(other);
+        Py_ssize_t s2 = Key_SIZE((Key *)other);
         Py_ssize_t minsize = (s1 < s2) ? s1 : s2;
-        cmpres = memcmp(self->p, ((Key *) other)->p, minsize);
+        cmpres = memcmp(Key_DATA(self), Key_DATA((Key *) other), minsize);
         if(! cmpres) {
             if(s1 < s2) {
                 cmpres = -1;
@@ -421,7 +422,7 @@ key_richcompare(Key *self, PyObject *other, int op)
 
         Py_ssize_t ti = 0;
         Py_ssize_t remain = Key_SIZE(self);
-        uint8_t *kp = self->p;
+        uint8_t *kp = Key_DATA(self);
         while(remain && ti < PyTuple_GET_SIZE(other)) {
             if(acid_write_element(&wtr, PyTuple_GET_ITEM(other, ti++))) {
                 acid_writer_abort(&wtr);
@@ -487,7 +488,9 @@ key_richcompare(Key *self, PyObject *other, int op)
 static Py_ssize_t
 key_length(Key *self)
 {
-    struct reader rdr = {self->p, self->p + Key_SIZE(self)};
+    struct reader rdr;
+    rdr.p = Key_DATA(self);
+    rdr.e = Key_SIZE(self) + rdr.p;
     int eof = rdr.p == rdr.e;
     Py_ssize_t len = 0;
 
@@ -510,14 +513,15 @@ key_concat(Key *self, PyObject *other)
     struct writer wtr;
 
     if(Py_TYPE(other) == &KeyType) {
-        out = acid_make_private_key(NULL, Key_SIZE(self) + Key_SIZE(other));
+        Key *otherk = (Key *)other;
+        out = acid_make_private_key(NULL, Key_SIZE(self) + Key_SIZE(otherk));
         if(out) {
-            memcpy(out->p, self->p, Key_SIZE(self));
-            memcpy(out->p + Key_SIZE(self), ((Key *)other)->p, Key_SIZE(other));
+            memcpy(Key_DATA(out), Key_DATA(self), Key_SIZE(self));
+            memcpy(Key_DATA(out), Key_DATA(otherk), Key_SIZE(otherk));
         }
     } else if(PyTuple_CheckExact(other)) {
         if(! acid_writer_init(&wtr, Key_SIZE(self) * 2)) {
-            memcpy(acid_writer_ptr(&wtr), self->p, Key_SIZE(self));
+            memcpy(acid_writer_ptr(&wtr), Key_DATA(self), Key_SIZE(self));
             wtr.pos += Key_SIZE(self);
 
             Py_ssize_t len = PyTuple_GET_SIZE(other);
@@ -566,7 +570,9 @@ key_subscript(Key *self, PyObject *key)
         if(i == -1 && PyErr_Occurred()) {
             return NULL;
         }
-        struct reader rdr = {self->p, self->p + Key_SIZE(self)};
+        struct reader rdr;
+        rdr.p = Key_DATA(self);
+        rdr.e = Key_SIZE(self) + rdr.p;
         int eof = rdr.p == rdr.e;
 
         if(i < 0) {
@@ -682,10 +688,10 @@ keyiter_next(KeyIter *self)
         return NULL;
     }
 
-    uint8_t *p = self->key->p + self->pos;
+    uint8_t *p = Key_DATA(self->key) + self->pos;
     struct reader rdr = {p, p + (size - self->pos)};
     PyObject *elem = acid_read_element(&rdr);
-    self->pos = (rdr.p - self->key->p);
+    self->pos = rdr.p - Key_DATA(self->key);
     return elem;
 }
 

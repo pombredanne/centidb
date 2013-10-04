@@ -171,8 +171,10 @@ typedef struct Key {
     uint16_t /*enum KeyFlags*/ flags;
 } Key;
 
+#define KEY_PREFIX_SLACK 0
 #define KEY_MAXSIZE UINT16_MAX
-#define Key_SIZE(k) (((Key *)k)->size)
+#define Key_DATA(k) ((k)->p + KEY_PREFIX_SLACK)
+#define Key_SIZE(k) ((k)->size)
 // TODO: relies on arch padding rules?
 #define Key_INFO(k) ((SharedKeyInfo *) (((uint8_t *)k) + sizeof(Key)))
 
