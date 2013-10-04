@@ -162,16 +162,19 @@ typedef struct {
  * _keylib.Key. The key is contained in `p[0..Key_SIZE(key)]`.
  */
 typedef struct Key {
-    PyObject_VAR_HEAD
-    /** Cached key hash value; initially -1 for "unknown". */
-    long hash;
-    /** Key storage mode. */
-    enum KeyFlags flags;
+    PyObject_HEAD
     /** In all modes, pointer to start of key. */
     uint8_t *p;
+    /** Data size (max 64kb). */
+    uint16_t size;
+    /** Storage mode. */
+    uint16_t /*enum KeyFlags*/ flags;
 } Key;
 
-#define Key_SIZE(k) Py_SIZE(k)
+#define KEY_MAXSIZE UINT16_MAX
+#define Key_SIZE(k) (((Key *)k)->size)
+// TODO: relies on arch padding rules?
+#define Key_INFO(k) ((SharedKeyInfo *) (((uint8_t *)k) + sizeof(Key)))
 
 
 /**
