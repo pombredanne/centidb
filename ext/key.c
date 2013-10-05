@@ -403,17 +403,10 @@ key_richcompare(Key *self, PyObject *other, int op)
 {
     int cmpres = 0;
     if(Py_TYPE(other) == &KeyType) {
-        Py_ssize_t s1 = Key_SIZE(self);
-        Py_ssize_t s2 = Key_SIZE((Key *)other);
-        Py_ssize_t minsize = (s1 < s2) ? s1 : s2;
-        cmpres = memcmp(Key_DATA(self), Key_DATA((Key *) other), minsize);
-        if(! cmpres) {
-            if(s1 < s2) {
-                cmpres = -1;
-            } else if(s1 > s2) {
-                cmpres = 1;
-            }
-        }
+        Key *otherk = (Key *)other;
+        Slice s1 = {Key_DATA(self), Key_DATA(self) + Key_SIZE(self)};
+        Slice s2 = {Key_DATA(otherk), Key_DATA(otherk) + Key_SIZE(otherk)};
+        cmpres = acid_memcmp(&s1, &s2);
     } else if(Py_TYPE(other) == &PyTuple_Type) {
         struct writer wtr;
         if(acid_writer_init(&wtr, 64)) {
