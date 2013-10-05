@@ -185,15 +185,13 @@ acid_make_key(PyObject *obj)
 static void
 key_dealloc(Key *self)
 {
-
-    switch(self->flags) {
-    case KEY_SHARED: {
+    switch((enum KeyFlags) self->flags) {
 #ifdef HAVE_MEMSINK
+    case KEY_SHARED:
         ms_cancel(Key_INFO(self)->source, (PyObject *)self);
         Py_DECREF(Key_INFO(self)->source);
-#endif
-        }
         break;
+#endif
     case KEY_COPIED:
         PyObject_Free(self->p);
         break;
