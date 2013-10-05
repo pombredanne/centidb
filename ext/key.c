@@ -98,7 +98,7 @@ static int invalidate_shared_key(PyObject *source, PyObject *sink)
         p = (void *)Key_INFO(self);
         self->flags = KEY_PRIVATE;
     } else {
-        if(! ((p = malloc(size)))) {
+        if(! ((p = PyObject_Malloc(size)))) {
             return -1;
         }
         self->flags = KEY_COPIED;
@@ -195,7 +195,7 @@ key_dealloc(Key *self)
         }
         break;
     case KEY_COPIED:
-        free(self->p);
+        PyObject_Free(self->p);
         break;
     case KEY_PRIVATE:
         break;
