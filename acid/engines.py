@@ -254,7 +254,7 @@ class SkiplistEngine(Engine):
         self.iter = self.sl.items
 
     def put(self, key, value):
-        self.sl.put(str(key), str(value))
+        self.sl.insert(str(key), str(value))
 
     def close(self):
         self.sl = None
