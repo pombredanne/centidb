@@ -38,14 +38,14 @@ acid_make_private_key(uint8_t *p, Py_ssize_t size)
         return NULL;
     }
 
-    Key *self = PyObject_Malloc(sizeof(Key) + size);
+    Key *self = PyObject_Malloc(sizeof(Key) + KEY_PREFIX_SLACK + size);
     if(self) {
         PyObject_Init((PyObject *)self, &KeyType);
         Key_SIZE(self) = size;
         self->flags = KEY_PRIVATE;
         self->p = ((uint8_t *) self) + sizeof(Key) + KEY_PREFIX_SLACK;
         if(p) {
-            memcpy(self->p + KEY_PREFIX_SLACK, p, size);
+            memcpy(Key_DATA(self), p, size);
         }
     }
     return self;
@@ -89,24 +89,26 @@ static int invalidate_shared_key(PyObject *source, PyObject *sink)
     Key *self = (Key *)sink;
     assert(self->flags == KEY_SHARED);
     PyObject *tmp_source = Key_INFO(self)->source;
+
+    uint8_t *old_data = Key_DATA(self);
     Py_ssize_t size = Key_SIZE(self);
-    uint8_t *p;
 
     // Reuse the 12-24 bytes previously used for ShareKeyInfo if the key fits
     // in there, otherwise make a new heap allocation.
-    if(size < sizeof(SharedKeyInfo)) {
-        p = (void *)Key_INFO(self);
+    if((size - KEY_PREFIX_SLACK) < sizeof(SharedKeyInfo)) {
+        self->p = KEY_PREFIX_SLACK + (uint8_t *)Key_INFO(self);
         self->flags = KEY_PRIVATE;
     } else {
-        if(! ((p = PyObject_Malloc(size)))) {
+        uint8_t *p;
+        if(! ((p = PyObject_Malloc(KEY_PREFIX_SLACK + size)))) {
             return -1;
         }
+        self->p = p;
         self->flags = KEY_COPIED;
     }
 
-    memcpy(p, Key_DATA(self), Key_SIZE(self));
-    self->p = p;
-    // Deref and forget the source object.
+    // Copy data then deref and forget the old source.
+    memcpy(Key_DATA(self), old_data, size);
     Py_DECREF(tmp_source);
     return 0;
 }
@@ -201,11 +203,23 @@ key_dealloc(Key *self)
     PyObject_Free(self);
 }
 
-
+/**
+ * Return a string or buffer object representing a key with the given prefix.
+ */
 PyObject *
 acid_key_to_raw(Key *self, Slice *prefix)
 {
     Py_ssize_t prefix_len = prefix->e - prefix->p;
+
+    // Does the requested prefix fit in the slack area?
+    if(self->flags != KEY_SHARED && prefix_len <= KEY_PREFIX_SLACK) {
+        uint8_t *p = Key_DATA(self) - prefix_len;
+        memcpy(p, prefix->p, prefix_len);
+        return PyBuffer_FromObject(/* base */   (PyObject *)self,
+                                   /* offset */ KEY_PREFIX_SLACK - prefix_len,
+                                   /* size */   prefix_len + Key_SIZE(self));
+    }
+
     Py_ssize_t need = prefix_len + Key_SIZE(self);
     PyObject *str = PyString_FromStringAndSize(NULL, need);
     if(str) {
@@ -215,7 +229,6 @@ acid_key_to_raw(Key *self, Slice *prefix)
     }
     return str;
 }
-
 
 /**
  * Return a new string representing the raw bytes in this key. Requires a
@@ -585,6 +598,36 @@ key_subscript(Key *self, PyObject *key)
     }
 }
 
+/**
+ */
+static Py_ssize_t
+key_getreadbuffer(Key *self, Py_ssize_t segment, void **pp)
+{
+    uint8_t *p = self->p;
+    Py_ssize_t ret = Key_SIZE(self);
+    if(self->flags != KEY_SHARED) {
+        ret += KEY_PREFIX_SLACK;
+        p -= KEY_PREFIX_SLACK;
+    }
+    *pp = p;
+    return ret;
+}
+
+/**
+ */
+static Py_ssize_t
+key_getsegcount(Key *self, Py_ssize_t *lenp)
+{
+    if(lenp) {
+        Py_ssize_t ret = Key_SIZE(self);
+        if(self->flags != KEY_SHARED) {
+            ret += KEY_PREFIX_SLACK;
+        }
+        *lenp = ret;
+    }
+    return 1;
+}
+
 
 static PySequenceMethods key_seq_methods = {
     .sq_length = (lenfunc) key_length,
@@ -596,6 +639,13 @@ static PySequenceMethods key_seq_methods = {
 static PyMappingMethods key_mapping_methods = {
     .mp_length = (lenfunc) key_length,
     .mp_subscript = (binaryfunc) key_subscript
+};
+
+/** Needed to implement buffer interface. */
+static PyBufferProcs key_buffer_methods = {
+    .bf_getreadbuffer = (readbufferproc)key_getreadbuffer,
+    .bf_getsegcount = (segcountproc)key_getsegcount,
+    .bf_getcharbuffer = (charbufferproc)key_getreadbuffer
 };
 
 static PyMethodDef key_methods[] = {
@@ -619,9 +669,11 @@ static PyTypeObject KeyType = {
     .tp_new = key_new,
     .tp_dealloc = (destructor) key_dealloc,
     .tp_repr = (reprfunc) key_repr,
+    .tp_str = (reprfunc) key_repr, // avoid str() using buffer interface.
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "acid._keylib.Key",
     .tp_methods = key_methods,
+    .tp_as_buffer = &key_buffer_methods,
     .tp_as_sequence = &key_seq_methods,
     .tp_as_mapping = &key_mapping_methods
 };
