@@ -387,10 +387,7 @@ static PyTypeObject IteratorType = {
 static PyObject *
 rangeiter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
-    RangeIterator *self = (RangeIterator *) iter_new(cls, args, kwds);
-    if(self) {
-    }
-    return (PyObject *)self;
+    return (PyObject *) iter_new(cls, args, kwds);
 }
 
 /**
