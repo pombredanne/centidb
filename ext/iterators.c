@@ -162,6 +162,9 @@ iter_step(Iterator *self)
 
     rdr.p += prefix_len;
     self->keys = acid_keylist_from_raw(rdr.p, rdr.e-rdr.p, self->source);
+    if(! self->keys) {
+        return -1;
+    }
     return 0;
 }
 
