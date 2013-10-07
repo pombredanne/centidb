@@ -818,6 +818,7 @@ acid_skip_element(struct reader *rdr, int *eof)
     uint8_t ch = *rdr->p++;
     switch(ch) {
     case KIND_BOOL:
+        rdr->p++;
     case KIND_NULL:
         break;
     case KIND_NEG_TIME:
