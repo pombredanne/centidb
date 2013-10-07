@@ -82,6 +82,11 @@ class Time(Field):
     """
 
 
+class List(Field):
+    """A list field.
+    """
+
+
 def _check_constraint(func, model):
     """on_update trigger that checks a constraint is correct. The metaclass
     wraps this in a functools.partial() and adds to to the list of on_update
