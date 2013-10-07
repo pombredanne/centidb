@@ -249,10 +249,12 @@ class SkiplistEngine(Engine):
     def __init__(self, maxsize=65535):
         self.sl = SkipList(maxsize)
         self.get = self.sl.search
-        self.put = self.sl.insert
         self.replace = self.sl.insert
         self.delete = self.sl.delete
         self.iter = self.sl.items
+
+    def put(self, key, value):
+        self.sl.put(str(key), str(value))
 
     def close(self):
         self.sl = None
@@ -277,6 +279,9 @@ class ListEngine(Engine):
             return self.items[idx][1]
 
     def put(self, k, v):
+        # Ensure we don't hold on to buffers.
+        k = str(k)
+        v = str(v)
         idx = bisect.bisect_left(self.items, (k,))
         if idx < len(self.items) and self.items[idx][0] == k:
             self.size += len(v) - len(self.items[idx][1])
