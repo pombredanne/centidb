@@ -170,6 +170,12 @@ class CollBasicTest:
         self.txn.__enter__()
         self.coll = self.store.add_collection('coll1')
 
+    def test_put(self):
+        self.store.count('key:coll1') # Ensure counter exists before len()
+        old_items = len(self.e.items)
+        k = self.coll.put('test')
+        assert (old_items + 1) == len(self.e.items)
+
     def testGetNoExist(self):
         eq(None, self.coll.get('missing'))
 
