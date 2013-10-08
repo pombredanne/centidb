@@ -38,6 +38,9 @@
 #define DEBUG(s, ...) fprintf(stderr, \
     "acid: %s:%s:%d: " s "\n", __FILE__, __func__, __LINE__, ## __VA_ARGS__);
 
+#define DUMPBUF(x, z) \
+    DEBUG("Buf is len %zd '%s'", z, acid_debug_hex(x, z));
+
 #define DUMPSTR(x) \
     DEBUG("Str is len %d '%s'", (int) PyString_GET_SIZE(x), \
           acid_debug_hex(PyString_AS_STRING(x), PyString_GET_SIZE(x)));
