@@ -627,7 +627,7 @@ py_from_args(PyObject *self, PyObject *args, PyObject *kwds)
  * Table of functions exported in the acid._iterators module.
  */
 static PyMethodDef IteratorsMethods[] = {
-    {"from_args", py_from_args, METH_VARARGS, "from_args"},
+    {"from_args", (PyCFunction)py_from_args, METH_VARARGS, "from_args"},
     {NULL, NULL, 0, NULL}
 };
 
