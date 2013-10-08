@@ -77,7 +77,10 @@ def open(url, trace_path=None, txn_context=None, **kwargs):
     engine = acid.engines.from_url(url)
     if trace_path is not None:
         engine = acid.engines.TraceEngine(engine, trace_path=trace_path)
-    return Store(engine, txn_context=txn_context(engine))
+    if txn_context:
+        return Store(engine, txn_context=txn_context(engine))
+    else:
+        return Store(engine)
 
 def decode_offsets(s):
     """Given a string, decode an array of offsets at the start of the string. A
