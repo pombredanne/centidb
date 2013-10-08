@@ -35,3 +35,9 @@ from acid.keylib import Key
 __all__ = core.__all__
 __doc__ = core.__doc__
 __version__ = '0.0.16'
+
+# Hack to support Python v2.5 'python -macid'
+if __name__ == '__main__':
+    import acid.tool
+    import atexit
+    atexit.register(acid.tool.main)
