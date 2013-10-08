@@ -38,6 +38,14 @@
 #define DEBUG(s, ...) fprintf(stderr, \
     "acid: %s:%s:%d: " s "\n", __FILE__, __func__, __LINE__, ## __VA_ARGS__);
 
+#define DUMPSTR(x) \
+    DEBUG("Str is len %d '%s'", (int) PyString_GET_SIZE(x), \
+          acid_debug_hex(PyString_AS_STRING(x), PyString_GET_SIZE(x)));
+
+#define DUMPKEY(x) \
+    DEBUG("Key is len %d '%s'", (int) Key_SIZE(x), \
+          acid_debug_hex(x->p, Key_SIZE(x)))
+
 
 // Python 2.5
 #ifndef Py_TYPE
@@ -253,6 +261,8 @@ Key *acid_make_key(PyObject *arg);
 Key *acid_key_next_greater(Key *self);
 PyObject *acid_key_to_raw(Key *self, Slice *prefix);
 
+const char *
+acid_debug_hex(uint8_t *s, Py_ssize_t len);
 int
 acid_make_reader(Slice *rdr, PyObject *buf);
 void

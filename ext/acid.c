@@ -19,6 +19,36 @@
 
 
 /**
+ * Return the ASCII hex character for a nibble.
+ */
+static char nibble(int n)
+{
+    return (n >= 10) ? ('a' + (n - 10)) : ('0' + n);
+}
+
+/**
+ * Format a bytestring into NUL terminated ASCII hex using a static buffer, and
+ * return a pointer to the buffer.
+ */
+const char *
+acid_debug_hex(uint8_t *s, Py_ssize_t len)
+{
+    static uint8_t buf[512];
+    if(len > sizeof buf) {
+        DEBUG("truncating oversize len %d to %d", (int)len, (int)sizeof buf)
+        len = sizeof buf;
+    }
+    uint8_t *p = buf;
+    for(int i = 0; i < len; i++) {
+        *p++ = nibble((s[i] & 0xF0) >> 4);
+        *p++ = nibble((s[i] & 0xF));
+        *p++ = ' ';
+    }
+    buf[len ? ((3 * len) - 1) : 0] = '\0';
+    return (char *)buf;
+}
+
+/**
  * Given some Python object, try to get at its raw data. For string or bytes
  * objects, this is the object value. For Unicode objects, this is the UTF-8
  * representation of the object value. For all other objects, attempt to invoke

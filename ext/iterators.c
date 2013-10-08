@@ -26,36 +26,6 @@ static PyTypeObject IteratorType;
 static PyTypeObject RangeIteratorType;
 
 
-static char nibble(int n)
-{
-    return (n >= 10) ? ('a' + (n - 10)) : ('0' + n);
-}
-
-static const char *hexster(uint8_t *s, Py_ssize_t len)
-{
-    static uint8_t buf[512];
-    uint8_t *p = buf;
-    for(int i = 0; i < len; i++) {
-        *p++ = nibble((s[i] & 0xF0) >> 4);
-        *p++ = nibble((s[i] & 0xF));
-        *p++ = ' ';
-    }
-    buf[len ? ((3 * len) - 1) : 0] = '\0';
-    return (char *)buf;
-}
-
-
-#define DUMPSTR(x) \
-    DEBUG("Str is len %d '%s'", (int) PyString_GET_SIZE(x), \
-          hexster(PyString_AS_STRING(x), \
-                  (int) PyString_GET_SIZE(x)));
-
-#define DUMPKEY(x) \
-    DEBUG("Key is len %d '%s'", (int) Key_SIZE(x), \
-          hexster(x->p, (int) Key_SIZE(x)))
-
-
-
 // -------------
 // Iterator Type
 // -------------
