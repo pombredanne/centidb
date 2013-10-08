@@ -628,7 +628,7 @@ def unpacks(s, prefix=None, first=False):
     """
     if not prefix:
         prefix = ''
-    if not s.startswith(prefix):
+    elif s[:len(prefix)] != prefix:
         return
 
     plength = len(prefix)
