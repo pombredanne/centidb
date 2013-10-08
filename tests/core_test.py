@@ -111,7 +111,7 @@ class IterTest:
 @testlib.register()
 class OneCollBoundsTest:
     def setUp(self):
-        self.store = acid.open('ListEngine')
+        self.store = acid.open('list:/')
         self.txn = self.store.begin()
         self.txn.__enter__()
         self.store.add_collection('stuff')
@@ -141,7 +141,7 @@ class TwoCollBoundsTest(OneCollBoundsTest):
 @testlib.register()
 class ThreeCollBoundsTest(OneCollBoundsTest):
     def setUp(self):
-        self.store = acid.open('ListEngine')
+        self.store = acid.open('list:/')
         self.txn = self.store.begin()
         self.txn.__enter__()
         self.store.add_collection('stuff')
@@ -207,7 +207,7 @@ class CollBasicTest:
 @testlib.register()
 class IndexTest:
     def setUp(self):
-        self.store = acid.open('ListEngine')
+        self.store = acid.open('list:/')
         self.e = self.store.engine
         self.t = self.store.begin()
         self.t.__enter__()
@@ -398,7 +398,7 @@ class ReopenBugTest:
 class DeleteBugTest:
     """Ensure delete deletes everything it should when indices are present."""
     def test1(self):
-        store = acid.open('ListEngine')
+        store = acid.open('list:/')
         with store.begin(write=True):
             stuff = store.add_collection('stuff')
             stuff.add_index('foop', lambda rec: 'foop')
@@ -414,7 +414,7 @@ class DeleteBugTest:
 @testlib.register()
 class TransactionAbortTest:
     def setUp(self):
-        self.store = acid.open('ListEngine')
+        self.store = acid.open('list:/')
 
     def test1(self):
         def crashy():

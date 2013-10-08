@@ -64,13 +64,14 @@ def parse_url(url):
     }
 
 
-
 def from_url(url):
     dct = parse_url(url)
     for klass in _engines:
         engine = klass.from_url(dct)
         if engine:
             return engine
+
+    raise ValueError('cannot parse ' + repr(url))
 
 
 class Engine(object):

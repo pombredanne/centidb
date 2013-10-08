@@ -40,7 +40,7 @@ class Model(acid.meta.Model):
 
 class TestBase:
     def setUp(self):
-        self.store = acid.open('ListEngine')
+        self.store = acid.open('list:/')
         Model.bind_store(self.store)
 
 

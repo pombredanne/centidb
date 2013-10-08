@@ -53,7 +53,7 @@ def abort():
     raise errors.AbortError('')
 
 
-def open(engine, trace_path=None, **kwargs):
+def open(url, trace_path=None, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
     `engine(**kwargs)` and wrap the result in a :py:class:`Store`. `engine`
     can either be a name from :py:mod:`acid.engines` or a fully qualified
@@ -62,22 +62,18 @@ def open(engine, trace_path=None, **kwargs):
     ::
 
         >>> # Uses acid.engines.SkiplistEngine
-        >>> acid.open('SkiplistEngine')
+        >>> acid.open('skiplist:/')
 
-        >>> # Uses mymodule.BlarghEngine
-        >>> acid.open('mymodule.BlarghEngine')
+        >>> # Import mymodule.
+        >>> acid.open('mypkg.acid+myengine:/')
 
     If `trace_path` is specified, then the underlying engine is wrapped in a
     :py:class:`acid.engines.TraceEngine` to produce a complete log of
     interactions with the external engine, written to `trace_path`.
     """
-    if '.' not in engine:
-        engine = 'acid.engines.' + engine
-    modname, _, classname = engine.rpartition('.')
-    __import__(modname)
-    engine = getattr(sys.modules[modname], classname)(**kwargs)
+    import acid.engines
+    engine = acid.engines.from_url(url)
     if trace_path is not None:
-        import acid.engines
         engine = acid.engines.TraceEngine(engine, trace_path=trace_path)
     return Store(engine)
 
