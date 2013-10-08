@@ -21,10 +21,56 @@ import itertools
 import math
 import random
 import threading
+import urlparse
 
 
 __all__ = ['SkipList', 'SkiplistEngine', 'ListEngine', 'PlyvelEngine',
            'KyotoEngine', 'LmdbEngine']
+
+_engines = []
+
+
+def register(klass):
+    """Register a new engine class that supports :py:meth:`Engine.from_url`.
+    Allows the engine to be uniformly constructed from a simple string. May be
+    used as a decorator.
+    """
+    _engines.append(klass)
+    return klass
+
+
+def parse_url(url):
+    """Split a string URL up into constituent parts, stripping any parameters
+    present in the path part and expanding them into their own dictionary.
+    """
+    parsed = urlparse.urlparse(url)
+    path, _, params_str = parsed.path.partition(';')
+    if params_str:
+        params = {}
+        for part in params_str.split(','):
+            bits = part.split('=', 1)
+            if len(bits) == 1:
+                params[bits[0]] = True
+            else:
+                params[bits[0]] = bits[1]
+    else:
+        params = {}
+
+    return {
+        'scheme': parsed.scheme,
+        'netloc': parsed.netloc,
+        'path': path,
+        'params': params
+    }
+
+
+
+def from_url(url):
+    dct = parse_url(url)
+    for klass in _engines:
+        engine = klass.from_url(dct)
+        if engine:
+            return engine
 
 
 class Engine(object):
@@ -42,6 +88,21 @@ class Engine(object):
     #: :py:class:`acid.keylib.Key` and :py:class:`acid.structlib.Struct` to
     #: present the result to the user without performing any copies.
     source = None
+
+    @classmethod
+    def from_url(cls, dct):
+        """Attempt to parse `dct` as a reference to the engine. If the
+        reference is valid, return a new engine instance, otherwise return
+        ``None``. URLs should be of the form `engine:/path?p1=v1,p2=v2` or
+        `engine://<netloc>/path?p1=v1,p2=v2`. `dct` is a dict with fields:
+
+            * `scheme`: URL scheme (e.g. `"engine"`).
+            * `netloc`: Empty string if URL was in first form, `netloc` if URL
+              was in second form.
+            * `path`: String path.
+            * `params`: Dict with keys `p1` and `p2`, values are strings if the
+              parameter included a value, otherwise ``True``.
+        """
 
     def close(self):
         """Close the database connection. The default implementation does
@@ -232,6 +293,7 @@ class SkipList(object):
             return node[1]
 
 
+@register
 class SkiplistEngine(Engine):
     """Storage engine that backs onto a `Skip List
     <http://en.wikipedia.org/wiki/Skip_list>`_. Lookup and insertion are
@@ -253,6 +315,17 @@ class SkiplistEngine(Engine):
         self.delete = self.sl.delete
         self.iter = self.sl.items
 
+    @classmethod
+    def from_url(cls, dct):
+        """Create an instance given a URL of the form
+        `"skiplist:/[;mazsize=N]"`. Supported parameters:
+
+            `maxsize`:
+                Maximum expected number of items in the map; default 65535.
+        """
+        if dct['scheme'] == 'skiplist':
+            return cls(maxsize=int(dct['params'].get('maxsize', '65535')))
+
     def put(self, key, value):
         self.sl.insert(str(key), str(value))
 
@@ -260,6 +333,7 @@ class SkiplistEngine(Engine):
         self.sl = None
 
 
+@register
 class ListEngine(Engine):
     """Storage engine that backs onto a sorted list of `(key, value)` tuples.
     Lookup is logarithmic while insertion is linear.
@@ -272,6 +346,14 @@ class ListEngine(Engine):
         #: Size in bytes for stored items, i.e.
         #: ``sum(len(k)+len(v) for k, v in items)``.
         self.size = 0
+
+    @classmethod
+    def from_url(cls, dct):
+        """Create an instance given a URL of the form `"list:/"`. No parameters
+        are supported.
+        """
+        if dct['scheme'] == 'list':
+            return cls()
 
     def get(self, k):
         idx = bisect.bisect_left(self.items, (k,))
@@ -310,6 +392,7 @@ class ListEngine(Engine):
         return itertools.imap(self.items[:].__getitem__, xr)
 
 
+@register
 class PlyvelEngine(Engine):
     """Storage engine that uses Google LevelDB via the `Plyvel
     <http://plyvel.readthedocs.org/>`_ module.
@@ -350,6 +433,17 @@ class PlyvelEngine(Engine):
             self.get = db.get
             self._iter = db.iterator
 
+    @classmethod
+    def from_url(cls, dct):
+        """Create an instance given a URL of the form
+        `"skiplist:/[;mazsize=N]"`. Supported parameters:
+
+            `maxsize`:
+                Maximum expected number of items in the map; default 65535.
+        """
+        if dct['scheme'] == 'skiplist':
+            return cls(maxsize=int(dct['params'].get('maxsize', '65535')))
+
     def close(self):
         self.db.close()
 
@@ -381,6 +475,7 @@ class PlyvelEngine(Engine):
         return it
 
 
+@register
 class KyotoEngine(Engine):
     """Storage engine that uses `Kyoto Cabinet
     <http://fallabs.com/kyotocabinet/>`_. Note a treedb must be used.
@@ -538,6 +633,7 @@ class TraceEngine(object):
             yield key, value
 
 
+@register
 class LmdbEngine(Engine):
     """Storage engine that uses the OpenLDAP `"Lightning" MDB
     <http://symas.com/mdb/>`_ library via the `py-lmdb
@@ -563,6 +659,38 @@ class LmdbEngine(Engine):
         self.replace = (txn or env).replace
         self.delete = (txn or env).delete
         self.cursor = (txn or env).cursor
+
+    @classmethod
+    def from_url(cls, dct):
+        """Create an instance given a URL of the form
+        `"lmdb:/path/to/env.lmdb[;p1[;p2=v2]]"`. Supported parameters:
+
+            `map_size`:
+                Environment map size in megabytes; default 4194304.
+            `readonly`:
+                Open environment read-only; default read-write.
+            `nometasync`:
+                Disable meta page fsync; default enabled.
+            `nosync`
+                Disable sync; default enabled.
+            `map_async`
+                Use ``MS_ASYNC`` with msync, `writemap` equivalent to `nosync`;
+                default use ``MS_SYNC``.
+            `writemap`:
+                Use writeable memory mapping; default disabled.
+            `max_readers`:
+                Maximum concurrent read threads; default 126.
+        """
+        if dct['scheme'] != 'lmdb':
+            return
+        return cls(path=dct['path'],
+                   map_size=1048576*int(dct.get('map_size', '4194304')),
+                   readonly=bool(dct['params'].get('readonly')),
+                   metasync=not dct['params'].get('nometasync'),
+                   sync=not dct['params'].get('nosync'),
+                   map_async=bool(dct['params'].get('map_async')),
+                   writemap=bool(dct['params'].get('writemap')),
+                   max_readers=int(dct['params'].get('max_readers', '126')))
 
     def close(self):
         self.env.close()
