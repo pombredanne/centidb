@@ -415,12 +415,18 @@ class BaseModel(object):
             func(self)
         return self._key
 
+    META_REPR_FIELDS = []
+
     def __repr__(self):
         klass = self.__class__
-        qname = '%s.%s' % (klass.__module__, klass.__name__)
+        bits = ['%s.%s' % (klass.__module__, klass.__name__)]
         if self.is_saved:
-            return '<%s %s>' % (qname, self._key)
-        return '<%s unsaved>' % (qname,)
+            bits.append(repr(self._key))
+        else:
+            bits.append('unsaved')
+        for name in self.META_REPR_FIELDS:
+            bits.append('%s:%r' % (name, getattr(self, name)))
+        return '<%s>' % ' '.join(bits)
 
 
 class Model(BaseModel):
