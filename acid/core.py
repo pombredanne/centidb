@@ -52,8 +52,7 @@ def abort():
     """Trigger a graceful abort of the active transaction."""
     raise errors.AbortError('')
 
-
-def open(url, trace_path=None, **kwargs):
+def open(url, trace_path=None, txn_context=None, **kwargs):
     """Look up an engine class named by `engine`, instantiate it as
     `engine(**kwargs)` and wrap the result in a :py:class:`Store`. `engine`
     can either be a name from :py:mod:`acid.engines` or a fully qualified
@@ -70,12 +69,15 @@ def open(url, trace_path=None, **kwargs):
     If `trace_path` is specified, then the underlying engine is wrapped in a
     :py:class:`acid.engines.TraceEngine` to produce a complete log of
     interactions with the external engine, written to `trace_path`.
+
+    If `txn_context` is speciied, then use `txn_context` instead of the default
+    :py:class:`acid.core.TxnContext` implementation.
     """
     import acid.engines
     engine = acid.engines.from_url(url)
     if trace_path is not None:
         engine = acid.engines.TraceEngine(engine, trace_path=trace_path)
-    return Store(engine)
+    return Store(engine, txn_context=txn_context(engine))
 
 def decode_offsets(s):
     """Given a string, decode an array of offsets at the start of the string. A
@@ -637,6 +639,15 @@ class TxnContext(object):
             return txn
         raise errors.TxnError('Transactions *must* be wrapped in a with: '
                               'block to ensure proper destruction.')
+
+
+class GeventTxnContext(TxnContext):
+    """Like TxnContext except using gevent.local.local().
+    """
+    def __init__(self, engine):
+        import gevent.local
+        self.engine = engine
+        self.local = gevent.local.local()
 
 
 class Store(object):
