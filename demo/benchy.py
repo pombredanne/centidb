@@ -70,12 +70,12 @@ class AcidEngine(object):
         if self.PATH:
             shutil.rmtree(self.PATH)
 
-    def insert(self, words, upper, stub, blind):
+    def insert(self, words, upper, stub):
         coll = self.coll
         with self.store.begin(write=True):
             for i in xrange(len(words)):
                 doc = {'stub': stub, 'name': words[i], 'location': upper[i]}
-                coll.put(doc, blind=blind)
+                coll.put(doc)
 
     def randget_idx(self, words):
         index = self.coll.indices['rev_name']
@@ -134,7 +134,7 @@ class SqliteEngine(object):
         if self.PATH:
             os.unlink(self.PATH)
 
-    def insert(self, words, upper, stub, blind):
+    def insert(self, words, upper, stub):
         c = self.db.cursor()
         for i in xrange(len(words)):
             c.execute('INSERT INTO stuff VALUES(?, ?, ?, ?)',
@@ -168,7 +168,7 @@ class MongoEngine(object):
             self.coll.ensure_index('name', 1)
             self.coll.ensure_index('location', 1)
 
-    def insert(self, words, upper, stub, blind):
+    def insert(self, words, upper, stub):
         coll = self.coll
         for i in xrange(len(words)):
             doc = {'stub': stub, 'name': words[i], 'location': upper[i],
@@ -189,10 +189,8 @@ class MongoEngine(object):
         pass
 
 
-def mode_name(blind, use_indices):
-    return 'insert-%sblind-%sindices' %\
-        ('' if blind else 'no',
-         '' if use_indices else 'no')
+def mode_name(use_indices):
+    return 'insert-%sindices' % ('' if use_indices else 'no')
 
 
 
@@ -223,25 +221,24 @@ def x():
     eng = None
     for engine in engines:
         print
-        for blind in True, False:
-            for use_indices in False, True:
-                if eng:
-                    eng.close()
-                eng = engine()
-                eng.create()
-                eng.make_coll(use_indices)
+        for use_indices in False, True:
+            if eng:
+                eng.close()
+            eng = engine()
+            eng.create()
+            eng.make_coll(use_indices)
 
-                t0 = time.time()
-                eng.insert(words, upper, stub, blind)
-                t = time.time() - t0
+            t0 = time.time()
+            eng.insert(words, upper, stub)
+            t = time.time() - t0
 
-                keycnt = len(words) * (3 if use_indices else 1)
-                engine_name = engine.__name__
+            keycnt = len(words) * (3 if use_indices else 1)
+            engine_name = engine.__name__
 
-                out(engine_name, mode_name(blind, use_indices),
-                    f('%d', keycnt),
-                    f('%.2f', t),
-                    f('%d', int((keycnt if blind else (keycnt + len(words))) / t)))
+            out(engine_name, mode_name(use_indices),
+                f('%d', keycnt),
+                f('%.2f', t),
+                f('%d', int((keycnt + len(words))) / t))
 
         idxcnt = 0
         t0 = time.time()
