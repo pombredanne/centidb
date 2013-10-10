@@ -39,21 +39,17 @@ relative performance using the various engines available using a single thread.
 
 **Variant Explanations**
 
-    *blind*
-        Inserts proceed without first checking for an existing record with the
-        same key, which is safe if keys are never reused. Checking for a
-        previous record is required to ensure indices remain consistent.
-
-    *noblind*
-        Inserts check for an existing record, i.e. the default mode.
-
     *indices*
         2 indices are maintained during insert: one of the lowercase version of
-        the word, and one on the uppercase version.
+        the word, and one on the uppercase version. Insertion requires use of
+        the :py:meth:`replace <acid.engines.Engine.replace>`, which may degrade
+        to a get()/put() pair with some engines.
 
     *noindices*
         No index is maintained during insert. The resulting collection can only
-        be searched by key.
+        be searched by key. Insertion uses a plain :py:meth:`put
+        <acid.engines.Engine.put`, and does not need to observe any previously
+        stored value.
 
 
 **Mode Explanations**

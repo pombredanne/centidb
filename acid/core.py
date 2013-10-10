@@ -244,14 +244,11 @@ class Collection(object):
         self.engine = store.engine
         self.info = info
         self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
-        if not key_func:
-            counter_name = counter_name or ('key:%(name)s' % self.info)
-            key_func = lambda _: store.count(counter_name)
-            info['blind'] = True
+        if key_func:
+            self.key_func = key_func
         else:
-            info.setdefault('blind', False)
-
-        self.key_func = key_func
+            counter_name = counter_name or ('key:%(name)s' % self.info)
+            self.key_func = lambda _: store.count(counter_name)
 
         self.encoder = encoder or encoders.PICKLE
         self.encoder_prefix = self.store.add_encoder(self.encoder)
@@ -263,19 +260,6 @@ class Collection(object):
         #:      idx = coll.add_index('some index', lambda v: v[0])
         #:      assert coll.indices['some index'] is idx
         self.indices = {}
-
-    def set_blind(self, blind):
-        """Set the default blind write behaviour to `blind`.. If ``True``,
-        indicates the key function never reassigns the same key twice, for
-        example when using a time-based key. In this case, checks for old
-        records with the same key may be safely skipped, significantly
-        improving performance.
-
-        This mode is always active when a collection has no indices defined,
-        and does not need explicitly set in that case.
-        """
-        self.info['blind'] = bool(blind)
-        self.store.set_meta(KIND_TABLE, self.info['name'], self.info)
 
     def add_index(self, name, func):
         """Associate an index with the collection. Index metadata will be
@@ -538,7 +522,7 @@ class Collection(object):
             if key != key_:
                 txn.put(key_.to_raw(self.prefix), packer_prefix + data)
 
-    def put(self, rec, packer=None, key=None, blind=False):
+    def put(self, rec, packer=None, key=None):
         """Create or overwrite a record.
 
             `rec`:
@@ -552,19 +536,6 @@ class Collection(object):
             `key`:
                 If specified, overrides the use of collection's key function
                 and forces a specific key. Use with caution.
-
-            `blind`:
-                If ``True``, skip checks for any old record assigned the same
-                key. Automatically enabled when a collection has no indices, or
-                when `blind=` is passed to :py:class:`Collection`'s
-                constructor.
-
-                While this significantly improves performance, enabling it for
-                a collection with indices and in the presence of old records
-                with the same key will lead to inconsistent indices.
-                :py:meth:`Index.iteritems` will issue a warning and discard
-                obsolete keys when this is detected, however other index
-                methods will not.
         """
         txn = self.store._txn_context.get()
         if key is None:
@@ -576,8 +547,7 @@ class Collection(object):
             packer_prefix = self.store.add_encoder(packer)
 
         if self.indices:
-            if not (blind or self.info['blind']):
-                self.delete(key)
+            self.delete(key)
             for index_key in self._index_keys(key, rec):
                 txn.put(index_key, '')
 
