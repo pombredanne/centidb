@@ -237,22 +237,6 @@ def derived_key(func):
     return func
 
 
-def blind(func):
-    """Mark a key function as being compatible with blind writes. This
-    indicates the function never generates a duplicate result, therefore the
-    database does not need to check for existing keys during save.
-
-    ::
-
-        @meta.blind
-        @meta.key
-        def never_repeating_key_func(self):
-            return int(time.time() * 10000000000)
-    """
-    func.meta_blind_keys = True
-    return func
-
-
 def index(func):
     """Mark a function as an index for the model. The function will be called
     during update to produce secondary indices for each item.
