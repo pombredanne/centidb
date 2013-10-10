@@ -23,6 +23,8 @@ import random
 import threading
 import urlparse
 
+from acid import errors
+
 
 __all__ = ['SkipList', 'SkiplistEngine', 'ListEngine', 'PlyvelEngine',
            'KyotoEngine', 'LmdbEngine']
@@ -71,7 +73,7 @@ def from_url(url):
         if engine:
             return engine
 
-    raise ValueError('cannot parse ' + repr(url))
+    raise errors.ConfigError('cannot parse ' + repr(url))
 
 
 class Engine(object):
