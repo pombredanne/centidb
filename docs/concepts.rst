@@ -25,12 +25,13 @@ language.
 
 Database systems provide a huge set of features that are often taken for
 granted, underused or misunderstood entirely. A specific example of this is the
-*query planner*: an often large and complex component responsible for deciding
-on the best approach to read facts from the tables, and which (if any) indexes
-defined seem to apply usefully to the query. For the common case of simply
-having some component that knows how to store data, and how to quickly answer
-basic questions about that data, a complete database system might be a rather
-large hammer for a small nail, depending on the application.
+*query planner*: an often large, highly generalized, and complex component
+responsible for deciding on the best approach to read facts from the tables,
+and which (if any) indexes defined seem to apply usefully to the query. For the
+common case of simply having some component that knows how to store data, and
+how to quickly answer a small, fixed set of basic questions about that data, a
+complete database system might be a rather large hammer for a small nail,
+depending on the application.
 
 There is also a high upfront cost associated with using a traditional database
 system. Before data can be stored a *schema* must be designed, and its
