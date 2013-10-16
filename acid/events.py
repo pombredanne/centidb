@@ -210,3 +210,19 @@ def after_delete(func, target=None):
     assert target is None, 'external events not supported yet.'
     func.meta_after_delete = True
     return func
+
+
+def on_commit(func, target=None):
+    """Mark a function to be called prior to commit of any transaction.
+    """
+    assert target is None, 'external events not supported yet.'
+    func.meta_on_commit = True
+    return func
+
+
+def after_commit(func, target=None):
+    """Mark a function to be called prior to commit of any transaction.
+    """
+    assert target is None, 'external events not supported yet.'
+    func.meta_after_commit = True
+    return func

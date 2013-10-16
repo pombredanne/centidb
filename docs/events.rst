@@ -32,6 +32,9 @@ being modified.
 .. autofunction:: acid.events.after_delete ()
 .. autofunction:: acid.events.after_replace ()
 
+.. autofunction:: acid.events.on_commit ()
+.. autofunction:: acid.events.after_commit ()
+
 
 External triggers
 +++++++++++++++++
