@@ -592,8 +592,13 @@ class TraceEngine(object):
             self.fp = open(trace_path, 'w', 1)
 
     def _trace(self, op, *args):
-        args = ' '.join(str(a).encode('hex') for a in args)
-        self.fp.write('%s %s %s\n' % (self.idx, op, args))
+        bits = []
+        for arg in args:
+            if isinstance(arg, bytes):
+                bits.append(arg.encode('hex'))
+            elif isinstance(arg, bool):
+                bits.append(str(int(arg)))
+        self.fp.write('%s %s %s\n' % (self.idx, op, ' '.join(bits)))
 
     def close(self):
         self._trace('close')
@@ -627,13 +632,19 @@ class TraceEngine(object):
         return self.engine.commit()
 
     def iter(self, k, reverse):
-        self._trace('iter', k, reverse)
-        it = self.engine.iter(k, reverse)
-        while True:
-            self._trace('fetch')
-            key, value = next(it)
-            self._trace('yield', key, value)
-            yield key, value
+        iter_id = self._counter
+        self._counter += 1
+
+        self._trace(iter_id, 'iter', k, reverse)
+        try:
+            it = self.engine.iter(k, reverse)
+            while True:
+                self._trace(iter_id, 'fetch')
+                key, value = next(it)
+                self._trace(iter_id, 'yield', key, value)
+                yield key, value
+        except StopIteration:
+            self._trace(iter_id, 'enditer')
 
 
 @register
