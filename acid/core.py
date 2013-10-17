@@ -523,14 +523,14 @@ class Collection(object):
         self.store = store
         self.engine = store.engine
         self.info = info
-        self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
 
-        self.compressor = compressor or encoders.PLAIN
+        prefix = keylib.pack_int(info['idx'], self.store.prefix)
         if info.get('strategy', 'batch') == 'batch':
-            self.strategy = BatchStrategy(self.prefix, store, self.compressor)
+            compressor = compressor or encoders.PLAIN
+            self.strategy = BatchStrategy(prefix, store, compressor)
         else:
             assert info['strategy'] == 'basic'
-            self.strategy = BasicStrategy(self.prefix)
+            self.strategy = BasicStrategy(prefix)
 
         if key_func:
             self.key_func = key_func
