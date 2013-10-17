@@ -852,7 +852,7 @@ p {
   line-height: 17px;
   text-decoration: none;
   color: #fff;
-  background: #8ca1af url({{ MEDIA_URL }}/images/gradient-light.png) bottom left repeat-x;
+  background: #8ca1af url(http://media.readthedocs.org/images/gradient-light.png) bottom left repeat-x;
   border-radius: 3px;
   -moz-border-radius: 3px;
   -webkit-border-radius: 3px;
@@ -869,7 +869,7 @@ p {
   -webkit-box-shadow: 0 1px 0px #465158;
 }
 .rtd-badge.rtd {
-  background: #3b4449 url({{ MEDIA_URL }}/images/badge-rtd.png) scroll top left no-repeat;
+  background: #3b4449 url(http://media.readthedocs.org/images/badge-rtd.png) scroll top left no-repeat;
   border: 1px solid #282E32;
   width: 41px;
   right: 5px;
@@ -877,7 +877,7 @@ p {
 .footer_popout:hover .rtd-badge.rtd {
   width: 160px;
 }
-.rtd-badge.revsys { background: #465158 url({{ MEDIA_URL }}/images/badge-revsys.png) top left no-repeat;
+.rtd-badge.revsys { background: #465158 url(http://media.readthedocs.org/images/badge-revsys.png) top left no-repeat;
   border: 1px solid #1C5871;
   width: 290px;
   right: 173px;
@@ -887,7 +887,7 @@ p {
   margin-left: auto;
   margin-right: 175px;
   margin-bottom: 5px;
-  background: #465158 url({{ MEDIA_URL }}/images/badge-revsys.png) top left no-repeat;
+  background: #465158 url(http://media.readthedocs.org/images/badge-revsys.png) top left no-repeat;
   border: 1px solid #1C5871;
   width: 290px;
   right: 173px;
@@ -897,7 +897,7 @@ p {
   margin-left: auto;
   margin-right: 175px;
   margin-bottom: 5px;
-  background: #465158 url({{ MEDIA_URL }}/images/badge-revsys-sm.png) top left no-repeat;
+  background: #465158 url(http://media.readthedocs.org/images/badge-revsys-sm.png) top left no-repeat;
   border: 1px solid #1C5871;
   width: 205px;
   right: 173px;
