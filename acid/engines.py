@@ -147,6 +147,14 @@ class Engine(object):
         """Delete `key` if it exists."""
         raise NotImplementedError
 
+    def pop(self, key):
+        """Delete `key` if it exists, returning the previous value, if any,
+        otherwise ``None``. The default implementation is impelmented using
+        :py:meth:`get` and :py:meth:`delete`."""
+        old = self.get(key)
+        self.delete(key)
+        return old
+
     def iter(self, key, reverse=False):
         """Yield `(key, value)` tuples in key order, starting at `key` and
         moving in a fixed direction.
