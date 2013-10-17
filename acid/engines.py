@@ -678,6 +678,7 @@ class LmdbEngine(Engine):
         self.db = db
         self.get = (txn or env).get
         self.put = (txn or env).put
+        self.pop = (txn or env).pop
         self.replace = (txn or env).replace
         self.delete = (txn or env).delete
         self.cursor = (txn or env).cursor
