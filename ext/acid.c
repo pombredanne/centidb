@@ -165,6 +165,37 @@ acid_next_greater_str(Slice *slice)
 }
 
 /**
+ * Import `module`, then iteratively walk its attributes looking for a specific
+ * object. Given import_object("sys", "stdout", "write", NULL), would return a
+ * new reference to a bound instancemethod for "sys.stdout.write". Return a new
+ * reference on success, or set an exception and return NULL on failure.
+ */
+PyObject *
+acid_import_object(const char *module, ...)
+{
+    va_list ap;
+    va_start(ap, module);
+
+    PyObject *obj = PyImport_ImportModule(module);
+    if(! obj) {
+        return NULL;
+    }
+
+    va_start(ap, module);
+    const char *name;
+    while((name = va_arg(ap, const char *)) != NULL) {
+        PyObject *obj2 = PyObject_GetAttrString(obj, name);
+        Py_DECREF(obj);
+        if(! obj2) {
+            va_end(ap);
+            return NULL;
+        }
+        obj = obj2;
+    }
+    return obj;
+}
+
+/**
  * Arrange for a acid._`name` submodule to be created and inserted into
  * sys.modules. `methods` is a NULL-terminated PyMethodDef array of methods to
  * include in the module. Return a new reference to the module on success, or

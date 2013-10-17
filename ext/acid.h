@@ -281,6 +281,8 @@ int acid_memcmp(Slice *s1, Slice *s2);
 int acid_init_keylib_module(void);
 int acid_init_iterators_module(void);
 
+PyObject *
+acid_import_object(const char *module, ...);
 
 PyTypeObject *
 acid_init_keylist_type(void);
