@@ -543,6 +543,13 @@ class Collection(object):
         self._after_replace = []
         self._after_delete = []
 
+    def _listen(self, name, func):
+        """Subscribe `func` to the event named `name`."""
+        lst = getattr(self, '_' + name, None)
+        if lst is None:
+            raise TypeError('%r has no %r event' % (self, name))
+        lst.append(func)
+
     def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
         it = self.strategy.iter(self.store._txn_context.get())
         return iterators.from_args(it, key, lo, hi, prefix, reverse,

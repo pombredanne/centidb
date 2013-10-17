@@ -65,6 +65,14 @@ def constraint(func):
     return func
 
 
+def _listen(name, func, target):
+    if target:
+        target._listen(name, func)
+    else:
+        setattr(func, 'meta_' + name, True)
+        return func
+
+
 def on_create(func, target=None):
     """Mark a function to be called prior to initial save (creation) of a
     model.
@@ -76,9 +84,7 @@ def on_create(func, target=None):
             '''Update the model's creation time.'''
             self.created = datetime.datetime.now()
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_on_create = True
-    return func
+    return _listen('on_create', func, target)
 
 
 def on_update(func, target=None):
@@ -91,10 +97,7 @@ def on_update(func, target=None):
             '''Update the model's modified time.'''
             self.modified = datetime.datetime.utcnow()
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_on_create = True
-    func.meta_on_update = True
-    return func
+    return _listen('on_update', func, target)
 
 
 def after_replace(func, target=None):
@@ -122,10 +125,7 @@ def after_replace(func, target=None):
         registering handlers if any index is defined on a collection.
 
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_on_create = True
-    func.meta_on_update = True
-    return func
+    return _listen('after_replace', func, target)
 
 
 def on_delete(func, target=None):
@@ -149,9 +149,7 @@ def on_delete(func, target=None):
             if self.state == 'active':
                 raise Exception("can't delete while account is active.")
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_on_delete = True
-    return func
+    return _listen('on_delete', func, target)
 
 
 def after_create(func, target=None):
@@ -165,10 +163,7 @@ def after_create(func, target=None):
             msg = Message(user_id=self.id, text='Welcome to our service!')
             msg.save()
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_after_create = True
-    func.meta_after_update = True
-    return func
+    return _listen('after_create', func, target)
 
 
 def after_update(func, target=None):
@@ -181,9 +176,7 @@ def after_update(func, target=None):
             '''Push an update event to message queue subscribers.'''
             my_message_queue.send(topic='account-updated', id=self.id)
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_after_update = True
-    return func
+    return _listen('after_update', func, target)
 
 
 def after_delete(func, target=None):
@@ -207,22 +200,16 @@ def after_delete(func, target=None):
             for msg in Message.user_index.find(prefix=self.id):
                 msg.delete()
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_after_delete = True
-    return func
+    return _listen('after_delete', func, target)
 
 
 def on_commit(func, target=None):
     """Mark a function to be called prior to commit of any transaction.
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_on_commit = True
-    return func
+    return _listen('on_commit', func, target)
 
 
 def after_commit(func, target=None):
     """Mark a function to be called prior to commit of any transaction.
     """
-    assert target is None, 'external events not supported yet.'
-    func.meta_after_commit = True
-    return func
+    return _listen('after_commit', func, target)
