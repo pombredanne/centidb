@@ -20,7 +20,7 @@ the Model's :py:class:`Collection <acid.Collection>` when it is created:
     class Account(acid.meta.Model):
         @acid.events.on_create
         def generate_password(self):
-            \"\"\"Assign a password to the account during creation.\"\"\"
+            """Assign a password to the account during creation."""
             self.password = passlib.generate(chars=8)
 
 Alternatively they may be registered for any free-standing function against
