@@ -273,12 +273,13 @@ class SkipList(object):
         return old
 
     def delete(self, searchKey):
-        """Delete `searchKey` from the list, returning ``True`` if it
-        existed."""
+        """Delete `searchKey` from the list, returning the old value if it
+        existed, otherwise ``None``."""
         update = self._update[:]
         node = self._findLess(update, searchKey)
         node = node[3]
         if node[0] == searchKey:
+            old = node[1]
             node[3][2] = update[0]
             for i in xrange(self.level + 1):
                 if update[i][3 + i] is not node:
@@ -288,7 +289,7 @@ class SkipList(object):
                 self.level -= 1
             if self.tail is node:
                 self.tail = node[2]
-            return True
+            return old
 
     def search(self, searchKey):
         """Return the value associated with `searchKey`, or ``None`` if
@@ -324,6 +325,7 @@ class SkiplistEngine(Engine):
         self.get = self.sl.search
         self.replace = self.sl.insert
         self.delete = self.sl.delete
+        self.pop = self.sl.delete
         self.iter = self.sl.items
 
     @classmethod
@@ -377,8 +379,10 @@ class ListEngine(Engine):
         v = str(v)
         idx = bisect.bisect_left(self.items, (k,))
         if idx < len(self.items) and self.items[idx][0] == k:
-            self.size += len(v) - len(self.items[idx][1])
+            old = self.items[idx][1]
+            self.size += len(v) - len(old)
             self.items[idx] = (k, v)
+            return old
         else:
             self.items.insert(idx, (k, v))
             self.size += len(k) + len(v)
@@ -386,8 +390,13 @@ class ListEngine(Engine):
     def delete(self, k):
         idx = bisect.bisect_left(self.items, (k,))
         if idx < len(self.items) and self.items[idx][0] == k:
-            self.size -= len(k) + len(self.items[idx][1])
+            old = self.items[idx][1]
+            self.size -= len(k) + len(old)
             self.items.pop(idx)
+            return old
+
+    replace = put
+    pop = delete
 
     def iter(self, k, reverse):
         if not self.items:

@@ -64,6 +64,16 @@ class EngineTestBase:
         old = self.e.replace('dave', '2')
         assert old == '', [old]
 
+    def testPop(self):
+        old = self.e.pop('dave')
+        assert old is None
+
+        self.e.put('dave', '1')
+        old = self.e.pop('dave')
+        assert str(old) == '1'
+        old = self.e.pop('dave')
+        assert old is None
+
     def testDelete(self):
         self.e.delete('dave')
         assert self.e.get('dave') is None
