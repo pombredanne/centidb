@@ -258,6 +258,8 @@ PyObject *acid_get_fixed_offset(int offset_secs);
 
 PyObject *
 acid_init_module(const char *name, PyMethodDef *methods);
+int
+acid_init_core_module(void);
 
 PyTypeObject *acid_init_key_type(void);
 Key *acid_make_key(PyObject *arg);

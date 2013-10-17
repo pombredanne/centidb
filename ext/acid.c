@@ -254,6 +254,9 @@ init_acid(void)
         return;
     }
 
+    if(acid_init_core_module()) {
+        return;
+    }
     if(acid_init_keylib_module()) {
         return;
     }
