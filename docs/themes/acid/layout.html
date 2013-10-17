@@ -1,102 +1,63 @@
+<!doctype html>
+<meta http-equiv="Content-Type" content="text/html; charset={{ encoding }}">
+
 {# Strip out the default script files we provide, but keep some, like mathjax. #}
-{% set script_files = script_files[3:] %}
-{%- set reldelim1 = reldelim1 is not defined and ' &raquo;' or reldelim1 %}
-{%- set reldelim2 = reldelim2 is not defined and ' |' or reldelim2 %}
-{%- set render_sidebar = (not embedded) and (not theme_nosidebar|tobool) and
-                         (sidebars != []) %}
+{% set script_files = script_files[3:] + [
+    "http://cdnjs.cloudflare.com/ajax/libs/jquery/1.8.2/jquery.min.js",
+    "http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.5.2/underscore-min.js",
+    "http://media.readthedocs.org/javascript/doctools.js",
+    "http://media.readthedocs.org/javascript/rtd.js"
+] %}
 {%- set url_root = pathto('', 1) %}
 {%- if url_root == '#' %}{% set url_root = '' %}{% endif %}
-{%- if not embedded and docstitle %}
-  {%- set titlesuffix = " &mdash; "|safe + docstitle|e %}
-{%- else %}
-  {%- set titlesuffix = "" %}
-{%- endif %}
+{%- set titlesuffix = " &mdash; "|safe + docstitle|e %}
 
 {%- macro sidebar() %}
-      {%- if render_sidebar %}
-      <div class="sphinxsidebar">
-        <div class="sphinxsidebarwrapper">
-          {%- block sidebarlogo %}
-          {%- if logo %}
-            <p class="logo"><a href="{{ pathto(master_doc) }}">
-              <img class="logo" src="{{ pathto('_static/' + logo, 1) }}" alt="Logo"/>
-            </a></p>
-          {%- endif %}
+<div class="sphinxsidebar">
+<div class="sphinxsidebarwrapper">
+    {%- if logo %}
+      <p class="logo"><a href="{{ pathto(master_doc) }}">
+        <img class="logo" src="{{ pathto('_static/' + logo, 1) }}" alt="">
+      </a></p>
+    {%- endif %}
 
-          <p>
-          <a href="https://github.com/dw/acid/">Github Repository</a>
-          </p>
-          {%- endblock %}
-          {%- if sidebars != None %}
-            {#- new style sidebar: explicitly include/exclude templates #}
-            {%- for sidebartemplate in sidebars %}
-            {%- include sidebartemplate %}
-            {%- endfor %}
-          {%- else %}
-            {#- old style sidebars: using blocks -- should be deprecated #}
-            {%- block sidebartoc %}
-            {%- include "localtoc.html" %}
-            {%- endblock %}
-            {%- block sidebarrel %}
-            {%- include "relations.html" %}
-            {%- endblock %}
-            {%- block sidebarsourcelink %}
-            {%- include "sourcelink.html" %}
-            {%- endblock %}
-            {%- if customsidebar %}
-            {%- include customsidebar %}
-            {%- endif %}
-            {%- block sidebarsearch %}
-            {%- include "searchbox.html" %}
-            {%- endblock %}
-          {%- endif %}
-        </div>
-      </div>
-      {%- endif %}
+    <p>
+    <a href="https://github.com/dw/acid/">Github Repository</a>
+    </p>
+
+    {%- block sidebartoc %}
+    {%- include "localtoc.html" %}
+    {%- endblock %}
+    {%- block sidebarrel %}
+    {%- include "relations.html" %}
+    {%- endblock %}
+</div>
+</div>
 {%- endmacro %}
 
+<title>{{ title|striptags|e }}{{ titlesuffix }}</title>
+<link rel="stylesheet" href="{{ pathto('_static/' + style, 1) }}">
+<link rel="stylesheet" href="{{ pathto('_static/pygments.css', 1) }}">
+{%- for cssfile in css_files %}
+    <link rel="stylesheet" href="{{ pathto(cssfile, 1) }}">
+{%- endfor %}
 
-<!doctype html>
+<script>
+var DOCUMENTATION_OPTIONS = {
+    URL_ROOT:    '{{ url_root }}',
+    VERSION:     '{{ release|e }}',
+    COLLAPSE_INDEX: false,
+    FILE_SUFFIX: '{{ '' if no_search_suffix else file_suffix }}',
+    HAS_SOURCE:  {{ has_source|lower }}
+};
+var doc_version = "{{ current_version }}";
+var doc_slug = "{{ slug }}";
+var page_name = "{{ pagename }}";
+</script>
 
-<html>
-<head>
-{% if 0 %}
-{%- block extrahead %} {% endblock %}
-{% endif %}
-{%- block header %}{% endblock %}
-
-
-<meta http-equiv="Content-Type" content="text/html; charset={{ encoding }}">
-{{ metatags }}
-
-    <title>{{ title|striptags|e }}{{ titlesuffix }}</title>
-    <link rel="stylesheet" href="{{ pathto('_static/' + style, 1) }}">
-    <link rel="stylesheet" href="{{ pathto('_static/pygments.css', 1) }}">
-    {%- for cssfile in css_files %}
-        <link rel="stylesheet" href="{{ pathto(cssfile, 1) }}">
-    {%- endfor %}
-
-    <script>
-    var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:    '{{ url_root }}',
-        VERSION:     '{{ release|e }}',
-        COLLAPSE_INDEX: false,
-        FILE_SUFFIX: '{{ '' if no_search_suffix else file_suffix }}',
-        HAS_SOURCE:  {{ has_source|lower }}
-    };
-    var doc_version = "{{ current_version }}";
-    var doc_slug = "{{ slug }}";
-    var page_name = "{{ pagename }}";
-    </script>
-
-    {%- for scriptfile in script_files %}
-    <script src="{{ pathto(scriptfile, 1) }}"></script>
-    {%- endfor %}
-
-    <script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
-    <script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.5.2/underscore-min.js"></script>
-    <script src="http://media.readthedocs.org/javascript/doctools.js"></script>
-    <script src="http://media.readthedocs.org/javascript/rtd.js"></script>
+{%- for scriptfile in script_files %}
+<script src="{{ pathto(scriptfile, 1) }}"></script>
+{%- endfor %}
 
 
 {%- block content %}
@@ -105,15 +66,11 @@
     <div class="document">
   {%- block document %}
       <div class="documentwrapper">
-      {%- if render_sidebar %}
         <div class="bodywrapper">
-      {%- endif %}
           <div class="body">
             {% block body %} {% endblock %}
           </div>
-      {%- if render_sidebar %}
         </div>
-      {%- endif %}
       </div>
   {%- endblock %}
 
