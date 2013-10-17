@@ -56,7 +56,7 @@ def dispatch(lst, *args):
         try:
             func(*args)
         except Exception:
-            LOG.exception('While invoking %r(*%r, **%r)', func, args, kwargs)
+            LOG.exception('While invoking %r(*%r)', func, args)
             lst.remove(func)
 
 def abort():
