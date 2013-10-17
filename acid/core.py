@@ -21,11 +21,9 @@ See http://acid.readthedocs.org/
 """
 
 from __future__ import absolute_import
-import functools
 import itertools
+import logging
 import operator
-import os
-import sys
 import threading
 import warnings
 
@@ -47,6 +45,19 @@ KIND_ENCODER = 2
 KIND_COUNTER = 3
 KIND_STRUCT = 4
 
+LOG = logging.getLogger('acid.core')
+
+
+def dispatch(lst, *args):
+    """Invoke each `func` in `lst` as `func(*args)`, logging any exceptions and
+    removing any exception-raising function."""
+    # reversed() avoids list copy.. list is mutated during iteration.
+    for func in reversed(lst):
+        try:
+            func(*args)
+        except Exception:
+            LOG.exception('While invoking %r(*%r, **%r)', func, args, kwargs)
+            lst.remove(func)
 
 def abort():
     """Trigger a graceful abort of the active transaction."""
@@ -81,7 +92,6 @@ def open(url, trace_path=None, txn_context=None, **kwargs):
         return Store(engine, txn_context=txn_context(engine))
     else:
         return Store(engine)
-
 
 def add_index(coll, name, func):
     """Associate an index with the collection. Index metadata will be
@@ -624,11 +634,9 @@ class Collection(object):
             old = self.strategy.replace(txn, key, new)
             if old:
                 oldrec = self.encoder.unpack(key, old)
-                for func in self._after_replace:
-                    func(key, oldrec, rec)
+                dispatch(self._after_replace, oldrec, rec)
             elif self._after_create:
-                for func in self._after_create:
-                    func(key, rec)
+                dispatch(self._after_create, key, rec)
         else:
             self.strategy.put(txn, key, new)
 
@@ -643,8 +651,7 @@ class Collection(object):
             data = self.strategy.pop(txn, key)
             if data:
                 obj = self.encoder.unpack(key, data)
-                for func in self._after_delete:
-                    func(key, obj)
+                dispatch(self._after_delete, key, obj)
         else:
             self.strategy.delete(txn, key)
 
