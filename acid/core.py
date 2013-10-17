@@ -540,9 +540,8 @@ class Collection(object):
 
         self.encoder = encoder or encoders.PICKLE
         self._after_create = []
-        self._after_delete = []
         self._after_replace = []
-        self._after_create = []
+        self._after_delete = []
 
     def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
         it = self.strategy.iter(self.store._txn_context.get())
@@ -602,8 +601,8 @@ class Collection(object):
                 collection's `encoder`.
 
             `key`:
-                If specified, overrides the use of collection's key function
-                and forces a specific key. Use with caution.
+                Optionaly use this exact key, otherwise assign a key using the
+                collection's key function.
         """
         txn = self.store._txn_context.get()
         if key is None:
@@ -611,13 +610,16 @@ class Collection(object):
         key = keylib.Key(key)
         new = self.encoder.pack(rec)
 
+        # If a listener is registered that must observe the prior record value,
+        # use replace(), which may result in a slow path on engines like
+        # LevelDB. Otherwise use put(), which does not observe the old value.
         if self._after_replace or self._after_create:
             old = self.strategy.replace(txn, key, new)
             if old:
                 oldrec = self.encoder.unpack(key, old)
                 for func in self._after_replace:
                     func(key, oldrec, rec)
-            else:
+            elif self._after_create:
                 for func in self._after_create:
                     func(key, rec)
         else:
