@@ -28,6 +28,7 @@ import threading
 import warnings
 
 import acid
+from acid import events
 from acid import encoders
 from acid import errors
 from acid import iterators
@@ -217,9 +218,9 @@ class Index(object):
         self.func = func
         self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
 
-        coll._after_delete.append(self._coll_after_delete)
-        coll._after_create.append(self._coll_after_create)
-        coll._after_replace.append(self._coll_after_replace)
+        events.after_delete(self._coll_after_delete, coll)
+        events.after_create(self._coll_after_create, coll)
+        events.after_replace(self._coll_after_replace, coll)
 
     def _iter(self, key, lo, hi, prefix, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
@@ -634,7 +635,7 @@ class Collection(object):
             old = self.strategy.replace(txn, key, new)
             if old:
                 oldrec = self.encoder.unpack(key, old)
-                dispatch(self._after_replace, oldrec, rec)
+                dispatch(self._after_replace, key, oldrec, rec)
             elif self._after_create:
                 dispatch(self._after_create, key, rec)
         else:

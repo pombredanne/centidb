@@ -17,6 +17,8 @@
 """Hodge-podge of Acid specific test functionality.
 """
 
+from __future__ import absolute_import
+import logging
 import operator
 import os
 import shutil
@@ -27,6 +29,8 @@ import acid
 import acid.encoders
 import acid.engines
 import acid.keylib
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 def ddb():
