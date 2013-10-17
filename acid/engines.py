@@ -652,16 +652,16 @@ class TraceEngine(object):
         iter_id = self._counter
         self._counter += 1
 
-        self._trace(iter_id, 'iter', k, reverse)
+        self._trace('iter', iter_id, k, reverse)
         try:
             it = self.engine.iter(k, reverse)
             while True:
-                self._trace(iter_id, 'fetch')
+                self._trace('fetch', iter_id)
                 key, value = next(it)
-                self._trace(iter_id, 'yield', key, value)
+                self._trace('yield', iter_id, key, value)
                 yield key, value
         except StopIteration:
-            self._trace(iter_id, 'enditer')
+            self._trace('enditer', iter_id)
 
 
 @register
