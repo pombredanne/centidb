@@ -6,7 +6,37 @@
 Events
 ######
 
-.. automodule:: acid.events
+.. module:: acid.events
+
+The `acid.events` module defines a set of events that may be fired when some
+mutation occurs on a collection.
+
+An event function may be used as a decorator applied to a method of an
+:py:mod:`acid.meta` Model, in which case the function will be associated with
+the Model's :py:class:`Collection <acid.Collection>` when it is created:
+
+::
+
+    class Account(acid.meta.Model):
+        @acid.events.on_create
+        def generate_password(self):
+            \"\"\"Assign a password to the account during creation.\"\"\"
+            self.password = passlib.generate(chars=8)
+
+Alternatively they may be registered for any free-standing function against
+any model or :py:class:`Collection <acid.Collection>`:
+
+::
+
+    def generate_password(acct):
+        self.password = passlib.generate(chars=8)
+
+    # Works against a Model class:
+    acid.events.on_create(generate_password, target=Account)
+
+    # Or a Collection instance:
+    store.add_collection('accounts')
+    acid.events.on_create(generate_password, target=store['accounts'])
 
 
 Constraints
