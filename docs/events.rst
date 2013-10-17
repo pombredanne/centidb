@@ -15,7 +15,7 @@ An event function may be used as a decorator applied to a method of an
 :py:mod:`acid.meta` Model, in which case the function will be associated with
 the Model's :py:class:`Collection <acid.Collection>` when it is created:
 
-::
+.. code-block:: python
 
     class Account(acid.meta.Model):
         @acid.events.on_create
@@ -26,7 +26,7 @@ the Model's :py:class:`Collection <acid.Collection>` when it is created:
 Alternatively they may be registered for any free-standing function against
 any model or :py:class:`Collection <acid.Collection>`:
 
-::
+.. code-block:: python
 
     def generate_password(acct):
         self.password = passlib.generate(chars=8)
