@@ -103,7 +103,7 @@ class LazyIndexProperty(object):
         self.name = name
 
     def __get__(self, instance, klass):
-        index = klass.collection().indices[self.name]
+        index = klass.collection().store[self.name]
         setattr(klass, self.name, index)
         return index
 
@@ -290,7 +290,7 @@ class BaseModel(object):
             encoder=cls.META_ENCODER)
 
         for index_func in cls.META_INDEX_FUNCS:
-            coll.add_index(index_func.func_name, index_func)
+            acid.add_index(coll, index_func.func_name, index_func)
         cls.META_COLLECTION = coll
 
     @classmethod

@@ -45,13 +45,18 @@ except ImportError:
     kyotocabinet = None
 
 
+def strize(it):
+    return [(str(t[0]), str(t[1])) if isinstance(t, tuple) else str(t)
+            for t in it]
+
+
 class EngineTestBase:
     def testGetPutOverwrite(self):
         assert self.e.get('dave') is None
         self.e.put('dave', '')
-        self.assertEqual(self.e.get('dave'), '')
+        self.assertEqual(str(self.e.get('dave')), '')
         self.e.put('dave', '2')
-        self.assertEqual(self.e.get('dave'), '2')
+        self.assertEqual(str(self.e.get('dave')), '2')
 
     def testReplace(self):
         old = self.e.replace('dave', '')
@@ -63,7 +68,7 @@ class EngineTestBase:
         self.e.delete('dave')
         assert self.e.get('dave') is None
         self.e.put('dave', '')
-        self.assertEqual(self.e.get('dave'), '')
+        self.assertEqual(str(self.e.get('dave')), '')
         self.e.delete('dave')
         self.assertEqual(self.e.get('dave'), None)
 
@@ -73,8 +78,8 @@ class EngineTestBase:
 
     def testIterForwardFilled(self):
         self.e.put('dave', '')
-        eq(list(self.e.iter('dave', False)), [('dave', '')])
-        eq(list(self.e.iter('davee', False)), [])
+        eq(strize(self.e.iter('dave', False)), [('dave', '')])
+        eq(strize(self.e.iter('davee', False)), [])
 
     def testIterForwardBeyondNoExist(self):
         self.e.put('aa', '')
@@ -89,30 +94,30 @@ class EngineTestBase:
     def testIterReverseAtEnd(self):
         self.e.put('a', '')
         self.e.put('b', '')
-        eq(list(self.e.iter('b', True)), [('b', ''), ('a', '')])
+        eq(strize(self.e.iter('b', True)), [('b', ''), ('a', '')])
 
     def testIterReversePastEnd(self):
         self.e.put('a', '')
         self.e.put('b', '')
-        eq(list(self.e.iter('c', True)), [('b', ''), ('a', '')])
+        eq(strize(self.e.iter('c', True)), [('b', ''), ('a', '')])
 
     def testIterReverseFilled(self):
         self.e.put('dave', '')
-        eq(list(self.e.iter('davee', True)), [('dave', '')])
+        eq(strize(self.e.iter('davee', True)), [('dave', '')])
 
     def testIterForwardMiddle(self):
         self.e.put('a', '')
         self.e.put('c', '')
         self.e.put('d', '')
-        assert list(self.e.iter('b', False)) == [('c', ''), ('d', '')]
-        assert list(self.e.iter('c', False)) == [('c', ''), ('d', '')]
+        eq(strize(self.e.iter('b', False)), [('c', ''), ('d', '')])
+        eq(strize(self.e.iter('c', False)), [('c', ''), ('d', '')])
 
     def testIterReverseMiddle(self):
         self.e.put('a', '')
         self.e.put('b', '')
         self.e.put('d', '')
         self.e.put('e', '')
-        eq(list(self.e.iter('c', True)),
+        eq(strize(self.e.iter('c', True)),
            [('d', ''), ('b', ''), ('a', '')])
 
 
@@ -133,8 +138,9 @@ class PlyvelEngineTest(EngineTestBase):
     @classmethod
     def _setUpClass(cls):
         rm_rf('test.ldb')
-        cls.e = acid.engines.PlyvelEngine(
+        cls.engine = acid.engines.PlyvelEngine(
             name='test.ldb', create_if_missing=True)
+        cls.e = cls.engine.begin(write=True)
 
     def setUp(self):
         for key, value in self.e.iter('', False):
@@ -142,6 +148,8 @@ class PlyvelEngineTest(EngineTestBase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.e.abort()
+        cls.engine.close()
         cls.e = None
         rm_rf('test.ldb')
 
@@ -170,10 +178,12 @@ class LmdbEngineTest(EngineTestBase):
     def _setUpClass(cls):
         rm_rf('test.lmdb')
         cls.env = lmdb.open('test.lmdb')
-        cls.e = acid.engines.LmdbEngine(cls.env)
+        cls.engine = acid.engines.LmdbEngine(cls.env)
+        cls.e = cls.engine.begin(write=True)
 
     def setUp(self):
-        for key, value in list(self.e.iter('', False)):
+        keys = [str(k) for k, v in self.e.iter('', False)]
+        for key in keys:
             self.e.delete(key)
 
     @classmethod

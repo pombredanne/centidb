@@ -322,15 +322,15 @@ on a collection. These are essentially separate, hidden collections that
 reverse map from record attributes to the record's primary key, similar to
 other database systems.
 
-An index can be created by calling :py:meth:`Collection.add_index`, passing it
-a name and function implementing the index:
+An index can be created by calling :py:func:`acid.add_index`, passing it a name
+and function implementing the index:
 
 ::
 
     def age_index(person):
         return person['age']
 
-    store['people'].add_index('by_age', age_index)
+    acid.add_index(store['people'], 'by_age', age_index)
 
 An index function can return a ``None``, a single primitive value, a tuple of
 values, or a list of any of the above. Returning ``None`` indicates that no

@@ -204,13 +204,11 @@ class RangeIteratorTest:
 
 @testlib.register()
 class BatchRangeIteratorTest:
-    def get_compressor(self, s):
-        return acid.encoders.PLAIN
 
     def setUp(self):
         self.engine = acid.engines.ListEngine()
-        self.rit = acid.iterators.BatchRangeIterator(self.engine, PREFIX,
-            self.get_compressor)
+        self.rit = acid.iterators.BatchRangeIterator(
+            self.engine, PREFIX, acid.encoders.PLAIN)
         self.fill()
 
     def fill(self):

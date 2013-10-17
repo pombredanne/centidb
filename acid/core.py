@@ -35,7 +35,7 @@ from acid import errors
 from acid import iterators
 from acid import keylib
 
-__all__ = ['Store', 'Collection', 'Index', 'open', 'abort']
+__all__ = ['Store', 'Collection', 'Index', 'open', 'abort', 'add_index']
 
 ITEMGETTER_1 = operator.itemgetter(1)
 ATTRGETTER_KEY = operator.attrgetter('key')
@@ -82,20 +82,57 @@ def open(url, trace_path=None, txn_context=None, **kwargs):
     else:
         return Store(engine)
 
-def decode_offsets(s):
-    """Given a string, decode an array of offsets at the start of the string. A
-    varint indicates the length of the array, followed by one varint for each
-    element, which is a delta from the previous element, starting at 0.
-    """
-    ba = bytearray(s)
-    length = len(ba)
-    count, pos = keylib.read_int(ba, 0, length, 0)
 
-    out = [0]
-    for _ in xrange(count):
-        i, pos = keylib.read_int(ba, pos, length, 0)
-        out.append(out[-1] + i)
-    return out, pos
+def add_index(coll, name, func):
+    """Associate an index with the collection. Index metadata will be
+    created in the storage engine it it does not exist. Returns the `Index`
+    instance describing the index. This method may only be invoked once for
+    each unique `name` for each collection.
+
+    .. note::
+        Only index metadata is persistent. You must invoke
+        :py:func:`acid.add_index` with the same arguments every time you create
+        a :py:class:`Collection` instance.
+
+    `name`:
+        ASCII name for the index.
+
+    `func`:
+        Index key generation function accepting one argument, the record
+        value. It should return a single primitive value, a tuple of
+        primitive values, a list of primitive values, or a list of tuples
+        of primitive values.
+
+        .. caution::
+            The index function must have no side-effects, as it may be
+            invoked repeatedly.
+
+        Example:
+
+        ::
+
+            coll = Collection(store, 'people')
+            coll.add_index('name', lambda person: person['name'])
+
+            coll.put({'name': 'David'})
+            coll.put({'name': 'Charles'})
+            coll.put({'name': 'Charles'})
+            coll.put({'name': 'Andrew'})
+
+            it = coll.indices['name'].iterpairs()
+            assert list(it) == [
+                (('Andrew',),   (4,)),
+                (('Charles',),  (2,)),
+                (('Charles',),  (3,)),
+                (('David',),    (1,))
+            ]
+    """
+    # assert name not in coll.indices TODO
+    info_name = 'index:%s:%s' % (coll.info['name'], name)
+    info = coll.store.get_index_meta(info_name, coll.info['name'])
+    index = Index(coll, info, func)
+    coll.store._objs[name] = index
+    return index
 
 
 class Index(object):
@@ -119,6 +156,49 @@ class Index(object):
         `max`:
             Maximum number of index records to return.
     """
+
+    def _index_keys(self, key, obj):
+        """Generate a list of encoded keys representing index entries for `obj`
+        existing under `key`."""
+        idx_keys = []
+        res = self.func(obj)
+        if type(res) is list:
+            for ikey in res:
+                idx_keys.append(keylib.packs([ikey, key], self.prefix))
+        elif res is not None:
+            idx_keys.append(keylib.packs([res, key], self.prefix))
+        return idx_keys
+
+    def _coll_after_delete(self, key, rec):
+        """Respond to after_delete() Collection event by removing any index
+        entries for the deleted record."""
+        keys = self._index_keys(key, rec)
+        if keys:
+            txn = self.store._txn_context.get()
+            for k in keys:
+                txn.delete(k)
+
+    def _coll_after_create(self, key, rec):
+        """Respond to after_create() Collection event by adding any index
+        entries for the new record."""
+        keys = self._index_keys(key, rec)
+        if keys:
+            txn = self.store._txn_context.get()
+            for k in keys:
+                txn.put(k, '')
+
+    def _coll_after_replace(self, key, oldrec, newrec):
+        """Respond to after_replace() Collection event by updating the set of
+        index entries for the record."""
+        oldkeys = self._index_keys(key, oldrec)
+        newkeys = self._index_keys(key, newrec)
+        if oldkeys != newkeys:
+            txn = self.store._txn_context.get()
+            for k in oldkeys:
+                txn.delete(k)
+            for k in newkeys:
+                txn.put(k, '')
+
     def __init__(self, coll, info, func):
         self.coll = coll
         self.store = coll.store
@@ -126,6 +206,10 @@ class Index(object):
         #: The index function.
         self.func = func
         self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
+
+        coll._after_delete.append(self._coll_after_delete)
+        coll._after_create.append(self._coll_after_create)
+        coll._after_replace.append(self._coll_after_replace)
 
     def _iter(self, key, lo, hi, prefix, reverse, max, include):
         """Setup a woeful chain of iterators that yields index entries.
@@ -207,180 +291,69 @@ class Index(object):
         return default
 
 
-class Collection(object):
-    """Provides access to a record collection contained within a
-    :py:class:`Store`, and ensures associated indices update consistently when
-    changes are made.
+class BasicStrategy(object):
+    """Access strategy for 'basic' ordered collections, i.e. those containing
+    no batch records."""
+    def __init__(self, prefix):
+        self.prefix = prefix
 
-        `store`:
-            :py:class:`Store` the collection belongs to. If metadata for the
-            collection does not already exist, it will be populated during
-            construction.
+    def get(self, txn, key):
+        """Implement get() as `Engine.get(key)`."""
+        return txn.get(key.to_raw(self.prefix))
 
-        `name`:
-            ASCII string used to identify the collection, aka. the key of the
-            collection itself.
+    def put(self, txn, key, data):
+        """Implement put() as `Engine.put(key)`."""
+        txn.put(key.to_raw(self.prefix), data)
 
-        `key_func`:
-            Function invoked as `func(rec)` to produce a key for the record
-            value about to be saved. It should return a tuple that will become
-            the record's key. If the function returns a single value, it will
-            be wrapped in a 1-tuple. If no function is given, keys are assigned
-            using a counter (like auto-increment in SQL). See `counter_name`.
+    def replace(self, txn, key, data):
+        """Implement replace() as `Engine.replace(key)`."""
+        return txn.replace(key.to_raw(self.prefix), data)
 
-        `encoder`:
-            :py:class:`acid.encoders.Encoder` used to serialize record values
-            to bytestrings; defaults to :py:attr:`acid.encoders.PICKLE`.
+    def delete(self, txn, key):
+        """Implement delete() as `Engine.delete(key)`."""
+        txn.delete(key.to_raw(self.prefix))
 
-        `counter_name`:
-            Specifies the name of the :py:class:`Store` counter to use when
-            generating auto-incremented keys. If unspecified, defaults to
-            ``"key:<name>"``. Unused when `key_func` is specified.
+    def pop(self, txn, key):
+        """Implement pop() as `Engine.pop(key)`."""
+        return txn.pop(key.to_raw(self.prefix))
+
+    def iter(self, txn):
+        """Implement iter() using :py:class:`iterators.RangeIterator`."""
+        return iterators.RangeIterator(txn, self.prefix)
+
+
+class BatchStrategy(object):
+    """Access strategy for ordered collections containing batch records.
     """
-    def __init__(self, store, info, key_func=None, encoder=None,
-                 counter_name=None):
-        """Create an instance; see class docstring."""
+    def __init__(self, prefix, store, compressor):
+        self.prefix = prefix
         self.store = store
-        self.engine = store.engine
-        self.info = info
-        self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
-        if key_func:
-            self.key_func = key_func
+        self.compressor = compressor
+
+    def get(self, txn, key):
+        """Implement get() using a range query over >=`key`."""
+        it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
+        it.set_exact(key)
+        for res in it.forward():
+            return res.data
+
+    def _prepare_batch(self, items):
+        keytups = [key for key, _ in reversed(items)]
+        phys = keylib.packs(keytups, self.prefix)
+
+        if len(items) == 1:
+            out = items[0][1]
         else:
-            counter_name = counter_name or ('key:%(name)s' % self.info)
-            self.key_func = lambda _: store.count(counter_name)
-
-        self.encoder = encoder or encoders.PICKLE
-        self.encoder_prefix = self.store.add_encoder(self.encoder)
-        #: Dict mapping indices added using :py:meth:`Collection.add_index` to
-        #: :py:class:`Index` instances representing them.
-        #:
-        #: ::
-        #:
-        #:      idx = coll.add_index('some index', lambda v: v[0])
-        #:      assert coll.indices['some index'] is idx
-        self.indices = {}
-
-    def add_index(self, name, func):
-        """Associate an index with the collection. Index metadata will be
-        created in the storage engine it it does not exist. Returns the `Index`
-        instance describing the index. This method may only be invoked once for
-        each unique `name` for each collection.
-
-        .. note::
-            Only index metadata is persistent. You must invoke
-            :py:meth:`Collection.add_index` with the same arguments every time
-            you create a :py:class:`Collection` instance.
-
-        `name`:
-            ASCII name for the index.
-
-        `func`:
-            Index key generation function accepting one argument, the record
-            value. It should return a single primitive value, a tuple of
-            primitive values, a list of primitive values, or a list of tuples
-            of primitive values.
-
-            .. caution::
-                The index function must have no side-effects, as it may be
-                invoked repeatedly.
-
-            Example:
-
-            ::
-
-                coll = Collection(store, 'people')
-                coll.add_index('name', lambda person: person['name'])
-
-                coll.put({'name': 'David'})
-                coll.put({'name': 'Charles'})
-                coll.put({'name': 'Charles'})
-                coll.put({'name': 'Andrew'})
-
-                it = coll.indices['name'].iterpairs()
-                assert list(it) == [
-                    (('Andrew',),   (4,)),
-                    (('Charles',),  (2,)),
-                    (('Charles',),  (3,)),
-                    (('David',),    (1,))
-                ]
-        """
-        assert name not in self.indices
-        info_name = 'index:%s:%s' % (self.info['name'], name)
-        info = self.store.get_index_meta(info_name, self.info['name'])
-        index = Index(self, info, func)
-        self.indices[name] = index
-        return index
-
-    def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
-        txn = self.store._txn_context.get()
-        it = iterators.BatchRangeIterator(txn, self.prefix,
-                                          self.store.get_encoder)
-        return iterators.from_args(it, key, lo, hi, prefix, reverse,
-                                   max_, include, max_phys)
-
-    def __getitem__(self, index):
-        return self.indices[index]
-
-    def _index_keys(self, key, obj):
-        """Generate a list of encoded keys representing index entries for `obj`
-        existing under `key`."""
-        idx_keys = []
-        for idx in self.indices.itervalues():
-            res = idx.func(obj)
-            if type(res) is list:
-                for ikey in res:
-                    idx_keys.append(keylib.packs([ikey, key], idx.prefix))
-            elif res is not None:
-                idx_keys.append(keylib.packs([res, key], idx.prefix))
-        return idx_keys
-
-    def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
-              max=None, include=False, raw=False):
-        """Yield all `(key tuple, value)` tuples in key order."""
-        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
-        if raw:
-            return ((r.key, r.data) for r in it)
-        return ((r.key, self.encoder.unpack(r.key, r.data)) for r in it)
-
-    def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-             max=None, include=False):
-        """Yield key tuples in key order."""
-        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
-        return itertools.imap(ATTRGETTER_KEY, it)
-
-    def values(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-               max=None, include=False, raw=False):
-        """Yield record values in key order."""
-        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
-        if raw:
-            return itertools.imap(ATTRGETTER_DATA, it)
-        return (self.encoder.unpack(r.key, r.data) for r in it)
-
-    def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
-             include=False, raw=None, default=None):
-        """Return the first matching record, or None. Like ``next(itervalues(),
-        default)``."""
-        it = self._iter(key, lo, hi, prefix, reverse, None, include, None)
-        for r in it:
-            if raw:
-                return r.data
-            return self.encoder.unpack(r.key, r.data)
-        return default
-
-    def get(self, key, default=None, raw=False):
-        """Fetch a record given its key. If `key` is not a tuple, it is wrapped
-        in a 1-tuple. If the record does not exist, return ``None`` or if
-        `default` is provided, return it instead."""
-        it = self._iter(key, None, None, None, None, None, None, None)
-        for r in it:
-            if raw:
-                return r.data
-            return self.encoder.unpack(r.key, r.data)
-        return default
+            out = bytearray()
+            keylib.write_int(len(items), out.append, 0)
+            for _, data in items:
+                keylib.write_int(len(data), out.append, 0)
+            concat = ''.join(data for _, data in items)
+            out.extend(self.compressor.pack(concat))
+        return phys, str(out)
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
-              max_bytes=None, max_keylen=None, preserve=True, packer=None,
+              max_bytes=None, max_keylen=None, preserve=True,
               max_phys=None, grouper=None):
         """
         Search the key range *lo..hi* for individual records, combining them
@@ -431,10 +404,6 @@ class Collection(object):
                 If ``False``, found batches are exploded and their members
                 contribute to the currently building batch.
 
-            `packer`:
-                Encoding to use as compressor, defaults to
-                :py:attr:`acid.encoders.PLAIN`.
-
             `max_phys`:
                 Maximum number of physical keys to visit in any particular
                 call. A collection may be incrementally batched by repeatedly
@@ -452,20 +421,21 @@ class Collection(object):
         """
         assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
+
         txn = self.store._txn_context.get()
-        packer = packer or encoders.PLAIN
-        it = self._iter(None, lo, hi, prefix, False, None, True, max_phys)
-        groupval = None
+        it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
+        groupval = object()
         items = []
 
-        for r in it:
+        for r in iterators.from_args(it, None, lo, hi, prefix,
+                                     False, None, True, max_phys):
             if preserve and len(r.keys) > 1:
                 self._write_batch(txn, items, packer)
             else:
                 txn.delete(keylib.packs(r.key, self.prefix))
                 items.append((r.key, r.data))
                 if max_bytes:
-                    _, encoded = self._prepare_batch(items, packer)
+                    _, encoded = self._prepare_batch(items)
                     if len(encoded) > max_bytes:
                         items.pop()
                         self._write_batch(txn, items, packer)
@@ -476,62 +446,160 @@ class Collection(object):
                     done = val != groupval
                     groupval = val
                 if done:
-                    self._write_batch(txn, items, packer)
-        self._write_batch(txn, items, packer)
+                    self._write_batch(txn, items)
+        self._write_batch(txn, items)
 
-    def _write_batch(self, txn, items, packer):
+    def _write_batch(self, txn, items):
         if items:
-            phys, data = self._prepare_batch(items, packer)
+            phys, data = self._prepare_batch(items)
             txn.put(phys, data)
             del items[:]
 
-    def _prepare_batch(self, items, packer):
-        packer_prefix = self.store._encoder_prefix.get(packer)
-        if not packer_prefix:
-            packer_prefix = self.store.add_encoder(packer)
-        keytups = [key for key, _ in reversed(items)]
-        phys = keylib.packs(keytups, self.prefix)
-        out = bytearray()
+    def iter(self, txn):
+        return iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
 
-        if len(items) == 1:
-            out.extend(packer_prefix)
-            out.extend(packer.pack(items[0][1]))
-        else:
-            keylib.write_int(len(items), out.append, 0)
-            for _, data in items:
-                keylib.write_int(len(data), out.append, 0)
-            out.extend(packer_prefix)
-            concat = ''.join(data for _, data in items)
-            out.extend(packer.pack(concat))
-        return phys, str(out)
-
-    def _split_batch(self, key):
-        """Find the batch `key` belongs to and split it, saving all records
-        individually except for `key`."""
-        key = keylib.Key(key)
-        txn = self.store._txn_context.get()
-        it = iterators.BatchRangeIterator(txn, self.prefix,
-                                          self.store.get_encoder)
+    def pop(self, txn, key):
+        """Implement pop() using a range query to find the single or batch
+        record `key` belongs to and splitting it, saving all records
+        individually except for `key`. Return the data for `key` if it existed,
+        otherwise ``None``."""
+        it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
         it.set_exact(key)
-        assert next(it.forward(), None), 'Physical key missing: %r' % (key,)
+        for res in it.forward():
+            old = res.data
+            if len(res.keys) > 1:
+                txn.delete(it.phys_key)
+                for key_, data in it.batch_items():
+                    if key != key_:
+                        txn.put(key_.to_raw(self.prefix), data)
+            else:
+                txn.delete(key.to_raw(self.prefix))
+            return old
 
-        txn.delete(it.phys_key)
-        packer = encoders.PLAIN
-        packer_prefix = self.store._encoder_prefix.get(encoders.PLAIN)
-        for key_, data in it.batch_items():
-            if key != key_:
-                txn.put(key_.to_raw(self.prefix), packer_prefix + data)
+    def replace(self, txn, key, data):
+        """Implement replace() by popping any existing value, then writing out
+        the new record and returning the old value."""
+        old = self.pop(txn, key)
+        txn.put(key.to_raw(self.prefix), data)
+        return old
 
-    def put(self, rec, packer=None, key=None):
+    delete = pop
+    put = replace
+
+
+class Collection(object):
+    """Provides access to a record collection contained within a
+    :py:class:`Store`, and ensures associated indices update consistently when
+    changes are made.
+
+        `store`:
+            :py:class:`Store` the collection belongs to. If metadata for the
+            collection does not already exist, it will be populated during
+            construction.
+
+        `name`:
+            ASCII string used to identify the collection, aka. the key of the
+            collection itself.
+
+        `key_func`:
+            Function invoked as `func(rec)` to produce a key for the record
+            value about to be saved. It should return a tuple that will become
+            the record's key. If the function returns a single value, it will
+            be wrapped in a 1-tuple. If no function is given, keys are assigned
+            using a counter (like auto-increment in SQL). See `counter_name`.
+
+        `encoder`:
+            :py:class:`acid.encoders.Encoder` used to serialize record values
+            to bytestrings; defaults to :py:attr:`acid.encoders.PICKLE`.
+
+        `counter_name`:
+            Specifies the name of the :py:class:`Store` counter to use when
+            generating auto-incremented keys. If unspecified, defaults to
+            ``"key:<name>"``. Unused when `key_func` is specified.
+    """
+    def __init__(self, store, info, key_func=None, encoder=None,
+                 compressor=None, counter_name=None):
+        """Create an instance; see class docstring."""
+        self.store = store
+        self.engine = store.engine
+        self.info = info
+        self.prefix = keylib.pack_int(info['idx'], self.store.prefix)
+
+        self.compressor = compressor or encoders.PLAIN
+        if info.get('strategy', 'batch') == 'batch':
+            self.strategy = BatchStrategy(self.prefix, store, self.compressor)
+        else:
+            assert info['strategy'] == 'basic'
+            self.strategy = BasicStrategy(self.prefix)
+
+        if key_func:
+            self.key_func = key_func
+        else:
+            counter_name = counter_name or ('key:%(name)s' % self.info)
+            self.key_func = lambda _: store.count(counter_name)
+
+        self.encoder = encoder or encoders.PICKLE
+        self._after_create = []
+        self._after_delete = []
+        self._after_replace = []
+        self._after_create = []
+
+    def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
+        it = self.strategy.iter(self.store._txn_context.get())
+        return iterators.from_args(it, key, lo, hi, prefix, reverse,
+                                   max_, include, max_phys)
+
+    def items(self, key=None, lo=None, hi=None, prefix=None, reverse=False,
+              max=None, include=False, raw=False):
+        """Yield all `(key tuple, value)` tuples in key order."""
+        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
+        if raw:
+            return ((r.key, r.data) for r in it)
+        return ((r.key, self.encoder.unpack(r.key, r.data)) for r in it)
+
+    def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+             max=None, include=False):
+        """Yield key tuples in key order."""
+        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
+        return itertools.imap(ATTRGETTER_KEY, it)
+
+    def values(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+               max=None, include=False, raw=False):
+        """Yield record values in key order."""
+        it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
+        if raw:
+            return itertools.imap(ATTRGETTER_DATA, it)
+        return (self.encoder.unpack(r.key, r.data) for r in it)
+
+    def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+             include=False, raw=None, default=None):
+        """Return the first matching record, or None. Like ``next(itervalues(),
+        default)``."""
+        it = self._iter(key, lo, hi, prefix, reverse, None, include, None)
+        for r in it:
+            if raw:
+                return r.data
+            return self.encoder.unpack(r.key, r.data)
+        return default
+
+    def get(self, key, default=None, raw=False):
+        """Fetch a record given its key. If `key` is not a tuple, it is wrapped
+        in a 1-tuple. If the record does not exist, return ``None`` or if
+        `default` is provided, return it instead."""
+        key = keylib.Key(key)
+        data = self.strategy.get(self.store._txn_context.get(), key)
+        if data:
+            if raw:
+                return data
+            return self.encoder.unpack(key, data)
+        return default
+
+    def put(self, rec, key=None):
         """Create or overwrite a record.
 
             `rec`:
                 The value to put; must be a value recognised by the
                 collection's `encoder`.
-
-            `packer`:
-                Encoding to use as compressor, defaults to
-                :py:attr:`acid.encoders.PLAIN`.
 
             `key`:
                 If specified, overrides the use of collection's key function
@@ -541,35 +609,35 @@ class Collection(object):
         if key is None:
             key = self.key_func(rec)
         key = keylib.Key(key)
-        packer = packer or encoders.PLAIN
-        packer_prefix = self.store._encoder_prefix.get(packer)
-        if not packer_prefix:
-            packer_prefix = self.store.add_encoder(packer)
+        new = self.encoder.pack(rec)
 
-        if self.indices:
-            self.delete(key)
-            for index_key in self._index_keys(key, rec):
-                txn.put(index_key, '')
+        if self._after_replace or self._after_create:
+            old = self.strategy.replace(txn, key, new)
+            if old:
+                oldrec = self.encoder.unpack(key, old)
+                for func in self._after_replace:
+                    func(key, oldrec, rec)
+            else:
+                for func in self._after_create:
+                    func(key, rec)
+        else:
+            self.strategy.put(txn, key, new)
 
-        txn.put(key.to_raw(self.prefix),
-                packer_prefix + packer.pack(self.encoder.pack(rec)))
         return key
 
     def delete(self, key):
         """Delete any existing record filed under `key`.
         """
         key = keylib.Key(key)
-        it = self._iter(key, None, None, None, None, None, None, None)
-        for r in it:
-            txn = self.store._txn_context.get()
-            if self.indices:
-                obj = self.encoder.unpack(r.key, r.data)
-                for idx_key in self._index_keys(key, obj):
-                    txn.delete(idx_key)
-            if len(r.keys) > 1:
-                self._split_batch(key)
-            else:
-                txn.delete(key.to_raw(self.prefix))
+        txn = self.store._txn_context.get()
+        if self._after_delete:
+            data = self.strategy.pop(txn, key)
+            if data:
+                obj = self.encoder.unpack(key, data)
+                for func in self._after_delete:
+                    func(key, obj)
+        else:
+            self.strategy.delete(txn, key)
 
 
 class TxnContext(object):
@@ -648,10 +716,16 @@ class Store(object):
                                     for i, e in enumerate(encoders._ENCODERS))
         self._prefix_encoder = dict((keylib.pack_int(1 + i), e)
                                     for i, e in enumerate(encoders._ENCODERS))
+
         # ((kind, name, attr), value)
-        self._meta = Collection(self, {'name': '\x00meta', 'idx': 9},
-            encoder=encoders.KEY, key_func=lambda t: t[:3])
-        self._colls = {}
+        meta_info = {
+            'name': '\x00meta',
+            'idx': 9,
+            #'strategy': 'basic'
+        }
+        self._meta = Collection(self, meta_info, encoder=encoders.KEY,
+                                key_func=lambda t: t[:3])
+        self._objs = {}
 
     def begin(self, write=False):
         """Return a context manager that starts a database transaction when it
@@ -742,13 +816,13 @@ class Store(object):
 
     def __getitem__(self, name, kwargs={}):
         try:
-            return self._colls[name]
+            return self._objs[name]
         except KeyError:
             info = self.get_meta(KIND_TABLE, name)
             if not info:
                 raise
-            self._colls[name] = Collection(self, info, **kwargs)
-            return self._colls[name]
+            self._objs[name] = Collection(self, info, **kwargs)
+            return self._objs[name]
 
     def add_encoder(self, encoder):
         """Register an :py:class:`acid.encoders.Encoder` so that
@@ -803,9 +877,3 @@ class Store(object):
         if n:
             self._meta.put(value + n, key=key)
         return 0L + value
-
-if acid._use_speedups:
-    try:
-        from acid._keylib import decode_offsets
-    except ImportError:
-        pass

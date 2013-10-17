@@ -676,12 +676,13 @@ class LmdbEngine(Engine):
         self.env = env
         self.txn = txn
         self.db = db
-        self.get = (txn or env).get
-        self.put = (txn or env).put
-        self.pop = (txn or env).pop
-        self.replace = (txn or env).replace
-        self.delete = (txn or env).delete
-        self.cursor = (txn or env).cursor
+        if txn:
+            self.get = txn.get
+            self.put = txn.put
+            self.pop = txn.pop
+            self.replace = txn.replace
+            self.delete = txn.delete
+            self.cursor = txn.cursor
 
     @classmethod
     def from_url(cls, dct):

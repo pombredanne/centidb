@@ -212,7 +212,7 @@ class IndexTest:
         self.t = self.store.begin()
         self.t.__enter__()
         self.coll = self.store.add_collection('stuff')
-        self.i = self.coll.add_index('idx', lambda obj: (69, obj))
+        self.i = acid.add_index(self.coll, 'idx', lambda obj: (69, obj))
 
         self.key = self.coll.put('dave')
         self.key2 = self.coll.put('dave2')
@@ -225,7 +225,7 @@ class IndexTest:
 
         # Insert junk in a higher collection to test iter stop conds.
         self.coll2 = self.store.add_collection('stuff2')
-        self.i2 = self.coll2.add_index('idx', lambda obj: (69, obj))
+        self.i2 = acid.add_index(self.coll2, 'idx', lambda obj: (69, obj))
         self.coll2.put('XXXX')
         self.coll2.put('YYYY')
 
@@ -316,7 +316,7 @@ class BatchTest:
 
     def test_batch(self):
         self.insert_items()
-        self.coll.batch(max_recs=len(self.ITEMS))
+        self.coll.strategy.batch(max_recs=len(self.ITEMS))
         # Should now contain metadata + 1 batch
         assert len(self.e.items) == (self.old_len + 1)
         # Forward iteration should succeed.
@@ -329,7 +329,7 @@ class BatchTest:
 
     def test_delete(self):
         self.insert_items()
-        self.coll.batch(max_recs=len(self.ITEMS))
+        self.coll.strategy.batch(max_recs=len(self.ITEMS))
         # Should now contain metadata + 1 batch
         assert len(self.e.items) == (self.old_len + 1)
         # Deletion should trigger split of batch.
@@ -341,7 +341,7 @@ class BatchTest:
 
     def test_put(self):
         self.insert_items()
-        self.coll.batch(max_recs=len(self.ITEMS))
+        self.coll.strategy.batch(max_recs=len(self.ITEMS))
         # Should now contain metadata + 1 batch
         assert len(self.e.items) == (self.old_len + 1)
         # Put should trigger split of batch and modification of record.
@@ -401,13 +401,13 @@ class DeleteBugTest:
         store = acid.open('list:/')
         with store.begin(write=True):
             stuff = store.add_collection('stuff')
-            stuff.add_index('foop', lambda rec: 'foop')
+            acid.add_index(stuff, 'foop', lambda rec: 'foop')
             key = stuff.put('temp')
-            assert stuff.indices['foop'].find('foop') == 'temp'
+            assert store['foop'].find('foop') == 'temp'
             assert stuff.get(1) == 'temp'
             stuff.delete(1)
             assert stuff.get(1) is None
-            i = stuff.indices['foop'].find('foop')
+            i = store['foop'].find('foop')
             assert i is None, i
 
 

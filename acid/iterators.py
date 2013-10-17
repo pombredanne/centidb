@@ -21,8 +21,23 @@ Iterator implementations.
 from __future__ import absolute_import
 
 import acid
-import acid.core
 from acid import keylib
+
+
+def decode_offsets(s):
+    """Given a string, decode an array of offsets at the start of the string. A
+    varint indicates the length of the array, followed by one varint for each
+    element, which is a delta from the previous element, starting at 0.
+    """
+    ba = bytearray(s)
+    length = len(ba)
+    count, pos = keylib.read_int(ba, 0, length, 0)
+
+    out = [0]
+    for _ in xrange(count):
+        i, pos = keylib.read_int(ba, pos, length, 0)
+        out.append(out[-1] + i)
+    return out, pos
 
 
 class Result(object):
@@ -102,6 +117,10 @@ class RangeIterator(Iterator):
         self.engine = engine
         self.prefix = prefix
 
+    @property
+    def key(self):
+        return self.keys[0]
+
     def _step(self):
         """Step the iterator once, saving the new key and data. Returns True if
         the iterator is still within the bounds of the collection prefix,
@@ -174,31 +193,21 @@ class BatchRangeIterator(Iterator):
         `prefix`:
             Bytestring prefix for all keys.
 
-        `get_compressor`:
-            Function invoked as `get_compressor(prefix)` where prefix is a
-            1-length bytestring containing the compressor's prefix. The
-            function should return a :py:class:`acid.encoders.Compressor`
-            instance.
+        `compressor`:
+            :py:class:`acid.encoders.Compressor` instance used to decompress
+            batch keys.
     """
     _max_phys = -1
     _index = 0
 
-    def __init__(self, engine, prefix, get_compressor):
+    def __init__(self, engine, prefix, compressor):
         self.engine = engine
         self.prefix = prefix
-        self.get_compressor = get_compressor
+        self.compressor = compressor
 
     def set_max_phys(self, max_phys):
         """Set the maximum number of physical records to visit."""
         self._max_phys = max_phys
-
-    def _decompress(self, data):
-        """Extract the compressor identifier prefix from `data`, use the
-        `get_compressor` callback provided to the constructor to get a
-        :py:class:`acid.encoders.Compressor` instance from the identifer, then
-        decompress the remainder of the string and return it."""
-        compressor = self.get_compressor(data[0])
-        return compressor.unpack(buffer(data, 1))
 
     def _step(self):
         """Progress one step through the batch, or fetch another physical
@@ -226,14 +235,14 @@ class BatchRangeIterator(Iterator):
             # Single record.
             if lenk == 1:
                 self.key = self.keys[0]
-                self.data = self._decompress(self.raw)
+                self.data = self.raw
                 self._index = 0
                 return True
 
             # Decode the array of logical record offsets and save it, along
             # with the decompressed concatenation of all records.
-            self.offsets, dstart = acid.core.decode_offsets(self.raw)
-            self.concat = self._decompress(buffer(self.raw, dstart))
+            self.offsets, dstart = decode_offsets(self.raw)
+            self.concat = self.compressor.unpack(buffer(self.raw, dstart))
             self._index = lenk
 
         self._index -= 1
@@ -338,5 +347,6 @@ def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
 if acid._use_speedups:
     try:
         from acid._iterators import *
+        from acid._keylib import decode_offsets
     except ImportError:
         pass

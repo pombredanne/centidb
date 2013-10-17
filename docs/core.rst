@@ -28,6 +28,8 @@ Collection Class
 Index Class
 +++++++++++
 
+.. autofunction:: acid.add_index
+
 .. autoclass:: Index
     :members:
 
