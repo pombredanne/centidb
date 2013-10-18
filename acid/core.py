@@ -555,6 +555,10 @@ class Collection(object):
         self._after_replace = []
         self._after_delete = []
         self._after_update = []
+        # Copied verbatim to allow proxying.
+        self._on_commit = store._on_commit
+        self._after_commit = store._after_commit
+        self._after_abort = store._after_abort
 
     def _listen(self, name, func):
         """Subscribe `func` to the event named `name`."""
@@ -665,9 +669,12 @@ class TxnContext(object):
     """Abstraction for maintaining the local context's transaction. This
     implementation uses TLS.
     """
-    def __init__(self, engine):
+    def __init__(self, engine, store):
         self.engine = engine
         self.local = threading.local()
+        self._on_commit = store._on_commit
+        self._after_commit = store._after_commit
+        self._after_abort = store._after_abort
 
     def mode(self):
         """Return a tristate indicating the active transaction mode: ``None`
@@ -688,9 +695,12 @@ class TxnContext(object):
         handled = True
         if exc_type:
             self.local.txn.abort()
+            dispatch(self._after_abort)
             handled = exc_type is errors.AbortError
         else:
+            dispatch(self._on_commit)
             self.local.txn.commit()
+            dispatch(self._after_commit)
         del self.local.txn
         del self.local.write
         return handled
@@ -706,9 +716,9 @@ class TxnContext(object):
 class GeventTxnContext(TxnContext):
     """Like TxnContext except using gevent.local.local().
     """
-    def __init__(self, engine):
+    def __init__(self, engine, store):
+        TxnContext.__init__(self, engine, store)
         import gevent.local
-        self.engine = engine
         self.local = gevent.local.local()
 
 
@@ -747,6 +757,9 @@ class Store(object):
         self._meta = Collection(self, meta_info, encoder=encoders.KEY,
                                 key_func=lambda t: t[:3])
         self._objs = {}
+        self._on_commit = []
+        self._after_commit = []
+        self._after_abort = []
 
     def begin(self, write=False):
         """Return a context manager that starts a database transaction when it

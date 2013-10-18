@@ -192,25 +192,19 @@ def after_delete(func, target=None):
     return _listen('after_delete', func, target)
 
 
-def on_abort(func, target=None):
-    """Mark a function to be called prior to abort of any transaction.
-    """
-    return _listen('on_abort', func, target)
-
-
 def after_abort(func, target=None):
-    """Mark a function to be called prior to abort of any transaction.
-    """
+    """Request `func` be invoked as `func()` following abort of any
+    transaction."""
     return _listen('after_abort', func, target)
 
 
 def on_commit(func, target=None):
-    """Mark a function to be called prior to commit of any transaction.
-    """
+    """Request `func` be invoked as `func()` prior to commit of any
+    transaction."""
     return _listen('on_commit', func, target)
 
 
 def after_commit(func, target=None):
-    """Mark a function to be called prior to commit of any transaction.
-    """
+    """Request `func` be invoked as `func()` following commit of any
+    transaction."""
     return _listen('after_commit', func, target)

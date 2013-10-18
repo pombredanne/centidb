@@ -81,12 +81,13 @@ case.
         **on_create**, No, —
         **on_update**, No, No
         **on_delete**, No, —
-        **on_abort**, No, No
         **on_commit**, No, No
         **after_create**, No, Yes
         **after_update**, No, No
         **after_delete**, No, Yes
         **after_replace**, Yes, Yes
+        **after_abort**, No, No
+        **after_commit**, No, No
 
 
 External triggers
@@ -134,7 +135,15 @@ being modified.
 .. autofunction:: acid.events.after_delete ()
 .. autofunction:: acid.events.after_replace ()
 
-.. autofunction:: acid.events.on_abort ()
+
+Transaction Events
+++++++++++++++++++
+
+These may be applied to a :py:class:`Model <acid.meta.Model>`,
+:py:class:`Collection <acid.Collection>`, or :py:class:`Store <acid.Store>`. In
+the case of Models or collections, the subscription is proxied through to the
+associated store.
+
 .. autofunction:: acid.events.after_abort ()
 .. autofunction:: acid.events.on_commit ()
 .. autofunction:: acid.events.after_commit ()
