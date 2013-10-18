@@ -39,17 +39,35 @@ any model or :py:class:`Collection <acid.Collection>`:
     acid.events.on_create(generate_password, target=store['accounts'])
 
 
+Model vs Collection Events
+++++++++++++++++++++++++++
+
+This interface attempts to unify two very different kinds of events: those
+occurring logically within the application's data model, and those occurring as
+a result of interaction with the storage engine. When applied to
+:py:class:`acid.meta.Model`, most event types rely only on in-memory state
+tracked by the model class, whereas those applied to
+:py:class:`acid.Collection` relate to the state of the storage engine as
+reported at the time of the mutation.
+
+The reason for having both event types is that usually Model events are good
+enough for application use, but storage engine events are needed to robustly
+implement features such as indexing. Instead of burying the storage engine
+events within Acid's implementation, they are exposed to user code.
+
+
 Observing Events
 ++++++++++++++++
 
-There is an important difference between the kinds of events available, since
+There is an important difference between the events available, since
 subscribing to some will cause Acid to adopt a less efficient strategy when
-interacting with the storage engine. Some engines, such as LMDB, support
-efficient *read-modify-write* operations, whereas others, such as LSM trees,
+interacting with the storage engine. Engines like :py:class:`LmdbEngine
+<acid.engines.LmdbEngine>` support efficient *read-modify-write* operations,
+whereas others such as :py:class:`PlyvelEngine <acid.engines.PlyvelEngine>`
 have reads that are more expensive than writes.
 
 An *observing event* is one that will cause Acid to ask the storage engine to
-perform a read of the previous record value, if any, during a write operation.
+read and return the previous record value, if any, during a write operation.
 Even for storage engines that support fast *read-modify-write* operations,
 emitting the event further requires decoding of the old record value. Therefore
 where possible, prefer subscribing to a non-observing event if it fits your use
@@ -65,8 +83,8 @@ case.
         **on_delete**, No, —
         **on_abort**, No, No
         **on_commit**, No, No
-        **after_create**, No, —
-        **after_update**, No, Yes
+        **after_create**, No, Yes
+        **after_update**, No, No
         **after_delete**, No, Yes
         **after_replace**, Yes, Yes
 
@@ -116,5 +134,7 @@ being modified.
 .. autofunction:: acid.events.after_delete ()
 .. autofunction:: acid.events.after_replace ()
 
+.. autofunction:: acid.events.on_abort ()
+.. autofunction:: acid.events.after_abort ()
 .. autofunction:: acid.events.on_commit ()
 .. autofunction:: acid.events.after_commit ()
