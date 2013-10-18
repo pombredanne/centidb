@@ -55,7 +55,7 @@ def dispatch(lst, *args):
     """Invoke each `func` in `lst` as `func(*args)`, logging any exceptions and
     removing any exception-raising function."""
     # reversed() avoids list copy.. list is mutated during iteration.
-    for i in xrange(len(lst), -1, -1):
+    for i in xrange(len(lst) - 1, -1, -1):
         try:
             if lst[i](*args) is False:
                 lst.pop(i)
