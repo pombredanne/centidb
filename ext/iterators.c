@@ -293,6 +293,19 @@ iter_start(Iterator *self, PyObject *key, int reverse)
 }
 
 /**
+ * Getter for `Iterator.key`.
+ */
+static PyObject *iter_get_key(Iterator *self)
+{
+    PyObject *out = Py_None;
+    if(self->keys && PyList_GET_SIZE(self->keys)) {
+        out = PyList_GET_ITEM(self->keys, 0);
+    }
+    Py_INCREF(out);
+    return out;
+}
+
+/**
  * Getter for `Iterator.keys`.
  */
 static PyObject *iter_get_keys(Iterator *self)
@@ -320,6 +333,7 @@ static PyObject *iter_get_data(Iterator *self)
 
 
 static PyGetSetDef iter_props[] = {
+    {"key", (getter)iter_get_key, NULL, "", NULL},
     {"keys", (getter)iter_get_keys, NULL, "", NULL},
     {"data", (getter)iter_get_data, NULL, "", NULL},
     {NULL, NULL, NULL, NULL, NULL}
