@@ -55,12 +55,13 @@ def dispatch(lst, *args):
     """Invoke each `func` in `lst` as `func(*args)`, logging any exceptions and
     removing any exception-raising function."""
     # reversed() avoids list copy.. list is mutated during iteration.
-    for func in reversed(lst):
+    for i in xrange(len(lst), -1, -1):
         try:
-            func(*args)
-        except Exception:
-            LOG.exception('While invoking %r(*%r)', func, args)
-            lst.remove(func)
+            if lst[i](*args) is False:
+                lst.pop(i)
+        except Exception, e:
+            LOG.exception('While invoking %r%r', lst[i], args)
+            lst.pop(i)
 
 def abort():
     """Trigger a graceful abort of the active transaction."""
