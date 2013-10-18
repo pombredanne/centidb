@@ -102,33 +102,15 @@ def after_replace(func, target=None):
         def after_replace(self, old):
             print "Record %s replaced: old ctime %s, new time %s" %\\
                   (self.key, old.ctime, self.ctime)
-
-    .. caution::
-
-        Registering any `after_replace` handler causes :py:meth:`Collection.put
-        <acid.Collection.put>` to use :py:meth:`Engine.replace
-        <acid.engines.Engine.replace>` instead of :py:meth:`Engine.put
-        <acid.engines.Engine.put>`, which cannot be supported efficiently for
-        all storage engines. Note that indices are internally implemented as
-        `after_replace` handlers, so there is no additional penalty to
-        registering handlers if any index is defined on a collection.
-
     """
     return _listen('after_replace', func, target)
 
 
 def on_delete(func, target=None):
-    """Mark a function to be called prior to deletion of a record.
-
-    .. caution::
-
-        When applied to a :py:class:`Model <acid.meta.Model>`, fires if
-        :py:meth:`delete <acid.meta.Model.delete>` is invoked for any model
-        with its key set, which is only possible following a load or save.
-
-        However when applied to a :py:class:`Collection <acid.Collection>`,
-        causes :py:meth:`Collection.delete <acid.Collection.delete>` to change
-        behaviour, causing a lookup and decode during deletion.
+    """Request `func` be invoked as `func(model)` when a `model` that has
+    previously been assigned a key is about to be deleted. This event can only
+    be applied to :py:class:`acid.meta.Model`, it has no meaning when applied
+    to a collection.
 
     ::
 
@@ -142,7 +124,9 @@ def on_delete(func, target=None):
 
 
 def after_create(func, target=None):
-    """Mark a function to be called after initial save (creation) of a record.
+    """Request `func` be invoked as `func(model)` when a `model` that had no
+    previous key has been saved. Alternatively when applied to a collection,
+    request `func(key, rec)` be invoked.
 
     ::
 
@@ -156,7 +140,9 @@ def after_create(func, target=None):
 
 
 def after_update(func, target=None):
-    """Mark a function to be called after create or update of a record.
+    """Request `func` be invoked as `func(model)` after any change to `model`.
+    Alternatively when applied to a collection, request `func(key, rec)` be
+    invoked.
 
     ::
 
@@ -169,17 +155,9 @@ def after_update(func, target=None):
 
 
 def after_delete(func, target=None):
-    """Mark a function to be called after deletion of a record.
-
-    .. caution::
-
-        When applied to a :py:class:`Model <acid.meta.Model>`, fires if
-        :py:meth:`delete <acid.meta.Model.delete>` is invoked for any model
-        with its key set, which is only possible following a load or save.
-
-        However when applied to a :py:class:`Collection <acid.Collection>`,
-        causes :py:meth:`Collection.delete <acid.Collection.delete>` to change
-        behaviour, causing a lookup and decode during deletion.
+    """Request `func` be invoked as `func(model)` after any `model` that
+    previously had an assigned key is deleted. Alternatively when applied to a
+    collection, request `func(key, rec)` be invoked.
 
     ::
 
