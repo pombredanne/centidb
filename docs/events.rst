@@ -23,6 +23,10 @@ the Model's :py:class:`Collection <acid.Collection>` when it is created:
             """Assign a password to the account during creation."""
             self.password = passlib.generate(chars=8)
 
+Events registered against against a class will also fire for any modifications
+to instances of any subclasses. Note that notification order is most-specific
+to least-specific.
+
 Alternatively they may be registered for any free-standing function against
 any model or :py:class:`Collection <acid.Collection>`:
 
@@ -90,12 +94,12 @@ case.
         **after_commit**, No, No
 
 
-External triggers
-+++++++++++++++++
+Debugging
++++++++++
 
-It is also possible to create a trigger from outside the model definition. This
-uses the same `on_*` and `after_*` functions, but includes a second parameter,
-which is a reference to the model class to subscribe to.
+Since it is possible to subscribe to events on a base clase, it is possible to
+subscribe to events on :py:class:`acid.meta.Model` itself, thus capturing all
+database operations. This may be useful for diagnostics:
 
 ::
 
@@ -107,9 +111,8 @@ which is a reference to the model class to subscribe to.
 
     def install_debug_helpers():
         if config.DEBUG:
-            acid.events.after_create(log_create, models.Base)
-            acid.events.after_delete(log_delete, models.Base)
-
+            acid.events.after_create(log_create, acid.meta.Model)
+            acid.events.after_delete(log_delete, acid.meta.Model)
 
 
 Constraints
@@ -120,11 +123,6 @@ Constraints
 
 Event Types
 +++++++++++
-
-It is possible to register functions to be called when models are modified
-somehow. Inheritance is respected, in that triggers registered against a base
-class will be invoked prior to any registered against the class of the model
-being modified.
 
 .. autofunction:: acid.events.on_create ()
 .. autofunction:: acid.events.on_update ()
