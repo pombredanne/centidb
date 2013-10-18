@@ -594,6 +594,11 @@ class TraceEngine(object):
     """
     _counter = 0
 
+    @property
+    def items(self):
+        # Convenience passthrough for unit tests.
+        return self.engine.items
+
     def __init__(self, engine, trace_path=None, _fp=None):
         assert trace_path is not None or _fp is not None
         TraceEngine._counter += 1
