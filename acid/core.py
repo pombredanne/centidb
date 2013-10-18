@@ -171,14 +171,11 @@ class Index(object):
     def _index_keys(self, key, obj):
         """Generate a list of encoded keys representing index entries for `obj`
         existing under `key`."""
-        idx_keys = []
         res = self.func(obj)
         if type(res) is list:
-            for ikey in res:
-                idx_keys.append(keylib.packs([ikey, key], self.prefix))
+            return [keylib.packs([ik, key], self.prefix) for ik in res]
         elif res is not None:
-            idx_keys.append(keylib.packs([res, key], self.prefix))
-        return idx_keys
+            return [keylib.packs([res, key], self.prefix)]
 
     def _coll_after_delete(self, key, rec):
         """Respond to after_delete() Collection event by removing any index
