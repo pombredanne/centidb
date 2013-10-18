@@ -49,8 +49,7 @@ def constraint(func, target=None):
             return 0 < self.age < 150
     """
     wrapped = functools.partial(_check_constraint, func)
-    on_update(wrapped, target)
-    return func
+    return on_update(wrapped, target)
 
 
 def _listen(name, func, target):
