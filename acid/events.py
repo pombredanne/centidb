@@ -78,8 +78,8 @@ def on_create(func, target=None):
 
 def on_update(func, target=None):
     """Request `func` be invoked as `func(model)` when `model` is about to be
-    saved for the first time. Alternatively when applied to a collection,
-    request `func(key, rec)` be invoked.
+    saved for any reason. Alternatively when applied to a collection, request
+    `func(key, rec)` be invoked.
 
     ::
 
