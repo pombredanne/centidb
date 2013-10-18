@@ -117,7 +117,7 @@ class ModelMeta(type):
         cls.setup_index_properties(klass, bases, attrs)
         cls.setup_field_properties(klass, bases, attrs)
         cls.setup_encoder(klass, bases, attrs)
-        cls.setup_triggers(klass, bases, attrs)
+        cls.setup_events(klass, bases, attrs)
         cls.setup_constraints(klass, bases, attrs)
         return klass
 
@@ -166,7 +166,7 @@ class ModelMeta(type):
                     LazyIndexProperty(index_func.func_name))
 
     @classmethod
-    def setup_triggers(cls, klass, bases, attrs):
+    def setup_events(cls, klass, bases, attrs):
         triggers = ('on_create', 'on_update', 'on_delete',
                     'after_create', 'after_update', 'after_delete')
         lists = {}

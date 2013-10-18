@@ -39,6 +39,60 @@ any model or :py:class:`Collection <acid.Collection>`:
     acid.events.on_create(generate_password, target=store['accounts'])
 
 
+Observing Events
+++++++++++++++++
+
+There is an important difference between the kinds of events available, since
+subscribing to some will cause Acid to adopt a less efficient strategy when
+interacting with the storage engine. Some engines, such as LMDB, support
+efficient *read-modify-write* operations, whereas others, such as LSM trees,
+have reads that are more expensive than writes.
+
+An *observing event* is one that will cause Acid to ask the storage engine to
+perform a read of the previous record value, if any, during a write operation.
+Even for storage engines that support fast *read-modify-write* operations,
+emitting the event further requires decoding of the old record value. Therefore
+where possible, prefer subscribing to a non-observing event if it fits your use
+case.
+
+    .. csv-table:: Observing Event Types (— means unsupported)
+        :class: pants
+        :header: Event, Used with Model, Used with Collection
+
+        **constraint**, No, No
+        **on_create**, No, —
+        **on_update**, No, No
+        **on_delete**, No, —
+        **on_abort**, No, No
+        **on_commit**, No, No
+        **after_create**, No, —
+        **after_update**, No, Yes
+        **after_delete**, No, Yes
+        **after_replace**, Yes, Yes
+
+
+External triggers
++++++++++++++++++
+
+It is also possible to create a trigger from outside the model definition. This
+uses the same `on_*` and `after_*` functions, but includes a second parameter,
+which is a reference to the model class to subscribe to.
+
+::
+
+    def log_create(model):
+        print 'Model created!', model
+
+    def log_delete(model):
+        print 'Model deleted!', model
+
+    def install_debug_helpers():
+        if config.DEBUG:
+            acid.events.after_create(log_create, models.Base)
+            acid.events.after_delete(log_delete, models.Base)
+
+
+
 Constraints
 +++++++++++
 
@@ -64,24 +118,3 @@ being modified.
 
 .. autofunction:: acid.events.on_commit ()
 .. autofunction:: acid.events.after_commit ()
-
-
-External triggers
-+++++++++++++++++
-
-It is also possible to create a trigger from outside the model definition. This
-uses the same `on_*` and `after_*` functions, but includes a second parameter,
-which is a reference to the model class to subscribe to.
-
-::
-
-    def log_create(model):
-        print 'Model created!', model
-
-    def log_delete(model):
-        print 'Model deleted!', model
-
-    def install_debug_helpers():
-        if config.DEBUG:
-            acid.events.after_create(log_create, models.Base)
-            acid.events.after_delete(log_delete, models.Base)

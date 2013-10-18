@@ -47,8 +47,10 @@ def _listen(name, func, target):
 
 
 def on_create(func, target=None):
-    """Mark a function to be called prior to initial save (creation) of a
-    model.
+    """Request `func` be invoked as `func(model)` when a new `model` which has
+    no key assigned is about to be saved for the first time. This event can
+    only be applied to :py:class:`acid.meta.Model`, it has no meaning when
+    applied to a collection.
 
     ::
 
@@ -61,7 +63,9 @@ def on_create(func, target=None):
 
 
 def on_update(func, target=None):
-    """Mark a function to be called prior to create or update of a record.
+    """Request `func` be invoked as `func(model)` when `model` is about to be
+    saved for the first time. Alternatively when applied to a collection,
+    request `func(key, rec)` be invoked.
 
     ::
 
@@ -74,11 +78,9 @@ def on_update(func, target=None):
 
 
 def after_replace(func, target=None):
-    """Mark a function to be called after replacement of a record. Unlike
-    :py:func:`on_create` or :py:func:`on_update`, `after_replace` only fires if
-    the storage engine indicates an existing record value existed prior to
-    save. No `on_replace` event is currently provided, since it is not easy to
-    make efficient, and due to lack of need.
+    """Request `func` be invoked as `func(self, old)` when `model` is about to
+    replace an older version of itself. Alternatively when applied to a
+    collection, request `func(key, old, new)` be invoked.
 
     ::
 

@@ -550,9 +550,11 @@ class Collection(object):
             self.key_func = lambda _: store.count(counter_name)
 
         self.encoder = encoder or encoders.PICKLE
+        self._on_update = []
         self._after_create = []
         self._after_replace = []
         self._after_delete = []
+        self._after_update = []
 
     def _listen(self, name, func):
         """Subscribe `func` to the event named `name`."""
@@ -626,6 +628,7 @@ class Collection(object):
         if key is None:
             key = self.key_func(rec)
         key = keylib.Key(key)
+        dispatch(self._on_update, key, rec)
         new = self.encoder.pack(rec)
 
         # If a listener is registered that must observe the prior record value,
@@ -641,6 +644,7 @@ class Collection(object):
         else:
             self.strategy.put(txn, key, new)
 
+        dispatch(self._after_update, key, rec)
         return key
 
     def delete(self, key):
