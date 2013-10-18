@@ -589,11 +589,17 @@ static int read_plain_int(struct reader *rdr, uint64_t *u64, uint8_t xor)
  */
 static PyObject *read_int(struct reader *rdr, int negate, uint8_t xor)
 {
+    // TODO: u64 sucks for ARM! Should use u32 there.
     uint64_t u64;
     if(read_plain_int(rdr, &u64, xor)) {
         return NULL;
     }
-    PyObject *v = PyLong_FromUnsignedLongLong(u64);
+    PyObject *v;
+    if(u64 < (uint64_t) LONG_MAX) {
+        v = PyInt_FromLong((long) u64);
+    } else {
+        v = PyLong_FromUnsignedLongLong(u64);
+    }
     if(v && negate) {
         PyObject *v2 = PyNumber_Negative(v);
         Py_DECREF(v);
