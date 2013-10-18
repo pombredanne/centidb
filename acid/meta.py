@@ -87,15 +87,6 @@ class List(Field):
     """
 
 
-def _check_constraint(func, model):
-    """on_update trigger that checks a constraint is correct. The metaclass
-    wraps this in a functools.partial() and adds to to the list of on_update
-    triggers for the model."""
-    if not func(model):
-        raise acid.errors.ConstraintError(name=func.func_name,
-            msg='Constraint %r failed' % (func.func_name,))
-
-
 class LazyIndexProperty(object):
     """Property that replaces itself with a acid.Index when it is first
     accessed."""
@@ -118,7 +109,6 @@ class ModelMeta(type):
         cls.setup_field_properties(klass, bases, attrs)
         cls.setup_encoder(klass, bases, attrs)
         cls.setup_events(klass, bases, attrs)
-        cls.setup_constraints(klass, bases, attrs)
         return klass
 
     @classmethod
@@ -181,14 +171,6 @@ class ModelMeta(type):
 
         for trigger in triggers:
             setattr(klass, 'META_' + trigger.upper(), lists[trigger])
-
-    @classmethod
-    def setup_constraints(cls, klass, bases, attrs):
-        for key, value in attrs.iteritems():
-            if getattr(value, 'meta_constraint', False):
-                wrapped = functools.partial(_check_constraint, value)
-                klass.META_ON_CREATE.append(wrapped)
-                klass.META_ON_UPDATE.append(wrapped)
 
     @classmethod
     def setup_field_properties(cls, klass, bases, attrs):

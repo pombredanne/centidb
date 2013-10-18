@@ -20,8 +20,22 @@ Mutation events.
 See http://acid.readthedocs.org/en/latest/events.html
 """
 
+from __future__ import absolute_import
 
-def constraint(func):
+import functools
+import acid.errors
+
+
+def _check_constraint(func, model):
+    """on_update trigger that checks a constraint is correct. The metaclass
+    wraps this in a functools.partial() and adds to to the list of on_update
+    triggers for the model."""
+    if not func(model):
+        raise acid.errors.ConstraintError(name=func.func_name,
+            msg='Constraint %r failed' % (func.func_name,))
+
+
+def constraint(func, target=None):
     """Mark a function as implementing a collection constraint. The function
     should return ``True`` if the constraint is satisfied, or raise an
     exception or return any falsey value otherwise. Constraints are implemented
@@ -34,7 +48,8 @@ def constraint(func):
         def is_age_valid(self):
             return 0 < self.age < 150
     """
-    func.meta_constraint = True
+    wrapped = functools.partial(_check_constraint, func)
+    on_update(wrapped, target)
     return func
 
 
