@@ -92,7 +92,6 @@ class Engine(object):
     #: present the result to the user without performing any copies.
     source = None
 
-    @classmethod
     def from_url(cls, dct):
         """Attempt to parse `dct` as a reference to the engine. If the
         reference is valid, return a new engine instance, otherwise return
@@ -106,6 +105,7 @@ class Engine(object):
             * `params`: Dict with keys `p1` and `p2`, values are strings if the
               parameter included a value, otherwise ``True``.
         """
+    from_url = classmethod(from_url)
 
     def close(self):
         """Close the database connection. The default implementation does
@@ -208,13 +208,13 @@ class SkipList(object):
             lvl += 1
         return lvl
 
-    @staticmethod
     def reprNode(self):
         links = []
         for i, node in enumerate(self[3:]):
             if node[0]:
                 links.append('%d->%r' % (i, node[0]))
         return '<Node %r (%s)>' % (self[0] or 'head', ', '.join(links))
+    reprNode = classmethod(reprNode)
 
     def items(self, searchKey=None, reverse=False):
         """Return an iterator initially yielding `searchKey`, or the next
@@ -305,7 +305,6 @@ class SkipList(object):
             return node[1]
 
 
-@register
 class SkiplistEngine(Engine):
     """Storage engine that backs onto a `Skip List
     <http://en.wikipedia.org/wiki/Skip_list>`_. Lookup and insertion are
@@ -328,7 +327,6 @@ class SkiplistEngine(Engine):
         self.pop = self.sl.delete
         self.iter = self.sl.items
 
-    @classmethod
     def from_url(cls, dct):
         """Create an instance given a URL of the form
         `"skiplist:/[;mazsize=N]"`. Supported parameters:
@@ -338,6 +336,7 @@ class SkiplistEngine(Engine):
         """
         if dct['scheme'] == 'skiplist':
             return cls(maxsize=int(dct['params'].get('maxsize', '65535')))
+    from_url = classmethod(from_url)
 
     def put(self, key, value):
         self.sl.insert(str(key), str(value))
@@ -346,7 +345,6 @@ class SkiplistEngine(Engine):
         self.sl = None
 
 
-@register
 class ListEngine(Engine):
     """Storage engine that backs onto a sorted list of `(key, value)` tuples.
     Lookup is logarithmic while insertion is linear.
@@ -360,13 +358,13 @@ class ListEngine(Engine):
         #: ``sum(len(k)+len(v) for k, v in items)``.
         self.size = 0
 
-    @classmethod
     def from_url(cls, dct):
         """Create an instance given a URL of the form `"list:/"`. No parameters
         are supported.
         """
         if dct['scheme'] == 'list':
             return cls()
+    from_url = classmethod(from_url)
 
     def get(self, k):
         idx = bisect.bisect_left(self.items, (k,))
@@ -412,7 +410,6 @@ class ListEngine(Engine):
         return itertools.imap(self.items[:].__getitem__, xr)
 
 
-@register
 class PlyvelEngine(Engine):
     """Storage engine that uses Google LevelDB via the `Plyvel
     <http://plyvel.readthedocs.org/>`_ module.
@@ -453,7 +450,6 @@ class PlyvelEngine(Engine):
             self.get = db.get
             self._iter = db.iterator
 
-    @classmethod
     def from_url(cls, dct):
         """Create an instance given a URL of the form
         `"skiplist:/[;mazsize=N]"`. Supported parameters:
@@ -463,6 +459,7 @@ class PlyvelEngine(Engine):
         """
         if dct['scheme'] == 'skiplist':
             return cls(maxsize=int(dct['params'].get('maxsize', '65535')))
+    from_url = classmethod(from_url)
 
     def close(self):
         self.db.close()
@@ -495,7 +492,6 @@ class PlyvelEngine(Engine):
         return it
 
 
-@register
 class KyotoEngine(Engine):
     """Storage engine that uses `Kyoto Cabinet
     <http://fallabs.com/kyotocabinet/>`_. Note a treedb must be used.
@@ -664,7 +660,6 @@ class TraceEngine(object):
             self._trace('enditer', iter_id)
 
 
-@register
 class LmdbEngine(Engine):
     """Storage engine that uses the OpenLDAP `"Lightning" MDB
     <http://symas.com/mdb/>`_ library via the `py-lmdb
@@ -693,7 +688,6 @@ class LmdbEngine(Engine):
             self.delete = txn.delete
             self.cursor = txn.cursor
 
-    @classmethod
     def from_url(cls, dct):
         """Create an instance given a URL of the form
         `"lmdb:/path/to/env.lmdb[;p1[;p2=v2]]"`. Supported parameters:
@@ -724,6 +718,7 @@ class LmdbEngine(Engine):
                    map_async=bool(dct['params'].get('map_async')),
                    writemap=bool(dct['params'].get('writemap')),
                    max_readers=int(dct['params'].get('max_readers', '126')))
+    from_url = classmethod(from_url)
 
     def close(self):
         self.env.close()
@@ -740,3 +735,10 @@ class LmdbEngine(Engine):
 
     def iter(self, k, reverse):
         return self.cursor(db=self.db)._iter_from(k, reverse)
+
+
+register(KyotoEngine)
+register(ListEngine)
+register(LmdbEngine)
+register(PlyvelEngine)
+register(SkiplistEngine)

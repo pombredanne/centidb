@@ -433,7 +433,7 @@ rangeiter_next(RangeIterator *self)
         return NULL;
     }
 
-    Py_INCREF(self);
+    Py_INCREF((PyObject *)self);
     return (PyObject *)self;
 }
 
@@ -467,7 +467,7 @@ rangeiter_forward(RangeIterator *self)
 
     self->base.started = 0;
     self->base.stop = &self->base.hi;
-    Py_INCREF(self);
+    Py_INCREF((PyObject *)self);
     return (PyObject *)self;
 }
 
@@ -511,7 +511,7 @@ rangeiter_reverse(RangeIterator *self)
 
     self->base.started = 0;
     self->base.stop = &self->base.lo;
-    Py_INCREF(self);
+    Py_INCREF((PyObject *)self);
     return (PyObject *)self;
 }
 

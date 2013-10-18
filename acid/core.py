@@ -21,6 +21,8 @@ See http://acid.readthedocs.org/
 """
 
 from __future__ import absolute_import
+from __future__ import with_statement
+
 import itertools
 import logging
 import operator
