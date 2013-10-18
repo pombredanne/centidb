@@ -45,8 +45,11 @@ class Result(object):
     classes do not return :py:class:`Result` instances, they only return
     objects satisfying the same interface."""
 
-    #: :py:class:`acid.keylib.KeyList` instance describing the list of keys
-    #: decoded from the physical engine key.
+    #: Equivalent to `keys[index]`. Always the sole key in a non-batch
+    #: iterator, or the current key in a batch iterator.
+    key = None
+
+    #: List of :py:class:`acid.Key` decoded from the physical engine key.
     keys = None
 
     #: Object satisfying the :py:class:`buffer` interface that represents the
