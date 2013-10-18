@@ -213,7 +213,7 @@ class NativeNextGreaterTest:
         for key in self.KEYS:
             kp = keylib.Key(key)
             kc = _keylib.Key(key)
-            assert kp.next_greater().to_raw('') == kc.next_greater().to_raw('')
+            eq(kp.next_greater().to_raw(''), kc.next_greater().to_raw(''))
 
 
 @testlib.register(python=True, enable=_keylib is not None)
