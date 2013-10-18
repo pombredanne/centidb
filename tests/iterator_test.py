@@ -32,7 +32,7 @@ from testlib import lt
 PREFIX = 'P_'
 KEYSETS = [
     ('O_', ['OCCURS_BEFORE_PREFIX']),
-    ('P_', 'A B BB C CC D'.split()),
+    ('P_', 'A B BB BBC BBD C CC D'.split()),
     ('Q_', ['OCCURS_AFTER_PREFIX'])
 ]
 
@@ -170,6 +170,12 @@ class RangeIteratorTest:
         self.rit.set_exact('BA')
         eq([], key0from(self.rit.forward))
         eq([], key0from(self.rit.reverse))
+
+    # Test prefix
+
+    def test_prefix(self):
+        self.rit.set_prefix('B')
+        eq(PKEYS[1:-3], key0from(self.rit.forward))
 
     # Test max by itself, and with options.
 
