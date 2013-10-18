@@ -669,12 +669,9 @@ class TxnContext(object):
     """Abstraction for maintaining the local context's transaction. This
     implementation uses TLS.
     """
-    def __init__(self, engine, store):
+    def __init__(self, engine):
         self.engine = engine
         self.local = threading.local()
-        self._on_commit = store._on_commit
-        self._after_commit = store._after_commit
-        self._after_abort = store._after_abort
 
     def mode(self):
         """Return a tristate indicating the active transaction mode: ``None`
@@ -716,8 +713,8 @@ class TxnContext(object):
 class GeventTxnContext(TxnContext):
     """Like TxnContext except using gevent.local.local().
     """
-    def __init__(self, engine, store):
-        TxnContext.__init__(self, engine, store)
+    def __init__(self, engine):
+        TxnContext.__init__(self, engine)
         import gevent.local
         self.local = gevent.local.local()
 
@@ -741,6 +738,13 @@ class Store(object):
         self.engine = engine
         self.prefix = prefix
         self._txn_context = txn_context or TxnContext(engine)
+        self._on_commit = []
+        self._after_commit = []
+        self._after_abort = []
+        # TODO HACK
+        self._txn_context._on_commit = self._on_commit
+        self._txn_context._after_commit = self._after_commit
+        self._txn_context._after_abort = self._after_abort
         self.begin = self._txn_context.begin
         self._counter_key_cache = {}
         self._encoder_prefix = dict((e, keylib.pack_int(1 + i))
@@ -757,9 +761,6 @@ class Store(object):
         self._meta = Collection(self, meta_info, encoder=encoders.KEY,
                                 key_func=lambda t: t[:3])
         self._objs = {}
-        self._on_commit = []
-        self._after_commit = []
-        self._after_abort = []
 
     def begin(self, write=False):
         """Return a context manager that starts a database transaction when it
