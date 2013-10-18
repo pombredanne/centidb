@@ -472,16 +472,20 @@ class BatchStrategy(object):
         individually except for `key`. Return the data for `key` if it existed,
         otherwise ``None``."""
         it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
-        it.set_exact(key)
+        it.set_lo(key)
+        it.set_max(1)
         for res in it.forward():
-            old = res.data
-            if len(res.keys) > 1:
+            old = None
+            lenk = len(res.keys)
+            if lenk == 1:
+                if res.key == key:
+                    old = res.data
+                    txn.delete(it.phys_key)
+            elif lenk > 1 and (res.keys[0] >= key >= res.keys[-1]):
                 txn.delete(it.phys_key)
                 for key_, data in it.batch_items():
                     if key != key_:
                         txn.put(key_.to_raw(self.prefix), data)
-            else:
-                txn.delete(key.to_raw(self.prefix))
             return old
 
     def replace(self, txn, key, data):

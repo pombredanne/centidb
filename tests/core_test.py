@@ -165,6 +165,7 @@ class ThreeCollBoundsTest(OneCollBoundsTest):
 class CollBasicTest:
     def setUp(self):
         self.e = acid.engines.ListEngine()
+        #self.e = acid.engines.TraceEngine(self.e, '/dev/stdout')
         self.store = acid.Store(self.e)
         self.txn = self.store.begin()
         self.txn.__enter__()
@@ -296,8 +297,8 @@ class Bag(object):
 class BatchTest:
     ITEMS = [
         ((1,), 'dave'),
-        ((2,), 'jim'),
-        ((3,), 'zork')
+        ((3,), 'jim'),
+        ((4,), 'zork')
     ]
 
     def setUp(self):
@@ -333,25 +334,38 @@ class BatchTest:
         # Should now contain metadata + 1 batch
         assert len(self.e.items) == (self.old_len + 1)
         # Deletion should trigger split of batch.
-        self.coll.delete(2)
+        self.coll.delete(3)
         # Should now contain metadata + 2 remaining records.
         assert len(self.e.items) == (self.old_len + 2)
         # Values shouldn't have changed.
         assert list(self.coll.items()) == [self.ITEMS[0], self.ITEMS[2]]
 
     def test_put(self):
+        """Overwrite key existing as part of a batch."""
         self.insert_items()
         self.coll.strategy.batch(max_recs=len(self.ITEMS))
         # Should now contain metadata + 1 batch
         assert len(self.e.items) == (self.old_len + 1)
         # Put should trigger split of batch and modification of record.
-        self.coll.put('james', key=2)
+        self.coll.put('james', key=3)
         # Should now contain metadata + 3 individual records
         assert len(self.e.items) == (self.old_len + 3)
         # Test for new items.
         assert list(self.coll.items()) ==\
-            [self.ITEMS[0], ((2,), 'james'), self.ITEMS[2]]
+            [self.ITEMS[0], ((3,), 'james'), self.ITEMS[2]]
 
+    def test_put_conflict(self):
+        """Insert record covered by a batch, but for which the key does not yet
+        exist."""
+        self.insert_items()
+        self.coll.strategy.batch(max_recs=len(self.ITEMS))
+        # Put should trigger split of batch and insert of record.
+        self.coll.put('john', key=2)
+        # Should now contain metadata + 4 individual records
+        assert len(self.e.items) == (self.old_len + 4)
+        # Test for new items.
+        assert list(self.coll.items()) ==\
+            [self.ITEMS[0], ((2,), 'john'), ((3,), 'jim'), self.ITEMS[2]]
 
 
 @testlib.register()
