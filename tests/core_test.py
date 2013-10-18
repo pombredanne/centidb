@@ -371,7 +371,9 @@ class BatchTest:
 @testlib.register()
 class CountTest:
     def setUp(self):
-        self.e = testlib.CountingEngine(acid.engines.ListEngine())
+        eng = acid.engines.ListEngine()
+        #eng = acid.engines.TraceEngine(eng, '/dev/stdout')
+        self.e = testlib.CountingEngine(eng)
         self.store = acid.Store(self.e)
         self.txn = self.store.begin()
         self.txn.__enter__()
@@ -384,16 +386,16 @@ class CountTest:
         eq(10, self.store.count('test', init=10))
         eq(11, self.store.count('test', init=10))
         eq(12, self.store.count('test', init=10))
-        assert (self.e.get_count + self.e.iter_count) == 3
-        assert self.e.put_count == 3
+        eq((self.e.get_count + self.e.iter_count), 6)
+        eq(self.e.put_count, 3)
 
     def testExistCountSometimes(self):
         eq(10, self.store.count('test', init=10))
         eq(11, self.store.count('test', n=0, init=10))
         eq(11, self.store.count('test', init=10))
         eq(12, self.store.count('test', init=10))
-        assert (self.e.get_count + self.e.iter_count) == 4
-        assert self.e.put_count == 3
+        eq((self.e.get_count + self.e.iter_count), 7)
+        eq(self.e.put_count, 3)
 
 
 @testlib.register()
