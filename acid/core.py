@@ -473,15 +473,13 @@ class BatchStrategy(object):
         otherwise ``None``."""
         it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
         it.set_lo(key)
-        it.set_max(1)
         for res in it.forward():
             old = None
-            lenk = len(res.keys)
-            if lenk == 1:
+            if len(res.keys) == 1:
                 if res.key == key:
                     old = res.data
                     txn.delete(it.phys_key)
-            elif lenk > 1 and (res.keys[0] >= key >= res.keys[-1]):
+            elif len(res.keys) > 1 and (res.keys[0] >= key >= res.keys[-1]):
                 txn.delete(it.phys_key)
                 for key_, data in it.batch_items():
                     if key != key_:
