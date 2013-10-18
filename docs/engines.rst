@@ -4,13 +4,6 @@ Engines
 
 .. _engines:
 
-Engine Interface
-++++++++++++++++
-
-.. autoclass:: acid.engines.Engine
-    :members:
-
-
 ListEngine
 ++++++++++
 
@@ -50,3 +43,11 @@ TraceEngine
 +++++++++++
 
 .. autoclass:: acid.engines.TraceEngine
+
+Engine Interface
+++++++++++++++++
+
+.. autoclass:: acid.engines.Engine
+    :members:
+
+

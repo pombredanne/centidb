@@ -79,9 +79,9 @@ def from_url(url):
 class Engine(object):
     """
     A storage engine or transaction is any object that implements the following
-    methods. Engines need not inherit from this class, it exists purely for
-    documentary purposes. All key and value variables below are ``NUL``-safe
-    bytestrings.
+    methods. Engines need not inherit from this class, but doing so enables
+    various default method implementations. All key and value variables below
+    are ``NUL``-safe bytestrings.
     """
 
     #: If present and not ``None``, indicates the `source object` responsible
@@ -149,8 +149,8 @@ class Engine(object):
 
     def pop(self, key):
         """Delete `key` if it exists, returning the previous value, if any,
-        otherwise ``None``. The default implementation is impelmented using
-        :py:meth:`get` and :py:meth:`delete`."""
+        otherwise ``None``. The default implementation is uses :py:meth:`get`
+        and :py:meth:`delete`."""
         old = self.get(key)
         self.delete(key)
         return old
