@@ -59,6 +59,9 @@ BatchRangeIterator
     :members:
 
 
+Strategies
+++++++++++
+
 BasicStrategy
 -------------
 
