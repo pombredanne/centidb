@@ -38,12 +38,18 @@ Iterator Result
     :members:
 
 
+Iterator
+--------
+
+.. autoclass:: acid.iterators.Iterator
+    :members:
+
+
 RangeIterator
 -------------
 
 .. autoclass:: acid.iterators.RangeIterator
     :members:
-    :inherited-members:
 
 
 BatchRangeIterator
@@ -51,4 +57,3 @@ BatchRangeIterator
 
 .. autoclass:: acid.iterators.BatchRangeIterator
     :members:
-    :inherited-members:

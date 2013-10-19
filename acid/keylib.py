@@ -51,26 +51,33 @@ UTCOFFSET_SHIFT = 64 # 16 hours * 4 (15 minute increments)
 UTCOFFSET_DIV = 15 * 60 # 15 minutes
 
 _tz_cache = {}
+_max_unicode = unichr(sys.maxunicode)
 
 
-def next_greater(s):
+def next_greater_text(s):
+    """Given a Unicode string `s`, return the most compact string that is
+    greater than any value prefixed with `s`, but lower than any other value.
+    If no such string exists, return ``None``."""
+    if s:
+        s2 = s.rstrip(_max_unicode)
+        if s2:
+            return s2[:-1] + unichr(ord(s2[-1]) + 1)
+
+
+def next_greater_bytes(s):
     """Given a bytestring `s`, return the most compact bytestring that is
     greater than any value prefixed with `s`, but lower than any other value.
+    If no such string exists, return ``None``."""
+    if s:
+        s2 = s.rstrip('\xff')
+        if s2:
+            return s2[:-1] + chr(ord(s2[-1]) + 1)
 
-    ::
 
-        >>> assert next_greater('') == '\\x00'
-        >>> assert next_greater('\\x00') == '\\x01'
-        >>> assert next_greater('\\xff') == '\\xff\\x00'
-        >>> assert next_greater('\\x00\\x00') == '\\x00\\x01')
-        >>> assert next_greater('\\x00\\xff') == '\\x01')
-        >>> assert next_greater('\\xff\\xff') == '\\x01')
-
-    """
-    assert s
-    # Based on the Plyvel `bytes_increment()` function.
-    s2 = s.rstrip('\xff')
-    return s2 and (s2[:-1] + chr(ord(s2[-1]) + 1))
+_next_greater_map = {
+    bytes: next_greater_bytes,
+    unicode: next_greater_text
+}
 
 
 class Key(object):
@@ -148,11 +155,36 @@ class Key(object):
 
     __iadd__ = __add__
 
-    def next_greater(self):
-        """Return the next possible key that is lexigraphically larger than
-        this one. Note the returned Key is only useful to implement compares,
-        it may not decode to a valid value."""
-        return self.from_raw(next_greater(self.packed[len(self.prefix):]))
+    def prefix_bound(self):
+        """Return a new :py:class:`Key <acid.keylib.Key>` that is larger than
+        any key prefixed by this key, but smaller than all greater keys. This
+        may return ``None`` if no such greater key exists (i.e. the prefix
+        consists entirely of ``0xff`` bytes when encoded). The returned
+        instance is useful only for implementing compares for
+        :py:meth:`set_prefix <acid.iterators.Iterator.set_prefix>`, it may not
+        decode to a valid key.
+        """
+        if self.args is None:
+            self.args = unpacks(self.packed, self.prefix, True)
+        if not self.args:
+            return
+
+        # The encoding for str and unicode is bit-aligned, so merely bumping
+        # the final byte will not produce the desired outcome. Instead the
+        # logical representation must have its final byte or ordinal
+        # incremented, and the result re-encoded.
+        last = self.args[-1]
+        gfunc = _next_greater_map.get(type(last))
+        if gfunc:
+            new = gfunc(last)
+            if new is not None:
+                return Key(self.args[:-1] + (new,))
+            else:
+                return Key(self.args[:-1]).prefix_bound()
+        else:
+            new = next_greater_bytes(self.packed[len(self.prefix):])
+            if new:
+                return Key.from_raw(new)
 
     def to_raw(self, prefix=None):
         """Get the bytestring representing this Key, optionally prefixed by

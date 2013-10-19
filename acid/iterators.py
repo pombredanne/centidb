@@ -86,11 +86,16 @@ class Iterator(object):
         self._hi_pred = getattr(self._hi, ('__gt__', '__ge__')[closed])
 
     def set_prefix(self, key):
-        """Provides directional iteration of a range of keys with a set prefix.
+        """Set the lower bound to `>= key` and the upper bound to `<
+        prefix_bound(key)`. If :py:meth:`prefix_bound
+        <acid.keylib.Key.prefix_bound>` returns ``None``, then set no upper
+        bound (i.e. iterate to the end of the collection).
         """
         key = keylib.Key(key)
         self.set_lo(key, True)
-        self.set_hi(key.next_greater(), False)
+        pbound = key.prefix_bound()
+        if pbound is not None:
+            self.set_hi(pbound, False)
 
     def set_max(self, max_):
         """Set the maximum size of the result set."""
