@@ -304,32 +304,33 @@ class Index(object):
 
 class BasicStrategy(object):
     """Access strategy for 'basic' ordered collections, i.e. those containing
-    no batch records."""
+    no batch records, or the metadata collection."""
     def __init__(self, prefix):
         self.prefix = prefix
 
     def get(self, txn, key):
-        """Implement get() as `Engine.get(key)`."""
+        """Implement `get()` as `Engine.get(key)`."""
         return txn.get(key.to_raw(self.prefix))
 
     def put(self, txn, key, data):
-        """Implement put() as `Engine.put(key)`."""
+        """Implement `put()` as `Engine.put(key)`."""
         txn.put(key.to_raw(self.prefix), data)
 
     def replace(self, txn, key, data):
-        """Implement replace() as `Engine.replace(key)`."""
+        """Implement `replace()` as `Engine.replace(key)`."""
         return txn.replace(key.to_raw(self.prefix), data)
 
     def delete(self, txn, key):
-        """Implement delete() as `Engine.delete(key)`."""
+        """Implement `delete()` as `Engine.delete(key)`."""
         txn.delete(key.to_raw(self.prefix))
 
     def pop(self, txn, key):
-        """Implement pop() as `Engine.pop(key)`."""
+        """Implement `pop()` as `Engine.pop(key)`."""
         return txn.pop(key.to_raw(self.prefix))
 
     def iter(self, txn):
-        """Implement iter() using :py:class:`iterators.RangeIterator`."""
+        """Implement `iter()` using :py:class:`acid.iterators.RangeIterator`.
+        """
         return iterators.RangeIterator(txn, self.prefix)
 
 
@@ -342,7 +343,7 @@ class BatchStrategy(object):
         self.compressor = compressor
 
     def get(self, txn, key):
-        """Implement get() using a range query over >=`key`."""
+        """Implement `get()` using a range query over `>= key`."""
         it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
@@ -467,10 +468,12 @@ class BatchStrategy(object):
             del items[:]
 
     def iter(self, txn):
+        """Implement `iter()` using
+        :py:class:`acid.iterators.BatchRangeIterator`."""
         return iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
 
     def pop(self, txn, key):
-        """Implement pop() using a range query to find the single or batch
+        """Implement `pop()` using a range query to find the single or batch
         record `key` belongs to and splitting it, saving all records
         individually except for `key`. Return the data for `key` if it existed,
         otherwise ``None``."""
@@ -490,13 +493,15 @@ class BatchStrategy(object):
             return old
 
     def replace(self, txn, key, data):
-        """Implement replace() by popping any existing value, then writing out
-        the new record and returning the old value."""
+        """Implement `replace()` by popping any existing value, then writing
+        out the new record and returning the old value."""
         old = self.pop(txn, key)
         txn.put(key.to_raw(self.prefix), data)
         return old
 
+    #: Alias for `pop()` (which satisfies the `delete()` interface).
     delete = pop
+    #: Alias for `replace()` (which satisfies the `put()` interface).
     put = replace
 
 

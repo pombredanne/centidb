@@ -57,3 +57,17 @@ BatchRangeIterator
 
 .. autoclass:: acid.iterators.BatchRangeIterator
     :members:
+
+
+BasicStrategy
+-------------
+
+.. autoclass:: acid.core.BasicStrategy
+    :members:
+
+BatchStrategy
+-------------
+
+.. autoclass:: acid.core.BatchStrategy
+    :members:
+
