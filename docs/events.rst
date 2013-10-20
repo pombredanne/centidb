@@ -92,6 +92,13 @@ possible, prefer subscribing to a non-observing event if it fits your use case.
         **after_abort**, No, No
         **after_commit**, No, No
 
+Although it would be possible to support `on_create` and `on_delete` storage
+engine events, doing so would necessitate engine operations that require an
+extra roundtrip for any engine that relies on the network, unlike the `after_*`
+variants which are supported by a single "mutate and return previous" message.
+Additionally for networked storage systems that lack transactions, it is very
+likely the single message can be supported as an atomic operation.
+
 
 Debugging
 +++++++++
