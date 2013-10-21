@@ -426,7 +426,7 @@ class PlyvelEngine(Engine):
             replace the lock with e.g. a greenlet-friendly implementation.
 
     URL scheme for :py:func:`acid.open`:
-    `"leveldb:/path/to/env.ldb[p1[;p2=v2]]`". Parameters:
+    `"leveldb:/path/to/env.ldb[p1[;p2=v2]]`". URL parameters:
 
         `paranoid_checks`:
             Enable "paranoid" engine checks; default off.
@@ -709,7 +709,7 @@ class LmdbEngine(Engine):
             Named database handle to use, or ``None`` to use the main database.
 
     URL scheme for :py:func:`acid.open`:
-    `"lmdb:/path/to/env.lmdb[;p1[;p2=v2]]"`. Supported parameters:
+    `"lmdb:/path/to/env.lmdb[;p1[;p2=v2]]"`. URL parameters:
 
             `map_size=N`:
                 Maximum environment map size in MiB; default 4194304MiB.
