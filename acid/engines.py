@@ -410,8 +410,8 @@ class PlyvelEngine(Engine):
 
     Read transactions are implemented using snapshots, and write transactions
     are implemented using an Engine-internal :py:class:`threading.Lock`. Note
-    that write batches are not used, since Acid requires a consistent view of
-    the partially mutated database within a transaction.
+    that write batches are not used, since a consistent view of the partially
+    mutated database is required within a transaction.
 
         `db`:
             If specified, should be a `plyvel.DB` instance for an already open
