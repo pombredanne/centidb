@@ -70,11 +70,11 @@ interacting with the storage engine. Engines like :py:class:`LmdbEngine
 whereas others such as :py:class:`PlyvelEngine <acid.engines.PlyvelEngine>`
 have reads that are more expensive than writes.
 
-An *observing event* is one that will cause Acid to ask the storage engine to
-read and return any previous record value during a write operation. Even for
-storage engines that support fast *read-modify-write* operations, emitting the
-event further requires decoding of the old record value. Therefore where
-possible, prefer subscribing to a non-observing event if it fits your use case.
+An *observing event* is one that causes the storage engine to read and return
+any previous record value during a write operation. Even for engines that
+support fast *read-modify-write* operations, emitting the event further
+requires decoding of the old record value. Therefore where possible, prefer
+subscribing to a non-observing event if it fits your use case.
 
     .. csv-table:: Observing Event Types (— means unsupported)
         :class: pants
