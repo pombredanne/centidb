@@ -97,8 +97,8 @@ class Engine(object):
     def from_url(cls, dct):
         """Attempt to parse `dct` as a reference to the engine. If the
         reference is valid, return a new engine instance, otherwise return
-        ``None``. URLs should be of the form `engine:/path?p1=v1,p2=v2` or
-        `engine://<netloc>/path?p1=v1,p2=v2`. `dct` is a dict with fields:
+        ``None``. URLs should be of the form `engine:/path?p1=v1;p2=v2` or
+        `engine://<netloc>/path?p1=v1;p2=v2`. `dct` is a dict with fields:
 
             * `scheme`: URL scheme (e.g. `"engine"`).
             * `netloc`: Empty string if URL was in first form, `netloc` if URL
