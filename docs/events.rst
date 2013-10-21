@@ -43,8 +43,8 @@ any model or :py:class:`Collection <acid.Collection>`:
     acid.events.on_create(generate_password, target=store['accounts'])
 
 
-Model vs Collection Events
-++++++++++++++++++++++++++
+Model vs. engine events
++++++++++++++++++++++++
 
 This interface attempts to unify two very different kinds of events: those
 occurring logically within the application's data model, and those occurring as
@@ -54,27 +54,25 @@ tracked by the model class, whereas those applied to
 :py:class:`acid.Collection` relate to the state of the storage engine as
 reported at the time of the mutation.
 
-The reason for having both event types is that usually Model events are good
-enough for application use, but storage engine events are needed to robustly
-implement features such as indexing. Instead of burying the storage engine
-events within Acid's implementation, they are exposed to user code.
+The reason for having both types is that usually Model events are good enough
+for application use, but storage engine events are needed to robustly implement
+features such as indexing. Instead of burying the storage engine events within
+Acid's implementation, they are exposed to user code.
 
 
 Observing Events
 ++++++++++++++++
 
-There is an important difference between the events available, since
-subscribing to some will cause Acid to adopt a less efficient strategy when
-interacting with the storage engine. Engines like :py:class:`LmdbEngine
-<acid.engines.LmdbEngine>` support efficient *read-modify-write* operations,
-whereas others such as :py:class:`PlyvelEngine <acid.engines.PlyvelEngine>`
-have reads that are more expensive than writes.
-
-An *observing event* is one that causes the storage engine to read and return
-any previous record value during a write operation. Even for engines that
-support fast *read-modify-write* operations, emitting the event further
-requires decoding of the old record value. Therefore where possible, prefer
-subscribing to a non-observing event if it fits your use case.
+Subscribing to certain events will cause a less efficient strategy to be
+adopted when interacting with the storage engine. Engines like
+:py:class:`LmdbEngine <acid.engines.LmdbEngine>` support efficient
+*read-modify-write* operations, whereas others such as :py:class:`PlyvelEngine
+<acid.engines.PlyvelEngine>` have reads that are more expensive than writes. An
+*observing event* is one that causes the storage engine to read and return any
+previous record value during a write operation. Even for engines that support
+fast *read-modify-write* operations, emitting the event further requires
+decoding of the old record value. Therefore where possible, prefer subscribing
+to a non-observing event if it fits your use case.
 
     .. csv-table:: Observing Event Types (— means unsupported)
         :class: pants
@@ -92,12 +90,12 @@ subscribing to a non-observing event if it fits your use case.
         **after_abort**, No, No
         **after_commit**, No, No
 
-Although it would be possible to support `on_create` and `on_delete` storage
-engine events, doing so would necessitate engine operations that require an
-extra roundtrip for any engine that relies on the network, unlike the `after_*`
-variants which are supported by a single "mutate and return previous" message.
-Additionally for networked storage systems that lack transactions, it is very
-likely the single message can be supported as an atomic operation.
+While it is possible to support `on_create` and `on_delete` engine events,
+these would necessitate extra roundtrips for any engine that relies on the
+network, unlike the `after_*` variants which can be supported by a single
+"mutate and return previous" message. Additionally for networked storage
+systems that lack transactions, it is more likely the single message can be
+supported as an atomic operation.
 
 
 Debugging
