@@ -89,8 +89,8 @@ def open(url, trace_path=None, txn_context=None):
     :py:class:`acid.engines.TraceEngine` to produce a complete log of
     interactions with the external engine, written to `trace_path`.
 
-    If `txn_context` is speciied, then use `txn_context` instead of the default
-    :py:class:`acid.core.TxnContext` implementation.
+    If `txn_context` is specified, then use `txn_context` instead of the
+    default :py:class:`acid.core.TxnContext` implementation.
     """
     import acid.engines
     engine = acid.engines.from_url(url)
