@@ -2,6 +2,8 @@
 Engines
 #######
 
+.. currentmodule:: acid.engines
+
 .. _engines:
 
 ListEngine

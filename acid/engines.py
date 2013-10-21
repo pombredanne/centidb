@@ -30,6 +30,8 @@ __all__ = ['SkipList', 'SkiplistEngine', 'ListEngine', 'PlyvelEngine',
            'KyotoEngine', 'LmdbEngine']
 
 _engines = []
+KB = 1024
+MB = 1048576
 
 
 def register(klass):
@@ -307,17 +309,17 @@ class SkipList(object):
 
 class SkiplistEngine(Engine):
     """Storage engine that backs onto a `Skip List
-    <http://en.wikipedia.org/wiki/Skip_list>`_. Lookup and insertion are
-    logarithmic.
-
-    This is like :py:class:`ListEngine` but scales well, with overhead
-    approaching a regular dict (113 bytes/record vs. 69 bytes/record on amd64).
-    Supports around 23k inserts/second or 44k lookups/second,  and tested up to
-    2.8 million keys.
+    <http://en.wikipedia.org/wiki/Skip_list>`_, lookup and insertion are
+    logarithmic. This is like :py:class:`ListEngine` but scales well, with
+    overhead approaching a regular dict (113 bytes/record vs. 69 bytes/record
+    on amd64). Supports around 23k inserts/second or 44k lookups/second,  and
+    tested up to 2.8 million keys.
 
         `maxsize`:
             Maximum expected number of elements. Inserting more will result in
             performance degradation.
+
+    URL scheme for :py:func:`acid.open`: `"skiplist:/[;maxsize=N]"`
     """
     def __init__(self, maxsize=65535):
         self.sl = SkipList(maxsize)
@@ -328,14 +330,8 @@ class SkiplistEngine(Engine):
         self.iter = self.sl.items
 
     def from_url(cls, dct):
-        """Create an instance given a URL of the form
-        `"skiplist:/[;mazsize=N]"`. Supported parameters:
-
-            `maxsize`:
-                Maximum expected number of items in the map; default 65535.
-        """
         if dct['scheme'] == 'skiplist':
-            return cls(maxsize=int(dct['params'].get('maxsize', '65535')))
+            return cls(maxsize=int(dct['params'].get('maxsize', 65535)))
     from_url = classmethod(from_url)
 
     def put(self, key, value):
@@ -347,9 +343,10 @@ class SkiplistEngine(Engine):
 
 class ListEngine(Engine):
     """Storage engine that backs onto a sorted list of `(key, value)` tuples.
-    Lookup is logarithmic while insertion is linear.
+    Lookup is logarithmic while insertion is linear. Primarily useful for unit
+    testing.
 
-    Primarily useful for unit testing. The constructor receives no arguments.
+    URL scheme for :py:func:`acid.open`: `"list:/"`
     """
     def __init__(self):
         #: Sorted list of `(key, value)` tuples.
@@ -359,9 +356,6 @@ class ListEngine(Engine):
         self.size = 0
 
     def from_url(cls, dct):
-        """Create an instance given a URL of the form `"list:/"`. No parameters
-        are supported.
-        """
         if dct['scheme'] == 'list':
             return cls()
     from_url = classmethod(from_url)
@@ -416,9 +410,8 @@ class PlyvelEngine(Engine):
 
     Read transactions are implemented using snapshots, and write transactions
     are implemented using an Engine-internal :py:class:`threading.Lock`. Note
-    that WriteBatches cannot be used, since Acid requires a consistent view of
-    the partially mutated database from within a write transaction, which
-    LevelDB does not automatically support.
+    that write batches are not used, since Acid requires a consistent view of
+    the partially mutated database within a transaction.
 
         `db`:
             If specified, should be a `plyvel.DB` instance for an already open
@@ -432,6 +425,39 @@ class PlyvelEngine(Engine):
             synchronize writes with some other aspect of the application, or to
             replace the lock with e.g. a greenlet-friendly implementation.
 
+    URL scheme for :py:func:`acid.open`:
+    `"leveldb:/path/to/env.ldb[p1[;p2=v2]]`". Parameters:
+
+        `paranoid_checks`:
+            Enable "paranoid" engine checks; default off.
+
+        `write_buffer_size=N`:
+            Size in MiB of level 0 memtable, higher values improve bulk loads;
+            default: 4MiB.
+
+        `max_open_files=N`:
+            Maximum number of OS file descriptors to open; default 1000.
+
+        `lru_cache_size=N`:
+            Size of block cache in MiB; default 8MiB.
+
+        `block_size=N`:
+            Approximate size in KiB of user data packed per block. Note that
+            the size specified here corresponds to uncompressed data, the
+            actual size of the unit read from disk may be smaller if
+            compression is enabled. Default 4KiB
+
+        `block_restart_interval=N`:
+            Number of keys between restart points for delta encoding of keys;
+            default 16.
+
+        `compression=[compressor]`:
+            Block compression scheme to use; default `"snappy"`.
+
+        `bloom_filter_bits=N`:
+            Use a bloom filter policy with approximately the specified number
+            of bits per key. A good value is 10, which yields a filter with ~1%
+            false positive rate. Default: no bloom filter policy.
     """
     def __init__(self, db=None, lock=None, _snapshot=None, **kwargs):
         if not db:
@@ -451,14 +477,18 @@ class PlyvelEngine(Engine):
             self._iter = db.iterator
 
     def from_url(cls, dct):
-        """Create an instance given a URL of the form
-        `"skiplist:/[;mazsize=N]"`. Supported parameters:
+        if dct['scheme'] != 'leveldb':
+            return
 
-            `maxsize`:
-                Maximum expected number of items in the map; default 65535.
-        """
-        if dct['scheme'] == 'skiplist':
-            return cls(maxsize=int(dct['params'].get('maxsize', '65535')))
+        return cls(path=dct['path'],
+            paranoid_checks=dct.get('paranoid_checks', False),
+            write_buffer_size=MB*int(dct.get('writer_buffer_size', 4)),
+            max_open_files=int(dct.get('max_open_files', 1000)),
+            lru_cache_size=MB*int(dct.get('lru_cache_size', 8)),
+            block_size=KB*int(dct.get('block_size', 4)),
+            block_restart_interval=int(dct.get('block_restart_interval', 16)),
+            compression=dct.get('compression', 'snappy'),
+            bloom_filter_bits=int(dct.get('bloom_filter_bits', 0)))
     from_url = classmethod(from_url)
 
     def close(self):
@@ -677,6 +707,36 @@ class LmdbEngine(Engine):
 
         `db`:
             Named database handle to use, or ``None`` to use the main database.
+
+    URL scheme for :py:func:`acid.open`:
+    `"lmdb:/path/to/env.lmdb[;p1[;p2=v2]]"`. Supported parameters:
+
+            `map_size=N`:
+                Maximum environment map size in MiB; default 4194304MiB.
+
+            `readonly`:
+                Open environment read-only; default read-write.
+
+            `nometasync`:
+                Disable meta page fsync; default enabled.
+
+            `nosync`
+                Disable sync; default enabled.
+
+            `map_async`
+                Use ``MS_ASYNC`` with msync, `writemap` equivalent to `nosync`;
+                default use ``MS_SYNC``.
+
+            `writemap`:
+                Use writeable memory mapping; default disabled.
+
+                Note: When enabled, defective operating systems like OS X that
+                do not fully support sparse files will attempt to zero-fill the
+                database file to match `map_size` at close. Avoid use of
+                `writemap` there.
+
+            `max_readers=N`:
+                Maximum concurrent read threads; default 126.
     """
     def __init__(self, env=None, txn=None, db=None, **kwargs):
         if not (env or txn):
@@ -694,35 +754,16 @@ class LmdbEngine(Engine):
             self.cursor = txn.cursor
 
     def from_url(cls, dct):
-        """Create an instance given a URL of the form
-        `"lmdb:/path/to/env.lmdb[;p1[;p2=v2]]"`. Supported parameters:
-
-            `map_size`:
-                Environment map size in megabytes; default 4194304.
-            `readonly`:
-                Open environment read-only; default read-write.
-            `nometasync`:
-                Disable meta page fsync; default enabled.
-            `nosync`
-                Disable sync; default enabled.
-            `map_async`
-                Use ``MS_ASYNC`` with msync, `writemap` equivalent to `nosync`;
-                default use ``MS_SYNC``.
-            `writemap`:
-                Use writeable memory mapping; default disabled.
-            `max_readers`:
-                Maximum concurrent read threads; default 126.
-        """
         if dct['scheme'] != 'lmdb':
             return
         return cls(path=dct['path'],
-                   map_size=1048576*int(dct.get('map_size', '4194304')),
+                   map_size=MB*int(dct.get('map_size', 4194304)),
                    readonly=bool(dct['params'].get('readonly')),
                    metasync=not dct['params'].get('nometasync'),
                    sync=not dct['params'].get('nosync'),
                    map_async=bool(dct['params'].get('map_async')),
                    writemap=bool(dct['params'].get('writemap')),
-                   max_readers=int(dct['params'].get('max_readers', '126')))
+                   max_readers=int(dct['params'].get('max_readers', 126)))
     from_url = classmethod(from_url)
 
     def close(self):
