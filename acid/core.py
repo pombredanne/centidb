@@ -67,7 +67,7 @@ def abort():
     """Trigger a graceful abort of the active transaction."""
     raise errors.AbortError('')
 
-def open(url, trace_path=None, txn_context=None, **kwargs):
+def open(url, trace_path=None, txn_context=None):
     """Instantiate an engine described by `url` and return a new
     :py:class:`Store` wrapping it. See :ref:`engines` for supported URL
     schemes.
