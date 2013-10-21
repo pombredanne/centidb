@@ -74,3 +74,16 @@ BatchStrategy
 .. autoclass:: acid.core.BatchStrategy
     :members:
 
+
+Contexts
+++++++++
+
+TxnContext
+----------
+
+.. autoclass:: acid.core.TxnContext
+
+GeventTxnContext
+----------------
+
+.. autoclass:: acid.core.GeventTxnContext
