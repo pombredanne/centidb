@@ -36,8 +36,8 @@ MB = 1048576
 
 def register(klass):
     """Register a new engine class that supports :py:meth:`Engine.from_url`.
-    Allows the engine to be uniformly constructed from a simple string. May be
-    used as a decorator.
+    Allows the engine to be uniformly constructed from a simple string using
+    :py:func:`acid.open`. May be used as a decorator.
     """
     _engines.append(klass)
     return klass

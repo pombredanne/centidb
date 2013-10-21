@@ -1,10 +1,13 @@
 
+.. currentmodule:: acid.engines
+
+.. module:: acid.engines
+
+.. _engines:
+
 Engines
 #######
 
-.. currentmodule:: acid.engines
-
-.. _engines:
 
 ListEngine
 ++++++++++
@@ -48,6 +51,8 @@ TraceEngine
 
 Engine Interface
 ++++++++++++++++
+
+.. autofunction:: acid.engines.register
 
 .. autoclass:: acid.engines.Engine
     :members:
