@@ -72,10 +72,22 @@ def open(url, trace_path=None, txn_context=None):
     :py:class:`Store` wrapping it. See :ref:`engines` for supported URL
     schemes.
 
-    The URL's scheme may optionally be prefixed by ``pkgname.modname+``, which
-    will cause the named module to be imported before attempting to create the
-    engine. This allows a third party engine to register via
-    :py:func:`acid.engines.register` before attempting to parse the URL.
+        `url`:
+            Engine URL; may be prefixed with ``pkgname.modname+`` to cause a
+            module to be imported before instantiating the engine. This allows
+            third party engines to register via
+            :py:func:`acid.engines.register` before the URL is parsed.
+
+        `trace_path`:
+            If specified, the engine is wrapped in a
+            :py:class:`acid.engines.TraceEngine` to produce a complete log of
+            interactions, written to `trace_path`.
+
+        `txn_context`:
+            If specified, use `txn_context` instead of the default
+            :py:class:`acid.core.TxnContext` implementation.
+
+    Example:
 
     .. code-block:: python
 
@@ -84,13 +96,6 @@ def open(url, trace_path=None, txn_context=None):
 
         # Cause "mypkg.acid" to be imported, then use "myengine:/".
         store = acid.open('mypkg.acid+myengine:/')
-
-    If `trace_path` is specified, then the underlying engine is wrapped in a
-    :py:class:`acid.engines.TraceEngine` to produce a complete log of
-    interactions with the external engine, written to `trace_path`.
-
-    If `txn_context` is specified, then use `txn_context` instead of the
-    default :py:class:`acid.core.TxnContext` implementation.
     """
     import acid.engines
     engine = acid.engines.from_url(url)
