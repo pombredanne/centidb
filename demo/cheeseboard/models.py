@@ -44,12 +44,7 @@ class Post(Model):
 
 def init_store():
     global store
-    store = acid.open('LmdbEngine',
-         path='store.lmdb',
-         map_size=(1048576*1024*2) - 1,
-         map_async=True,
-         sync=False,
-         metasync=False,
-         writemap=True)
+    url = 'lmdb:store.lmdb;map_size=2040;map_async;nosync;nometasync;writemap'
+    store = acid.open(url)
     Model.bind_store(store)
     return store
