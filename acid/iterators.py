@@ -167,7 +167,7 @@ class RangeIterator(Iterator):
         from `hi`..`lo`. Note the yielded object is reused, so references to it
         should not be held."""
         if self._hi is None:
-            key = keylib.next_greater(self.prefix)
+            key = keylib.next_greater_bytes(self.prefix)
         else:
             key = self._hi.to_raw(self.prefix)
 
@@ -304,7 +304,7 @@ class BatchRangeIterator(Iterator):
         from `lo`..`hi`. Note the yielded object is reused, so references to it
         should not be held."""
         if self._hi is None:
-            key = keylib.next_greater(self.prefix)
+            key = keylib.next_greater_bytes(self.prefix)
         else:
             key = self._hi.to_raw(self.prefix)
 
