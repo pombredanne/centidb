@@ -42,7 +42,7 @@ writer = csv.writer(sys.stdout, quoting=csv.QUOTE_ALL)
 out = lambda *args: writer.writerow(args)
 
 USE_SPARSE_FILES = sys.platform != 'darwin'
-BASE_PATH = '/ram/benchy/'
+BASE_PATH = os.environ.get('ACID_TMPDIR', '/tmp') + '/benchy/'
 if not os.path.exists(BASE_PATH):
     os.mkdir(BASE_PATH, 0744)
 

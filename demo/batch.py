@@ -26,7 +26,7 @@ import acid
 import acid.encoders
 import acid.engines
 
-TMP_PATH = '/ram/tmp.db'
+TMP_PATH = os.environ.get('ACID_TMPDIR', '/tmp') + '/tmp.db'
 INPUT_PATH = os.path.join(os.path.dirname(__file__), 'laforge.json.gz')
 recs = json.load(gzip.open(INPUT_PATH))
 
