@@ -62,8 +62,8 @@ class AcidEngine(object):
                 encoder=self.ENCODER,
                 key_func=self.KEY_FUNC)
             if use_indices:
-                self.coll.add_index('rev_name', lambda p: p['name'])
-                self.coll.add_index('rev_locn', lambda p: p['location'])
+                acid.add_index(self.coll, 'rev_name', lambda p: p['name'])
+                acid.add_index(self.coll, 'rev_locn', lambda p: p['location'])
 
     def close(self):
         self.store.engine.close()
@@ -78,10 +78,9 @@ class AcidEngine(object):
                 coll.put(doc)
 
     def randget_idx(self, words):
-        index = self.coll.indices['rev_name']
         with self.store.begin():
             for word in words:
-                index.get(word)
+                self.coll.get(word)
 
     def randget_id(self, words, upper):
         coll = self.coll
@@ -101,7 +100,7 @@ class LmdbEngine(AcidEngine):
 class SkiplistEngine(AcidEngine):
     PATH = None
     def make_engine(self):
-         self.store = acid.open('SkiplistEngine', maxsize=int(1e9))
+        self.store = acid.open('skiplist:/')
 
 
 class PlyvelEngine(AcidEngine):
