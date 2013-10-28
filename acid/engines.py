@@ -727,6 +727,11 @@ class LmdbEngine(Engine):
                 Use ``MS_ASYNC`` with msync, `writemap` equivalent to `nosync`;
                 default use ``MS_SYNC``.
 
+            `noreadahead`:
+                Instruct LMDB to disable the OS filesystem readahead mechanism,
+                which may improve random read performance when a database is
+                larger than RAM; readahead is enabled by default.
+
             `writemap`:
                 Use writeable memory mapping; default disabled.
 
@@ -762,6 +767,7 @@ class LmdbEngine(Engine):
                    metasync=not dct['params'].get('nometasync'),
                    sync=not dct['params'].get('nosync'),
                    map_async=bool(dct['params'].get('map_async')),
+                   readahead=not dct['params'].get('noreadahead'),
                    writemap=bool(dct['params'].get('writemap')),
                    max_readers=int(dct['params'].get('max_readers', 126)))
     from_url = classmethod(from_url)
