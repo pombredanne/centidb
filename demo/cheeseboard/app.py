@@ -32,6 +32,10 @@ templates = wheezy.template.engine.Engine(
     extensions=[wheezy.template.ext.core.CoreExtension()])
 
 store = models.init_store()
+# Hack to avoid attempting to create Post collection from RO txn
+with store.begin(write=True):
+    list(models.Post.iter())
+    models.Post.find()
 
 
 def getint(name, default=None):
