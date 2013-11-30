@@ -740,6 +740,13 @@ class LmdbEngine(Engine):
                 database file to match `map_size` at close. Avoid use of
                 `writemap` there.
 
+            `nomeminit`:
+                Avoiding 0-initialization of malloc buffers when `writemap` is
+                disabled. Improves performance at the cost of nondeterministic
+                slack areas in the database file, and potential security
+                consequences (e.g. accidentally persistenting free'd cleartext
+                passwords).
+
             `max_readers=N`:
                 Maximum concurrent read threads; default 126.
     """
@@ -769,6 +776,7 @@ class LmdbEngine(Engine):
                    map_async=bool(dct['params'].get('map_async')),
                    readahead=not dct['params'].get('noreadahead'),
                    writemap=bool(dct['params'].get('writemap')),
+                   meminit=not bool(dct['params'].get('nomeminit')),
                    max_readers=int(dct['params'].get('max_readers', 126)))
     from_url = classmethod(from_url)
 
