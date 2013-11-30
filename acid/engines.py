@@ -741,10 +741,10 @@ class LmdbEngine(Engine):
                 `writemap` there.
 
             `nomeminit`:
-                Avoiding 0-initialization of malloc buffers when `writemap` is
+                Avoid 0-initialization of malloc buffers when `writemap` is
                 disabled. Improves performance at the cost of nondeterministic
                 slack areas in the database file, and potential security
-                consequences (e.g. accidentally persistenting free'd cleartext
+                consequences (e.g. accidentally persisting free'd cleartext
                 passwords).
 
             `max_readers=N`:
