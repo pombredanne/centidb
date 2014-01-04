@@ -19,7 +19,7 @@ simplest available, :py:class:`ListEngine <acid.engines.ListEngine>`:
 ::
 
     import acid
-    store = acid.open('ListEngine')
+    store = acid.open('list:/')
 
 We now have a :py:class:`Store <Store>`. Stores manage metadata for a set of
 collections, along with any registered encodings and counters. Multiple
@@ -58,21 +58,23 @@ Now let's insert some people using :py:meth:`Collection.put`:
 
 ::
 
-    >>> store['people'].put(('Buffy', 'girl'))
+    >>> people = [['Buffy', 'girl'],
+    ...           ['Willow', 'girl'],
+    ...           ['Spike', 'boy']]
+
+    >>> with store.begin(write=True):
+    ...     for person in people:
+    ...         print store['people'].put(person)
+
     acid.Key(1L,)
-
-    >>> store['people'].put(('Willow', 'girl'))
     acid.Key(2L,)
-
-    >>> store['people'].put(('Spike', 'boy'))
     acid.Key(3L,)
 
-Since we didn't specify an encoder during construction, the default pickle
-encoder is used which allows almost any Python value, although here we use
-tuples. As no key function was given, the collection defaults to
-auto-incrementing keys.
+Since we didn't specify an encoder when we called :py:meth:`add_collection
+<Store.add_collection>`, the default JSON encoder is used. As no key function
+was given, the collection defaults to auto-incrementing keys.
 
-More magic is visible underneath:
+Some magic is visible underneath:
 
 ::
 
@@ -81,9 +83,9 @@ More magic is visible underneath:
      ('\x01(\x01\x01collections_idx\x00',   ' (\x01\x01collections_idx\x00\x15\x0b'),
      ('\x01(key:people\x00',                ' (key:people\x00\x15\x04'),
 
-     ('\n\x15\x01', ' \x80\x02U\x05Buffyq\x01U\x04girlq\x02\x86q\x03.'),
-     ('\n\x15\x02', ' \x80\x02U\x06Willowq\x01U\x04girlq\x02\x86q\x03.'),
-     ('\n\x15\x03', ' \x80\x02U\x05Spikeq\x01U\x03boyq\x02\x86q\x03.')]
+     ('\n\x15\x01', '["Buffy","girl"]'),
+     ('\n\x15\x02', '["Willow","girl"]'),
+     ('\n\x15\x03', '["Spike","boy"]')]
 
 Notice the ``key:people`` counter and freshly inserted people records. Pay
 attention to the record keys, occupying only 3 bytes despite their prefix also
@@ -101,15 +103,15 @@ missing:
 ::
 
     >>> store['people'].get(2)
-    ('Willow', 'girl')
+    ['Willow', 'girl']
 
     >>> # No such record.
     >>> store['people'].get(99)
     None
 
     >>> # Default is returned.
-    >>> store['people'].get(99, default=('Angel', 'boy'))
-    ('Angel', 'boy')
+    >>> store['people'].get(99, default=['Angel', 'boy'])
+    ['Angel', 'boy']
 
 Be aware that unlike :py:meth:`dict.get`, :py:meth:`Collection.get` and related
 methods return freshly decoded *copies* of the associated value. In this
@@ -142,11 +144,11 @@ highest records:
 
     >>> # Find record with lowest key, 1
     >>> store['people'].find()
-    ('Buffy', 'girl')
+    ['Buffy', 'girl']
 
     >>> # Find record with highest key, 3
     >>> store['people'].find(reverse=True)
-    ('Spike', 'boy')
+    ['Spike', 'boy']
 
 We can locate records based only on the relation of their key to some
 constraining keys:
@@ -155,11 +157,11 @@ constraining keys:
 
     >>> # Find first record with 2 <= key < 99.
     >>> store['people'].find(lo=2, hi=99)
-    ('Willow', 'girl')
+    ['Willow', 'girl']
 
     >>> # Find last record with 2 <= key < 99.
     >>> store['people'].find(lo=2, hi=99, reverse=True)
-    ('Spike', 'boy')
+    ['Spike', 'boy']
 
 
 Range iteration
@@ -197,9 +199,9 @@ supported combinations.
 
         >>> # All values, start to end:
         >>> pprint(list(store['people'].values()))
-        [('Buffy', 'girl'),
-         ('Willow', 'girl'),
-         ('Spike', 'boy')]
+        [['Buffy', 'girl'],
+         ['Willow', 'girl'],
+         ['Spike', 'boy']]
 
 :py:meth:`Collection.items`
 
@@ -207,8 +209,8 @@ supported combinations.
 
         >>> # All (key, value) pairs, from 99 to 2:
         >>> pprint(list(store['people'].items(lo=2, hi=99, reverse=True)))
-        [(acid.Key(3L,), ('Spike', 'boy')),
-         (acid.Key(2L,), ('Willow', 'girl'))]
+        [(acid.Key(3L,), ['Spike', 'boy']),
+         (acid.Key(2L,), ['Willow', 'girl'])]
 
 
 .. _keys:

@@ -289,11 +289,11 @@ the storage engine:
 +-------------------+---------+---------------------------------------------+
 | ``name``          | ``idx`` | *Description*                               |
 +-------------------+---------+---------------------------------------------+
-| ``key``           | 1       | Built-in ``KEY_ENCODER``                    |
+| ``key``           | 1       | Built-in :py:attr:`acid.encoders.KEY`       |
 +-------------------+---------+---------------------------------------------+
-| ``pickle``        | 2       | Built-in ``PICKLE_ENCODER``                 |
+| ``json``          | 2       | Built-in :py:attr:`acid.encoders.JSON`      |
 +-------------------+---------+---------------------------------------------+
-| ``plain``         | 3       | Built-in ``PLAIN`` compessor (raw bytes)    |
+| ``plain``         | 3       | Built-in :py:attr:`acid.encoders.PLAIN`     |
 +-------------------+---------+---------------------------------------------+
-| ``zlib``          | 4       | Built-in ``ZLIB`` compressor                |
+| ``zlib``          | 4       | Built-in :py:attr:`acid.encoders.ZLIB`      |
 +-------------------+---------+---------------------------------------------+

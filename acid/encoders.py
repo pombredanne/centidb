@@ -17,9 +17,12 @@
 from __future__ import absolute_import
 import functools
 import operator
-import cPickle as pickle
-import cStringIO as StringIO
 import zlib
+
+try:
+    import cStringIO as StringIO
+except ImportError:
+    import StringIO
 
 import acid
 import acid.keylib
@@ -124,7 +127,11 @@ def make_json_encoder(separators=',:', **kwargs):
     The `ujson <https://pypi.python.org/pypi/ujson>`_ package will be used for
     decoding if it is available, otherwise :py:func:`json.loads` is used.
     """
-    import json
+    try:
+        import json
+    except ImportError:
+        import simplejson as json
+
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     try:
         import ujson
@@ -183,21 +190,31 @@ def make_thrift_encoder(klass, factory=None):
                          get=getattr, set=setattr, delete=delattr)
 
 
+def make_pickle_encoder(protocol=2):
+    """Return an :py:class:`Encoder <acid.Encoder>` that serializes objects
+    using the :py:mod:`cPickle` module. `protocol` specifies the protocol
+    version to use.
+    """
+    import cPickle
+
+    def _pickle_unpack(key, value):
+        """cPickle.loads() can't read from a buffer directly, however for
+        strings it internally constructs a cStringIO.StringI() and invokes
+        load(), which has a special case for StringI instances, which do accept
+        buffers. So we avoid string copy by constructing the StringI and
+        passing it to load instead."""
+        return cPickle.load(StringIO.StringIO(value))
+
+    return RecordEncoder('pickle', _pickle_unpack,
+                         functools.partial(cPickle.dumps, protocol=protocol))
+
+
 #: Encode Python tuples using keylib.packs()/keylib.unpacks().
 KEY = RecordEncoder('key', lambda key, value: acid.keylib.unpack(value),
                     acid.keylib.packs)
 
-def _pickle_unpack(key, value):
-    """cPickle.loads() can't reading from a buffer directly, however for
-    strings it internally constructs a cStringIO.StringI() and invokes load(),
-    which has a special case for StringI instances, which do accept buffers. So
-    we avoid string copy by constructing the StringI and passing it to load
-    instead."""
-    return pickle.load(StringIO.StringIO(value))
-
-#: Encode Python objects using the cPickle version 2 protocol.
-PICKLE = RecordEncoder('pickle', _pickle_unpack,
-                       functools.partial(pickle.dumps, protocol=2))
+#: Encode objects using json.dumps()/json.loads().
+JSON = make_json_encoder()
 
 #: Perform no compression at all.
 PLAIN = Compressor('plain', str, lambda o: o)
@@ -207,4 +224,4 @@ ZLIB = Compressor('zlib', zlib.decompress, zlib.compress)
 
 # The order of this tuple is significant. See core.Store source/data format
 # documentation for more information.
-_ENCODERS = (KEY, PICKLE, PLAIN, ZLIB)
+_ENCODERS = (KEY, JSON, PLAIN, ZLIB)

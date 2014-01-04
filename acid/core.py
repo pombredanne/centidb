@@ -537,7 +537,7 @@ class Collection(object):
 
         `encoder`:
             :py:class:`acid.encoders.Encoder` used to serialize record values
-            to bytestrings; defaults to :py:attr:`acid.encoders.PICKLE`.
+            to bytestrings; defaults to :py:attr:`acid.encoders.JSON`.
 
         `counter_name`:
             Specifies the name of the :py:class:`Store` counter to use when
@@ -565,7 +565,7 @@ class Collection(object):
             counter_name = counter_name or ('key:%(name)s' % self.info)
             self.key_func = lambda _: store.count(counter_name)
 
-        self.encoder = encoder or encoders.PICKLE
+        self.encoder = encoder or encoders.JSON
         self._on_update = []
         self._after_create = []
         self._after_replace = []
@@ -853,7 +853,7 @@ class Store(object):
     def add_collection(self, name, **kwargs):
         """Shorthand for `acid.Collection(self, **kwargs)`."""
         old = self.get_meta(KIND_TABLE, name)
-        encoder = kwargs.get('encoder', encoders.PICKLE)
+        encoder = kwargs.get('encoder', encoders.JSON)
         new = {'name': name, 'encoder': encoder.name}
         if old:
             for key, value in old.iteritems():

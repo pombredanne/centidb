@@ -24,19 +24,19 @@ Compressor Interface
 Predefined Record Encoders
 ++++++++++++++++++++++++++
 
-.. attribute:: acid.encoders.KEY
+.. attribute:: KEY
 
-This predefined :py:class:`RecordEncoder` uses :py:func:`acid.keylib.packs` and
-:py:func:`acid.keylib.unpacks` to serialize tuples. It is used internally to
-represent keys, counters, and :py:class:`Store <acid.Store>` metadata.
+    This predefined :py:class:`RecordEncoder` uses :py:func:`acid.keylib.packs`
+    and :py:func:`acid.keylib.unpacks` to serialize tuples. It is used
+    internally to represent keys, counters, and :py:class:`Store <acid.Store>`
+    metadata.
 
+.. attribute:: JSON
 
-.. attribute:: acid.encoders.PICKLE
-
-This predefined :py:class:`RecordEncoder` uses :py:func:`pickle.dumps` and
-:py:func:`pickle.loads` with protocol 2 to serialize any pickleable object. It
-is the default encoder if no specific `encoder=` argument is given to the
-:py:class:`Collection <acid.Collection>` constructor.
+    This predefined :py:class:`RecordEncoder` uses :py:func:`json.dumps` and
+    :py:func:`json.loads` to serialize compatible objects. It is the default
+    encoder if no specific `encoder=` argument is given to the
+    :py:class:`Collection <acid.Collection>` constructor.
 
 
 Predefined Compressors
@@ -44,18 +44,23 @@ Predefined Compressors
 
 .. attribute:: acid.encoders.PLAIN
 
-This predefined :py:class:`Compressor` returns its input unchanged. It is used
-as the default :py:class:`Collection(..., packer=) <acid.Collection>` argument
-when no explicit compressor is provided.
-
+    This predefined :py:class:`Compressor` returns its input unchanged. It is
+    used as the default :py:class:`Collection(..., packer=) <acid.Collection>`
+    argument when no explicit compressor is provided.
 
 .. attribute:: acid.encoders.ZLIB
 
-This predefined :py:class:`Compressor` uses :py:func:`zlib.compress` and
-:py:func:`zlib.decompress` to provide value compression. It may be passed as
-the `packer=` argument to :py:meth:`Collection.put <acid.Collection.put>`, or
-specified as the default using the `packer=` argument to the
-:py:class:`Collection <acid.Collection>` constructor.
+    This predefined :py:class:`Compressor` uses :py:func:`zlib.compress` and
+    :py:func:`zlib.decompress` to provide value compression. It may be passed
+    as the `packer=` argument to :py:meth:`Collection.put
+    <acid.Collection.put>`, or specified as the default using the `packer=`
+    argument to the :py:class:`Collection <acid.Collection>` constructor.
+
+
+make_pickle_encoder
++++++++++++++++++++
+
+.. autofunction:: acid.encoders.make_pickle_encoder
 
 
 make_json_encoder
