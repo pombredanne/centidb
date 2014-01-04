@@ -179,7 +179,7 @@ def make_thrift_encoder(klass, factory=None):
 
     # Form a name from the Thrift ttypes module and struct name.
     name = 'thrift:%s.%s' % (klass.__module__, klass.__name__)
-    return RecordEncoder(name, loads, dumps, factory=klass,
+    return RecordEncoder(name, loads, dumps, new=klass,
                          get=getattr, set=setattr, delete=delattr)
 
 
