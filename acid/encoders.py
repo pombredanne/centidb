@@ -119,7 +119,7 @@ class Compressor(object):
 
 
 def make_json_encoder(separators=',:', **kwargs):
-    """Return an :py:class:`Encoder <acid.Encoder>` that serializes
+    """Return a :py:class:`RecordEncoder` that serializes
     dict/list/string/float/int/bool/None objects using the :py:mod:`json`
     module. `separators` and `kwargs` are passed to the
     :py:class:`json.JSONEncoder` constructor.
@@ -144,7 +144,7 @@ def make_json_encoder(separators=',:', **kwargs):
 
 
 def make_msgpack_encoder():
-    """Return an :py:class:`Encoder <acid.Encoder>` that serializes
+    """Return a :py:class:`RecordEncoder` that serializes
     dict/list/string/float/int/bool/None objects using `MessagePack
     <http://msgpack.org/>`_ via the `msgpack-python
     <https://pypi.python.org/pypi/msgpack-python/>`_ package."""
@@ -155,8 +155,8 @@ def make_msgpack_encoder():
 
 def make_thrift_encoder(klass, factory=None):
     """
-    Return an :py:class:`Encoder <acid.Encoder>` instance that serializes
-    `Apache Thrift <http://thrift.apache.org/>`_ structs using a compact binary
+    Return a :py:class:`RecordEncoder` instance that serializes `Apache Thrift
+    <http://thrift.apache.org/>`_ structs using a compact binary
     representation.
 
     `klass`:
@@ -191,9 +191,8 @@ def make_thrift_encoder(klass, factory=None):
 
 
 def make_pickle_encoder(protocol=2):
-    """Return an :py:class:`Encoder <acid.Encoder>` that serializes objects
-    using the :py:mod:`cPickle` module. `protocol` specifies the protocol
-    version to use.
+    """Return a :py:class:`RecordEncoder` that serializes objects using the
+    :py:mod:`cPickle` module. `protocol` specifies the protocol version to use.
     """
     import cPickle
 

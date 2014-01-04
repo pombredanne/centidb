@@ -42,13 +42,13 @@ Predefined Record Encoders
 Predefined Compressors
 ++++++++++++++++++++++
 
-.. attribute:: acid.encoders.PLAIN
+.. attribute:: PLAIN
 
     This predefined :py:class:`Compressor` returns its input unchanged. It is
     used as the default :py:class:`Collection(..., packer=) <acid.Collection>`
     argument when no explicit compressor is provided.
 
-.. attribute:: acid.encoders.ZLIB
+.. attribute:: ZLIB
 
     This predefined :py:class:`Compressor` uses :py:func:`zlib.compress` and
     :py:func:`zlib.decompress` to provide value compression. It may be passed
@@ -60,25 +60,25 @@ Predefined Compressors
 make_pickle_encoder
 +++++++++++++++++++
 
-.. autofunction:: acid.encoders.make_pickle_encoder
+.. autofunction:: make_pickle_encoder
 
 
 make_json_encoder
 +++++++++++++++++
 
-.. autofunction:: acid.encoders.make_json_encoder
+.. autofunction:: make_json_encoder
 
 
 make_msgpack_encoder
 ++++++++++++++++++++
 
-.. autofunction:: acid.encoders.make_msgpack_encoder
+.. autofunction:: make_msgpack_encoder
 
 
 make_thrift_encoder
 +++++++++++++++++++
 
-.. autofunction:: acid.encoders.make_thrift_encoder
+.. autofunction:: make_thrift_encoder
 
 
 Example
