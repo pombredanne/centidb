@@ -56,7 +56,7 @@ _max_unicode = unichr(sys.maxunicode)
 
 def next_greater_text(s):
     """Given a Unicode string `s`, return the most compact string that is
-    greater than any value prefixed with `s`, but lower than any other value.
+    greater than any string prefixed with `s`, but lower than any other value.
     If no such string exists, return ``None``."""
     if s:
         s2 = s.rstrip(_max_unicode)
@@ -66,7 +66,7 @@ def next_greater_text(s):
 
 def next_greater_bytes(s):
     """Given a bytestring `s`, return the most compact bytestring that is
-    greater than any value prefixed with `s`, but lower than any other value.
+    greater than any string prefixed with `s`, but lower than any other value.
     If no such string exists, return ``None``."""
     if s:
         s2 = s.rstrip('\xff')
@@ -158,7 +158,7 @@ class Key(object):
     def prefix_bound(self):
         """Return a new :py:class:`Key <acid.keylib.Key>` that is larger than
         any key prefixed by this key, but smaller than all greater keys. This
-        may return ``None`` if no such greater key exists (i.e. the prefix
+        may return ``None`` if no such greater key exists (e.g. the prefix
         consists entirely of ``0xff`` bytes when encoded). The returned
         instance is useful only for implementing compares for
         :py:meth:`set_prefix <acid.iterators.Iterator.set_prefix>`, it may not

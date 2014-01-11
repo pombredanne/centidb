@@ -247,6 +247,7 @@ typedef struct {
 
 int acid_writer_init(struct writer *wtr, Py_ssize_t initial);
 uint8_t *acid_writer_ptr(struct writer *wtr);
+int acid_writer_puts(struct writer *wtr, const char *s, Py_ssize_t size);
 void acid_writer_abort(struct writer *wtr);
 int acid_write_element(struct writer *wtr, PyObject *arg);
 PyObject *acid_read_element(struct reader *rdr);
@@ -263,9 +264,12 @@ acid_init_core_module(void);
 
 PyTypeObject *acid_init_key_type(void);
 Key *acid_make_key(PyObject *arg);
-Key *acid_key_next_greater(Key *self);
+Key *acid_key_prefix_bound(Key *self);
 PyObject *acid_key_to_raw(Key *self, Slice *prefix);
 
+
+int
+acid_prefix_bound(struct writer *wtr, Slice *src);
 const char *
 acid_debug_hex(uint8_t *s, Py_ssize_t len);
 int
@@ -277,7 +281,7 @@ acid_key_as_slice(Slice *slice, Key *key);
 Py_ssize_t
 acid_next_greater(Slice *slice);
 PyObject *
-acid_next_greater_str(Slice *slice);
+acid_next_greater_bytes(Slice *slice);
 int acid_memcmp(Slice *s1, Slice *s2);
 
 int acid_init_keylib_module(void);

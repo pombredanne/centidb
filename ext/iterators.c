@@ -216,7 +216,7 @@ iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
     }
 
     set_bound(&self->lo, acid_make_key(key_obj), PRED_GE);
-    set_bound(&self->hi, acid_key_next_greater(self->lo.key), PRED_LT);
+    set_bound(&self->hi, acid_key_prefix_bound(self->lo.key), PRED_LT);
     if(! (self->lo.key && self->hi.key)) {
         return NULL;
     }
@@ -497,7 +497,7 @@ rangeiter_reverse(RangeIterator *self)
     if(self->base.hi.key) {
         key = acid_key_to_raw(self->base.hi.key, &prefix);
     } else {
-        key = acid_next_greater_str(&prefix);
+        key = acid_next_greater_bytes(&prefix);
     }
 
     // TODO: may "return without exception set" if next_greater failed.
@@ -579,7 +579,7 @@ py_from_args(PyObject *self, PyObject *args, PyObject *kwds)
     // prefix=
     } else if(((o = PyTuple_GET_ITEM(args, 4))) != Py_None) {
         set_bound(&it->lo, acid_make_key(o), PRED_GE);
-        set_bound(&it->hi, acid_key_next_greater(it->lo.key), PRED_LT);
+        set_bound(&it->hi, acid_key_prefix_bound(it->lo.key), PRED_LT);
         if(! (it->lo.key && it->hi.key)) {
             return NULL;
         }

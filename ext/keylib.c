@@ -37,6 +37,8 @@ static PyTypeObject *UUID_Type;
 static PyObject *uuid_get_bytes;
 // Reference to datetime.datetime.utcoffset().
 static PyObject *datetime_utcoffset;
+// Maximum Python Unicode ordinal.
+static Py_UNICODE max_unicode_ordinal;
 
 
 /**
@@ -144,7 +146,7 @@ static int writer_putc(struct writer *wtr, uint8_t o)
  * Append a bytestring `s` to the buffer, growing it as necessary. Return 0 on
  * success or set an exception and return -1.
  */
-static int writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
+int acid_writer_puts(struct writer *wtr, const char *s, Py_ssize_t size)
 {
     if(writer_need(wtr, size)) {
         return -1;
@@ -258,7 +260,7 @@ static PyObject *py_pack_int(PyObject *self, PyObject *args)
 
     struct writer wtr;
     if(! acid_writer_init(&wtr, 9)) {
-        if(! writer_puts(&wtr, prefix, prefix_len)) {
+        if(! acid_writer_puts(&wtr, prefix, prefix_len)) {
             if(! write_int(&wtr, v, 0, 0)) {
                 return acid_writer_fini(&wtr);
             }
@@ -426,8 +428,8 @@ int acid_write_element(struct writer *wtr, PyObject *arg)
         assert(Py_TYPE(ss) == &PyString_Type);
         ret = writer_putc(wtr, KIND_UUID);
         if(! ret) {
-            ret = writer_puts(wtr, PyString_AS_STRING(ss),
-                                   PyString_GET_SIZE(ss));
+            ret = acid_writer_puts(wtr, PyString_AS_STRING(ss),
+                                        PyString_GET_SIZE(ss));
         }
         Py_DECREF(ss);
     } else {
@@ -483,7 +485,7 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
     }
 
     if(prefix) {
-        if(writer_puts(&wtr, (char *)prefix, prefix_size)) {
+        if(acid_writer_puts(&wtr, (char *)prefix, prefix_size)) {
             return NULL;
         }
     }
@@ -496,8 +498,8 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
         if(type == &PyTuple_Type) {
             ret = write_tuple(&wtr, tups);
         } else if(type == KeyType) {
-            ret = writer_puts(&wtr, (char *)Key_DATA((Key *)tups),
-                                            Key_SIZE((Key *)tups));
+            ret = acid_writer_puts(&wtr, (char *)Key_DATA((Key *)tups),
+                                                 Key_SIZE((Key *)tups));
         } else {
             ret = acid_write_element(&wtr, tups);
         }
@@ -511,8 +513,8 @@ static PyObject *py_packs(PyObject *self, PyObject *args)
             if(type == &PyTuple_Type) {
                 ret = write_tuple(&wtr, elem);
             } else if(type == KeyType) {
-                ret = writer_puts(&wtr, (char *) Key_DATA((Key *)elem),
-                                                 Key_SIZE((Key *)elem));
+                ret = acid_writer_puts(&wtr, (char *) Key_DATA((Key *)elem),
+                                                      Key_SIZE((Key *)elem));
             } else {
                 ret = acid_write_element(&wtr, elem);
             }
@@ -860,6 +862,141 @@ acid_skip_element(struct reader *rdr, int *eof)
 }
 
 /**
+ * Find length of longest prefix in `(uint8_t) o[0..len]` not ending with 0xff.
+ */
+static Py_ssize_t
+longest_prefix(uint8_t *p, Py_ssize_t len)
+{
+    Py_ssize_t goodlen = 0;
+    for(Py_ssize_t i = 0; i < len; i++) {
+        if(p[i] != 0xff) {
+            goodlen = 1 + i;
+        }
+    }
+    return goodlen;
+}
+
+/**
+ * Given a string `src`, return the most compact string that is greater than
+ * any string prefixed with `src`, but lower than any other string. If no such
+ * string exists, return NULL. Use PyErr_Occurred() to test for error.
+ */
+PyObject *
+acid_next_greater_bytes(Slice *src)
+{
+    Py_ssize_t goodlen = longest_prefix(src->p, src->e - src->p);
+    PyObject *dst = NULL;
+    if(goodlen && ((dst = PyString_FromStringAndSize(NULL, goodlen)))) {
+        uint8_t *dstp = (uint8_t *)PyString_AS_STRING(dst);
+        memcpy(dstp, src->p, goodlen);
+        dstp[goodlen - 1]++;
+    }
+    return dst;
+}
+
+/**
+ * Given a Unicode string `src`, return the most compact string that is greater
+ * than any string prefixed with `src`, but lower than any other string. If no
+ * such string exists, return NULL. Use PyErr_Occurred() to test for error.
+ */
+PyObject *
+acid_next_greater_text(PyObject *src)
+{
+    Py_UNICODE *srcpu = PyUnicode_AS_UNICODE(src);
+    Py_ssize_t srclen = PyUnicode_GET_SIZE(src);
+    Py_ssize_t goodlen = 0;
+
+    // Find longest prefix of `src` not ending with `maxord`.
+    for(Py_ssize_t i = 0; i < srclen; i++) {
+        if(srcpu[i] != max_unicode_ordinal) {
+            goodlen = 1 + i;
+        }
+    }
+
+    PyObject *dst = NULL;
+    if(goodlen && ((dst = PyUnicode_FromStringAndSize(NULL, goodlen)))) {
+        Py_UNICODE *dstpu = PyUnicode_AS_UNICODE(dst);
+        memcpy(dstpu, srcpu, Py_UNICODE_SIZE * goodlen);
+        dstpu[goodlen - 1]++;
+    }
+    return dst;
+}
+
+/**
+ * Position `src` on the kind byte of the last element. `src` must not be
+ * empty. Return 0 on success or -1 on failure.
+ */
+static int
+seek_last_element(Slice *src)
+{
+    assert(src->p != src->e);
+
+    int rc = 0;
+    int eof = 0;
+    uint8_t *last;
+    while(! (eof || rc)) {
+        last = src->p;
+        rc = acid_skip_element(src, &eof);
+    }
+    src->p = last;
+    return rc;
+}
+
+/**
+ * Write a key larger than any key prefixed by the key in `src`, but smaller
+ * than all greater keys. May fail if no such key exists. Return 0 on success
+ * or -1 on failure. Use PyErr_Occurred() to test for error.
+ */
+int
+acid_prefix_bound(struct writer *wtr, Slice *src)
+{
+    if(src->p == src->e) {
+        return -1;
+    }
+
+    Slice tmp = *src;
+    if(seek_last_element(&tmp)) {
+        return -1;
+    }
+    uint8_t *new_end = tmp.p;
+
+    int rc = -1;
+    enum ElementKind kind = *tmp.p;
+    if(kind == KIND_TEXT || kind == KIND_BLOB) {
+        PyObject *last = acid_read_element(&tmp);
+        if(last) {
+            PyObject *new;
+            if(PyUnicode_CheckExact(last)) {
+                new = acid_next_greater_text(last);
+            } else {
+                Slice stmp = {(uint8_t *)PyString_AS_STRING(last)};
+                stmp.e = stmp.p + PyString_GET_SIZE(last);
+                new = acid_next_greater_bytes(&stmp);
+            }
+            Py_DECREF(last);
+            if(new) {
+                (void) acid_writer_puts(wtr, (char *)src->p, new_end - src->p);
+                rc = acid_write_element(wtr, new);
+                Py_DECREF(new);
+            }
+        }
+    } else {
+        Py_ssize_t len = tmp.e - tmp.p;
+        Py_ssize_t goodlen = longest_prefix(tmp.p, len);
+        (void) acid_writer_puts(wtr, (char *)src->p, tmp.p - src->p);
+        if(goodlen && !((rc = acid_writer_puts(wtr, (char *)tmp.p, goodlen)))) {
+            (*(acid_writer_ptr(wtr) - 1)) ++;
+        }
+    }
+    if(rc && !PyErr_Occurred()) {
+        tmp.p = src->p;
+        tmp.e = new_end;
+        rc = acid_prefix_bound(wtr, &tmp);
+    }
+    return rc;
+}
+
+/**
  * Python-level interface to unpack a tuple. Expects 2 arguments: string prefix
  * to ignore and encoded tuple. Return the unpacked tuple on success, or set an
  * exception and return NULL on failure.
@@ -1019,6 +1156,8 @@ int
 acid_init_keylib_module(void)
 {
     PyDateTime_IMPORT;
+
+    max_unicode_ordinal = PyUnicode_GetMax();
 
     UUID_Type = (PyTypeObject *) acid_import_object("uuid", "UUID", NULL);
     assert(PyType_CheckExact((PyObject *) UUID_Type));

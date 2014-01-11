@@ -123,48 +123,6 @@ acid_memcmp(Slice *s1, Slice *s2)
 }
 
 /**
- * Find the longest prefix of `p[0..len]` that does not end with a 0xff byte.
- * Returns -1 if entire string is 0xff bytes, or offset of last non-0xff byte.
- */
-Py_ssize_t
-acid_next_greater(Slice *slice)
-{
-    uint8_t *l = NULL;
-    for(uint8_t *p = slice->p; p < slice->e; p++) {
-        if(*p != 0xff) {
-            l = p;
-        }
-    }
-
-    // All bytes are 0xff, should never happen.
-    if(! l) {
-        return -1;
-    }
-    return (l + 1) - slice->p;
-}
-
-/**
- * Like acid_next_greater(), except return a PyString containing the prefix
- * with the last non-0xff incremented by 1. Return NULL on failure.
- */
-PyObject *
-acid_next_greater_str(Slice *slice)
-{
-    Py_ssize_t goodlen = acid_next_greater(slice);
-    if(goodlen == -1) {
-        return NULL;
-    }
-
-    PyObject *str = PyString_FromStringAndSize(NULL, goodlen);
-    if(str) {
-        uint8_t *dst = (uint8_t *)PyString_AS_STRING(str);
-        memcpy(dst, slice->p, goodlen);
-        dst[goodlen - 1]++;
-    }
-    return str;
-}
-
-/**
  * Import `module`, then iteratively walk its attributes looking for a specific
  * object. Given import_object("sys", "stdout", "write", NULL), would return a
  * new reference to a bound instancemethod for "sys.stdout.write". Return a new

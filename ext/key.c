@@ -256,27 +256,34 @@ key_to_hex(Key *self, PyObject *args, PyObject *kwds)
  * decode to a valid value.
  */
 static PyObject *
-key_next_greater(Key *self, PyObject *args, PyObject *kwds)
+key_prefix_bound(Key *self, PyObject *args, PyObject *kwds)
 {
     Slice slice;
     acid_key_as_slice(&slice, self);
-    Py_ssize_t goodlen = acid_next_greater(&slice);
-    // All bytes are 0xff, should never happen.
-    if(goodlen == -1) {
+
+    struct writer wtr;
+    if(acid_writer_init(&wtr, Key_SIZE(self)+5)) {
+        return NULL;
+    }
+
+    if(acid_prefix_bound(&wtr, &slice)) {
+        acid_writer_abort(&wtr);
+        if(PyErr_Occurred()) {
+            return NULL;
+        }
         Py_RETURN_NONE;
     }
 
-    Key *key = acid_make_private_key(Key_DATA(self), goodlen);
-    if(key) {
-        Key_DATA(key)[goodlen - 1]++;
-    }
-    return (PyObject *)key;
+    uint8_t *start = acid_writer_ptr(&wtr) - wtr.pos;
+    Key *bound = acid_make_private_key(start, wtr.pos);
+    acid_writer_abort(&wtr);
+    return (PyObject *) bound;
 }
 
 Key *
-acid_key_next_greater(Key *self)
+acid_key_prefix_bound(Key *self)
 {
-    return (Key *) key_next_greater(self, NULL, NULL);
+    return (Key *) key_prefix_bound(self, NULL, NULL);
 }
 
 /**
@@ -299,7 +306,7 @@ key_from_hex(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     PyObject *decoded = PyObject_CallMethod(hex, "decode", "s", "hex");
     if(decoded) {
         self = acid_make_private_key((void *) PyString_AS_STRING(decoded),
-                                PyString_GET_SIZE(decoded));
+                                              PyString_GET_SIZE(decoded));
         Py_DECREF(decoded);
     }
     return (PyObject *) self;
@@ -604,7 +611,7 @@ static PyMethodDef key_methods[] = {
     {"from_raw",    (PyCFunction)key_from_raw, METH_VARARGS|METH_CLASS, ""},
     {"to_raw",      (PyCFunction)key_to_raw,   METH_VARARGS,            ""},
     {"to_hex",      (PyCFunction)key_to_hex,   METH_VARARGS|METH_KEYWORDS, ""},
-    {"next_greater",(PyCFunction)key_next_greater, METH_NOARGS, ""},
+    {"prefix_bound",(PyCFunction)key_prefix_bound, METH_NOARGS, ""},
     {0,             0,                         0,                       0}
 };
 

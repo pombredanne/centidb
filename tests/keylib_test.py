@@ -199,8 +199,8 @@ class Mod7BugTest:
 
 
 @testlib.register(python=True, enable=_keylib is not None)
-class NativeNextGreaterTest:
-    """Compare C extension's next_greater() to keylib.py's."""
+class NativePrefixBoundTest:
+    """Compare C extension's prefix_bound() to keylib.py's."""
     KEYS = [
         (1, 2, 3),
         (1, 2, 'dave'),
@@ -213,7 +213,7 @@ class NativeNextGreaterTest:
         for key in self.KEYS:
             kp = keylib.Key(key)
             kc = _keylib.Key(key)
-            eq(kp.next_greater().to_raw(''), kc.next_greater().to_raw(''))
+            eq(kp.prefix_bound().to_raw(), kc.prefix_bound().to_raw())
 
 
 @testlib.register(python=True, enable=_keylib is not None)
