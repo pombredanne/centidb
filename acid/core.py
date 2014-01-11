@@ -772,7 +772,7 @@ class Store(object):
         meta_info = {
             'name': '\x00meta',
             'idx': 9,
-            #'strategy': 'basic'
+            'strategy': 'basic'
         }
         self._meta = Collection(self, meta_info, encoder=encoders.KEY,
                                 key_func=lambda t: t[:3])

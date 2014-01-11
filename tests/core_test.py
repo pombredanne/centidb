@@ -386,7 +386,8 @@ class CountTest:
         eq(10, self.store.count('test', init=10))
         eq(11, self.store.count('test', init=10))
         eq(12, self.store.count('test', init=10))
-        eq((self.e.get_count + self.e.iter_count), 6)
+        eq(self.e.iter_count, 0)
+        eq(self.e.get_count, 3)
         eq(self.e.put_count, 3)
 
     def testExistCountSometimes(self):
@@ -394,7 +395,8 @@ class CountTest:
         eq(11, self.store.count('test', n=0, init=10))
         eq(11, self.store.count('test', init=10))
         eq(12, self.store.count('test', init=10))
-        eq((self.e.get_count + self.e.iter_count), 7)
+        eq(self.e.iter_count, 0)
+        eq(self.e.get_count, 4)
         eq(self.e.put_count, 3)
 
 
