@@ -283,6 +283,9 @@ key_prefix_bound(Key *self, PyObject *args, PyObject *kwds)
 Key *
 acid_key_prefix_bound(Key *self)
 {
+    if(! self) {
+        return NULL;
+    }
     return (Key *) key_prefix_bound(self, NULL, NULL);
 }
 
