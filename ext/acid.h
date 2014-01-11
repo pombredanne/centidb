@@ -77,16 +77,16 @@ struct Key;
  */
 enum ElementKind
 {
-    KIND_NULL = 15,
-    KIND_NEG_INTEGER = 20,
-    KIND_INTEGER = 21,
-    KIND_BOOL = 30,
-    KIND_BLOB = 40,
-    KIND_TEXT = 50,
-    KIND_UUID = 90,
-    KIND_NEG_TIME = 91,
-    KIND_TIME = 92,
-    KIND_SEP = 102
+    KIND_NULL = 0x0f,
+    KIND_NEG_INTEGER = 0x14,
+    KIND_INTEGER = 0x15,
+    KIND_BOOL = 0x1e,
+    KIND_BLOB = 0x28,
+    KIND_TEXT = 0x32,
+    KIND_UUID = 0x5a,
+    KIND_NEG_TIME = 0x5b,
+    KIND_TIME = 0x5c,
+    KIND_SEP = 0x66
 };
 
 /**
