@@ -215,8 +215,8 @@ iter_set_prefix(Iterator *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    set_bound(&self->lo, acid_make_key(key_obj), PRED_GE);
-    set_bound(&self->hi, acid_key_prefix_bound(self->lo.key), PRED_LT);
+    set_bound(&self->lo, acid_make_key(key_obj), PRED_LE);
+    set_bound(&self->hi, acid_key_prefix_bound(self->lo.key), PRED_GT);
     if(! (self->lo.key && self->hi.key)) {
         return NULL;
     }
@@ -395,10 +395,10 @@ test_bound(Bound *bound, uint8_t *p, Py_ssize_t len)
     if(bound) {
         Key *key = bound->key;
         if(key) {
-            Slice key_slice;
-            acid_key_as_slice(&key_slice, key);
-            Slice slice = {p, p+len};
-            int rc = acid_memcmp(&key_slice, &slice);
+            Slice bound_slice;
+            acid_key_as_slice(&bound_slice, key);
+            Slice test_slice = {p, p+len};
+            int rc = acid_memcmp(&bound_slice, &test_slice);
             switch(bound->pred) {
             case PRED_LE:
                 out = rc <= 0;
@@ -578,8 +578,8 @@ py_from_args(PyObject *self, PyObject *args, PyObject *kwds)
         return PyObject_CallMethod((PyObject *)it, "forward", "");
     // prefix=
     } else if(((o = PyTuple_GET_ITEM(args, 4))) != Py_None) {
-        set_bound(&it->lo, acid_make_key(o), PRED_GE);
-        set_bound(&it->hi, acid_key_prefix_bound(it->lo.key), PRED_LT);
+        set_bound(&it->lo, acid_make_key(o), PRED_LE);
+        set_bound(&it->hi, acid_key_prefix_bound(it->lo.key), PRED_GT);
         if(! (it->lo.key && it->hi.key)) {
             return NULL;
         }
