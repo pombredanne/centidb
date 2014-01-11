@@ -116,9 +116,9 @@ class OneCollBoundsTest:
         self.txn.__enter__()
         self.store.add_collection('stuff')
         self.keys = [
-            self.store['stuff'].put('a'),
-            self.store['stuff'].put('b'),
-            self.store['stuff'].put('c')
+            self.store['stuff'].put(u'a'),
+            self.store['stuff'].put(u'b'),
+            self.store['stuff'].put(u'c')
         ]
 
     def test1(self):
@@ -133,9 +133,9 @@ class TwoCollBoundsTest(OneCollBoundsTest):
     def setUp(self):
         OneCollBoundsTest.setUp(self)
         self.store.add_collection('stuff2')
-        self.store['stuff2'].put('a')
-        self.store['stuff2'].put('b')
-        self.store['stuff2'].put('c')
+        self.store['stuff2'].put(u'a')
+        self.store['stuff2'].put(u'b')
+        self.store['stuff2'].put(u'c')
 
 
 @testlib.register()
@@ -146,19 +146,19 @@ class ThreeCollBoundsTest(OneCollBoundsTest):
         self.txn.__enter__()
         self.store.add_collection('stuff')
         self.keys = [
-            self.store['stuff'].put('a'),
-            self.store['stuff'].put('b'),
-            self.store['stuff'].put('c')
+            self.store['stuff'].put(u'a'),
+            self.store['stuff'].put(u'b'),
+            self.store['stuff'].put(u'c')
         ]
         self.store.add_collection('stuff0')
-        self.store['stuff0'].put('a')
-        self.store['stuff0'].put('b')
-        self.store['stuff0'].put('c')
+        self.store['stuff0'].put(u'a')
+        self.store['stuff0'].put(u'b')
+        self.store['stuff0'].put(u'c')
         OneCollBoundsTest.setUp(self)
         self.store.add_collection('stuff2')
-        self.store['stuff2'].put('a')
-        self.store['stuff2'].put('b')
-        self.store['stuff2'].put('c')
+        self.store['stuff2'].put(u'a')
+        self.store['stuff2'].put(u'b')
+        self.store['stuff2'].put(u'c')
 
 
 @testlib.register()
@@ -174,35 +174,35 @@ class CollBasicTest:
     def test_put(self):
         self.store.count('key:coll1') # Ensure counter exists before len()
         old_items = len(self.e.items)
-        k = self.coll.put('test')
+        k = self.coll.put(u'test')
         assert (old_items + 1) == len(self.e.items)
 
     def testGetNoExist(self):
         eq(None, self.coll.get('missing'))
 
     def testGetNoExistDefault(self):
-        eq('dave', self.coll.get('missing', default='dave'))
+        eq(u'dave', self.coll.get('missing', default=u'dave'))
 
     def testGetExist(self):
-        key = self.coll.put('')
+        key = self.coll.put(u'')
         eq(key, (1,))
         eq('', self.coll.get(1))
-        key = self.coll.put('x')
+        key = self.coll.put(u'x')
         eq(key, (2,))
-        eq('x', self.coll.get(2))
+        eq(u'x', self.coll.get(2))
 
     def testIterItemsExist(self):
-        rec = self.coll.put('')
-        eq([((1,), '')], list(self.coll.items()))
+        rec = self.coll.put(u'')
+        eq([((1,), u'')], list(self.coll.items()))
 
     def testIterKeysExist(self):
-        key = self.coll.put('')
-        key2 = self.coll.put('')
+        key = self.coll.put(u'')
+        key2 = self.coll.put(u'')
         eq([key, key2], list(self.coll.keys()))
 
     def testIterValuesExist(self):
-        rec = self.coll.put('')
-        eq([''], list(self.coll.values()))
+        rec = self.coll.put(u'')
+        eq([u''], list(self.coll.values()))
 
 
 @testlib.register()
@@ -215,11 +215,11 @@ class IndexTest:
         self.coll = self.store.add_collection('stuff')
         self.i = acid.add_index(self.coll, 'idx', lambda obj: (69, obj))
 
-        self.key = self.coll.put('dave')
-        self.key2 = self.coll.put('dave2')
+        self.key = self.coll.put(u'dave')
+        self.key2 = self.coll.put(u'dave2')
 
-        self.expect = [(69, 'dave'), self.key]
-        self.expect2 = [(69, 'dave2'), self.key2]
+        self.expect = [(69, u'dave'), self.key]
+        self.expect2 = [(69, u'dave2'), self.key2]
         self.first = [self.expect]
         self.second = [self.expect2]
         self.both = [self.expect, self.expect2]
@@ -227,15 +227,15 @@ class IndexTest:
         # Insert junk in a higher collection to test iter stop conds.
         self.coll2 = self.store.add_collection('stuff2')
         self.i2 = acid.add_index(self.coll2, 'idx', lambda obj: (69, obj))
-        self.coll2.put('XXXX')
-        self.coll2.put('YYYY')
+        self.coll2.put(u'XXXX')
+        self.coll2.put(u'YYYY')
 
     # iterpairs
     def testIterPairs(self):
         eq(self.both, list(self.i.pairs()))
         eq(self.both, list(self.i.pairs(lo=68)))
-        eq(self.both, list(self.i.pairs(lo=(69, 'dave'))))
-        eq(self.second, list(self.i.pairs(lo=(69, 'dave2'))))
+        eq(self.both, list(self.i.pairs(lo=(69, u'dave'))))
+        eq(self.second, list(self.i.pairs(lo=(69, u'dave2'))))
         eq([], list(self.i.pairs(lo=80)))
 
         eq(self.both[::-1], list(self.i.pairs(reverse=True)))
@@ -247,8 +247,8 @@ class IndexTest:
 
     # itertups
     def testIterTups(self):
-        eq([(69, 'dave'), (69, 'dave2')], list(self.i.tups()))
-        eq([(69, 'dave2'), (69, 'dave')], list(self.i.tups(reverse=True)))
+        eq([(69, u'dave'), (69, u'dave2')], list(self.i.tups()))
+        eq([(69, u'dave2'), (69, u'dave')], list(self.i.tups(reverse=True)))
 
     # iterkeys
     def testIterKeys(self):
@@ -257,35 +257,35 @@ class IndexTest:
 
     # iteritems
     def testIterItems(self):
-        item1 = (self.key, 'dave')
-        item2 = (self.key2, 'dave2')
+        item1 = (self.key, u'dave')
+        item2 = (self.key2, u'dave2')
         eq([item1, item2], list(self.i.items()))
         eq([item2, item1], list(self.i.items(reverse=True)))
 
     # itervalues
     def testIterValues(self):
-        eq(['dave', 'dave2'], list(self.i.values()))
-        eq(['dave2', 'dave'], list(self.i.values(reverse=True)))
+        eq([u'dave', u'dave2'], list(self.i.values()))
+        eq([u'dave2', u'dave'], list(self.i.values(reverse=True)))
 
     # find
     def testFind(self):
-        eq('dave', self.i.find())
-        eq('dave2', self.i.find(reverse=True))
-        eq('dave2', self.i.find((69, 'dave2')))
+        eq(u'dave', self.i.find())
+        eq(u'dave2', self.i.find(reverse=True))
+        eq(u'dave2', self.i.find((69, u'dave2')))
         # open
-        eq('dave', self.i.find(hi=(69, 'dave2'), reverse=True))
+        eq(u'dave', self.i.find(hi=(69, u'dave2'), reverse=True))
 
     # get
     def testGet(self):
         eq(None, self.i.get('missing'))
-        eq('dave', self.i.get((69, 'dave')))
-        eq('dave2', self.i.get((69, 'dave2')))
+        eq(u'dave', self.i.get((69, u'dave')))
+        eq(u'dave2', self.i.get((69, u'dave2')))
 
     # has
     def testHas(self):
-        assert self.i.has((69, 'dave'))
-        assert not self.i.has((69, 'dave123'))
-        assert self.i.has((69, 'dave2'))
+        assert self.i.has((69, u'dave'))
+        assert not self.i.has((69, u'dave123'))
+        assert self.i.has((69, u'dave2'))
 
 
 class Bag(object):
@@ -296,9 +296,9 @@ class Bag(object):
 @testlib.register()
 class BatchTest:
     ITEMS = [
-        ((1,), 'dave'),
-        ((3,), 'jim'),
-        ((4,), 'zork')
+        ((1,), u'dave'),
+        ((3,), u'jim'),
+        ((4,), u'zork')
     ]
 
     def setUp(self):
@@ -347,7 +347,7 @@ class BatchTest:
         # Should now contain metadata + 1 batch
         assert len(self.e.items) == (self.old_len + 1)
         # Put should trigger split of batch and modification of record.
-        self.coll.put('james', key=3)
+        self.coll.put(u'james', key=3)
         # Should now contain metadata + 3 individual records
         assert len(self.e.items) == (self.old_len + 3)
         # Test for new items.
@@ -360,7 +360,7 @@ class BatchTest:
         self.insert_items()
         self.coll.strategy.batch(max_recs=len(self.ITEMS))
         # Put should trigger split of batch and insert of record.
-        self.coll.put('john', key=2)
+        self.coll.put(u'john', key=2)
         # Should now contain metadata + 4 individual records
         assert len(self.e.items) == (self.old_len + 4)
         # Test for new items.
@@ -405,9 +405,9 @@ class ReopenBugTest:
         engine = acid.engines.ListEngine()
         st1 = acid.Store(engine)
         st1.begin().__enter__()
-        st1.add_collection('dave')
+        st1.add_collection(u'dave')
         st2 = acid.Store(engine)
-        st2['dave']
+        st2[u'dave']
 
 
 @testlib.register()
@@ -418,7 +418,7 @@ class DeleteBugTest:
         with store.begin(write=True):
             stuff = store.add_collection('stuff')
             acid.add_index(stuff, 'foop', lambda rec: 'foop')
-            key = stuff.put('temp')
+            key = stuff.put(u'temp')
             assert store['foop'].find('foop') == 'temp'
             assert stuff.get(1) == 'temp'
             stuff.delete(1)

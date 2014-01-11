@@ -176,7 +176,7 @@ class ModelMeta(type):
     def setup_field_properties(cls, klass, bases, attrs):
         for key, value in attrs.iteritems():
             if isinstance(value, Field):
-                value.name = key
+                value.name = key.decode('ascii')
 
     @classmethod
     def setup_encoder(cls, klass, bases, attrs):
