@@ -126,12 +126,26 @@ def make_json_encoder(separators=',:', **kwargs):
 
     The `ujson <https://pypi.python.org/pypi/ujson>`_ package will be used for
     decoding if it is available, otherwise :py:func:`json.loads` is used.
+
+    .. warning::
+
+        Strings passed to the encoder **must** be Unicode, since otherwise
+        :py:class:`json.JSONEncoder` will silently convert them, causing
+        their original and deserialized representations to mismatch, which
+        causes index entries to be inconsistent between create/update and
+        delete.
+
+        For this reason, the :py:class:`json.JSONEncoder`
+        `encoding='undefined'` option is forcibly enabled, causing exceptions
+        to be raised when attempting to serialize a bytestring. You must
+        explicitly `.decode()` all bytestrings.
     """
     try:
         import json
     except ImportError:
         import simplejson as json
 
+    kwargs['encoding'] = 'undefined'
     encoder = json.JSONEncoder(separators=separators, **kwargs)
     try:
         import ujson
