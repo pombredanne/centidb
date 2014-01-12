@@ -506,7 +506,9 @@ class BatchStrategy(object):
             elif res.keys[0] >= key >= res.keys[-1]:
                 txn.delete(it.phys_key)
                 for key_, data in it.batch_items():
-                    if key != key_:
+                    if key == key_:
+                        old = data
+                    else:
                         txn.put(key_.to_raw(self.prefix), data)
             return old
 

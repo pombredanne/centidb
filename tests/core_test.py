@@ -340,6 +340,16 @@ class BatchTest:
         # Values shouldn't have changed.
         assert list(self.coll.items()) == [self.ITEMS[0], self.ITEMS[2]]
 
+    def test_delete_pop(self):
+        self.insert_items()
+        self.coll.strategy.batch(max_recs=len(self.ITEMS))
+        # Pop should trigger split of batch and return of old value.
+        data = self.coll.strategy.pop(self.txn.get(), keylib.Key(3))
+        eq(data, '"jim"')
+        # Should now contain metadata + 2 remaining records.
+        assert len(self.e.items) == (self.old_len + 2)
+        # Obj should be old value
+
     def test_put(self):
         """Overwrite key existing as part of a batch."""
         self.insert_items()
