@@ -862,14 +862,15 @@ acid_skip_element(struct reader *rdr, int *eof)
 }
 
 /**
- * Find length of longest prefix in `(uint8_t) o[0..len]` not ending with 0xff.
+ * Find length of longest prefix in `(uint8_t) src[0..srclen]` not ending with
+ * 0xff.
  */
 static Py_ssize_t
-longest_prefix(uint8_t *p, Py_ssize_t len)
+longest_prefix(uint8_t *src, Py_ssize_t srclen)
 {
     Py_ssize_t goodlen = 0;
-    for(Py_ssize_t i = len - 1; i--;) {
-        if(p[i] != 0xff) {
+    for(Py_ssize_t i = srclen - 1; i >= 0; i--) {
+        if(src[i] != 0xff) {
             goodlen = 1 + i;
             break;
         }
@@ -908,7 +909,7 @@ acid_next_greater_text(PyObject *src)
     Py_ssize_t goodlen = 0;
 
     // Find longest prefix of `src` not ending with `maxord`.
-    for(Py_ssize_t i = srclen - 1; i--;) {
+    for(Py_ssize_t i = srclen - 1; i >= 0; i--) {
         if(srcpu[i] != max_unicode_ordinal) {
             goodlen = 1 + i;
             break;
