@@ -583,6 +583,10 @@ class Collection(object):
             raise TypeError('%r has no %r event' % (self, name))
         lst.append(func)
 
+    def __repr__(self):
+        klass = self.__class__.__name__
+        return "<%s.%s %s>" % (__name__, klass, self.info['name'])
+
     def _iter(self, key, lo, hi, prefix, reverse, max_, include, max_phys):
         it = self.strategy.iter(self.store._txn_context.get())
         return iterators.from_args(it, key, lo, hi, prefix, reverse,

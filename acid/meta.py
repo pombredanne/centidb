@@ -387,7 +387,7 @@ class BaseModel(object):
         klass = self.__class__
         bits = ['%s.%s' % (klass.__module__, klass.__name__)]
         if self.is_saved:
-            bits.append(repr(self._key))
+            bits.append(repr(tuple(self._key)))
         else:
             bits.append('unsaved')
         for name in self.META_REPR_FIELDS:
