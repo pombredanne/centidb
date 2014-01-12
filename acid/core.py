@@ -356,7 +356,7 @@ class BatchStrategy(object):
         it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
-            return res.data
+            return str(res.data) # TODO: buf dies at cursor exit
 
     def _prepare_batch(self, items):
         keytups = [key for key, _ in reversed(items)]
