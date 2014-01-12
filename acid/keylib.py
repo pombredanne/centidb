@@ -610,7 +610,7 @@ def packs(tups, prefix=None):
     for i, tup in enumerate(tups):
         if i:
             w(KIND_SEP)
-        if type(tup) not in PACKS_GOOD_TYPES:
+        if type(tup) not in GOOD_TYPES:
             tup = (tup,)
         for j, arg in enumerate(tup):
             type_ = type(arg)
