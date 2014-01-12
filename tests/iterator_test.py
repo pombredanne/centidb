@@ -68,10 +68,10 @@ def keyfrom(genfunc):
 
 
 @testlib.register()
-class RangeIteratorTest:
+class BasicIteratorTest:
     def setUp(self):
         self.engine = acid.engines.ListEngine()
-        self.rit = acid.iterators.RangeIterator(self.engine, PREFIX)
+        self.rit = acid.iterators.BasicIterator(self.engine, PREFIX)
         self.fill()
 
     def fill(self):
@@ -209,11 +209,11 @@ class RangeIteratorTest:
 
 
 @testlib.register()
-class BatchRangeIteratorTest:
+class BatchIteratorTest:
 
     def setUp(self):
         self.engine = acid.engines.ListEngine()
-        self.rit = acid.iterators.BatchRangeIterator(
+        self.rit = acid.iterators.BatchIterator(
             self.engine, PREFIX, acid.encoders.PLAIN)
         self.fill()
 

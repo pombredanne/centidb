@@ -45,17 +45,17 @@ Iterator
     :members:
 
 
-RangeIterator
+BasicIterator
 -------------
 
-.. autoclass:: acid.iterators.RangeIterator
+.. autoclass:: acid.iterators.BasicIterator
     :members:
 
 
-BatchRangeIterator
-------------------
+BatchIterator
+-------------
 
-.. autoclass:: acid.iterators.BatchRangeIterator
+.. autoclass:: acid.iterators.BatchIterator
     :members:
 
 

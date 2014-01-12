@@ -23,7 +23,7 @@
 
 // Forward declarations.
 static PyTypeObject IteratorType;
-static PyTypeObject RangeIteratorType;
+static PyTypeObject BasicIteratorType;
 
 
 // -------------
@@ -361,24 +361,24 @@ static PyTypeObject IteratorType = {
 
 
 // ------------------
-// RangeIterator Type
+// BasicIterator Type
 // ------------------
 
 
 /**
- * RangeIterator(engine, prefix).
+ * BasicIterator(engine, prefix).
  */
 static PyObject *
-rangeiter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
+basiciter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
     return (PyObject *) iter_new(cls, args, kwds);
 }
 
 /**
- * RangeIterator.__del__().
+ * BasicIterator.__del__().
  */
 static void
-rangeiter_dealloc(KeyIter *self)
+basiciter_dealloc(KeyIter *self)
 {
     iter_clear((Iterator *) self);
     PyObject_Del(self);
@@ -419,10 +419,10 @@ test_bound(Bound *bound, uint8_t *p, Py_ssize_t len)
 }
 
 /**
- * RangeIterator.next().
+ * BasicIterator.next().
  */
 static PyObject *
-rangeiter_next(RangeIterator *self)
+basiciter_next(BasicIterator *self)
 {
     if(! (self->base.it && self->base.keys)) {
         return NULL;
@@ -452,10 +452,10 @@ rangeiter_next(RangeIterator *self)
 }
 
 /**
- * RangeIterator.forward().
+ * BasicIterator.forward().
  */
 static PyObject *
-rangeiter_forward(RangeIterator *self)
+basiciter_forward(BasicIterator *self)
 {
     PyObject *key;
     if(self->base.lo.key) {
@@ -486,10 +486,10 @@ rangeiter_forward(RangeIterator *self)
 }
 
 /**
- * RangeIterator.reverse().
+ * BasicIterator.reverse().
  */
 static PyObject *
-rangeiter_reverse(RangeIterator *self)
+basiciter_reverse(BasicIterator *self)
 {
     Slice prefix;
     acid_string_as_slice(&prefix, self->base.prefix);
@@ -529,24 +529,24 @@ rangeiter_reverse(RangeIterator *self)
     return (PyObject *)self;
 }
 
-static PyMethodDef rangeiter_methods[] = {
-    {"next", (PyCFunction)rangeiter_next, METH_NOARGS, ""},
-    {"forward", (PyCFunction)rangeiter_forward, METH_NOARGS, ""},
-    {"reverse", (PyCFunction)rangeiter_reverse, METH_NOARGS, ""},
+static PyMethodDef basiciter_methods[] = {
+    {"next", (PyCFunction)basiciter_next, METH_NOARGS, ""},
+    {"forward", (PyCFunction)basiciter_forward, METH_NOARGS, ""},
+    {"reverse", (PyCFunction)basiciter_reverse, METH_NOARGS, ""},
     {0, 0, 0, 0}
 };
 
-static PyTypeObject RangeIteratorType = {
+static PyTypeObject BasicIteratorType = {
     PyObject_HEAD_INIT(NULL)
     .tp_base = &IteratorType,
-    .tp_new = rangeiter_new,
-    .tp_dealloc = (destructor) rangeiter_dealloc,
-    .tp_name = "acid._iterators.RangeIterator",
-    .tp_basicsize = sizeof(RangeIterator),
-    .tp_iternext = (iternextfunc) rangeiter_next,
+    .tp_new = basiciter_new,
+    .tp_dealloc = (destructor) basiciter_dealloc,
+    .tp_name = "acid._iterators.BasicIterator",
+    .tp_basicsize = sizeof(BasicIterator),
+    .tp_iternext = (iternextfunc) basiciter_next,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "acid._iterators.RangeIterator",
-    .tp_methods = rangeiter_methods
+    .tp_doc = "acid._iterators.BasicIterator",
+    .tp_methods = basiciter_methods
 };
 
 /**
@@ -625,7 +625,7 @@ acid_init_iterators_module(void)
     if(PyType_Ready(&IteratorType)) {
         return -1;
     }
-    if(PyType_Ready(&RangeIteratorType)) {
+    if(PyType_Ready(&BasicIteratorType)) {
         return -1;
     }
 
@@ -637,7 +637,7 @@ acid_init_iterators_module(void)
     if(PyModule_AddObject(mod, "Iterator", (PyObject *) &IteratorType)) {
         return -1;
     }
-    if(PyModule_AddObject(mod, "RangeIterator", (PyObject *) &RangeIteratorType)) {
+    if(PyModule_AddObject(mod, "BasicIterator", (PyObject *) &BasicIteratorType)) {
         return -1;
     }
 

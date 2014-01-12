@@ -242,7 +242,7 @@ class Index(object):
         """Setup a woeful chain of iterators that yields index entries.
         """
         txn = self.store._txn_context.get()
-        it = iterators.RangeIterator(txn, self.prefix)
+        it = iterators.BasicIterator(txn, self.prefix)
         return iterators.from_args(it,
             key, lo, hi, prefix, reverse, max, include, None)
 
@@ -347,9 +347,9 @@ class BasicStrategy(object):
         return txn.pop(key.to_raw(self.prefix))
 
     def iter(self, txn):
-        """Implement `iter()` using :py:class:`acid.iterators.RangeIterator`.
+        """Implement `iter()` using :py:class:`acid.iterators.BasicIterator`.
         """
-        return iterators.RangeIterator(txn, self.prefix)
+        return iterators.BasicIterator(txn, self.prefix)
 
 
 class BatchStrategy(object):
@@ -362,7 +362,7 @@ class BatchStrategy(object):
 
     def get(self, txn, key):
         """Implement `get()` using a range query over `>= key`."""
-        it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
+        it = iterators.BatchIterator(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
             return bytes(res.data)  # TODO: buf dies at cursor exit
@@ -453,7 +453,7 @@ class BatchStrategy(object):
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
 
         txn = self.store._txn_context.get()
-        it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
+        it = iterators.BatchIterator(txn, self.prefix, self.compressor)
         groupval = object()
         items = []
 
@@ -487,15 +487,15 @@ class BatchStrategy(object):
 
     def iter(self, txn):
         """Implement `iter()` using
-        :py:class:`acid.iterators.BatchRangeIterator`."""
-        return iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
+        :py:class:`acid.iterators.BatchIterator`."""
+        return iterators.BatchIterator(txn, self.prefix, self.compressor)
 
     def pop(self, txn, key):
         """Implement `pop()` using a range query to find the single or batch
         record `key` belongs to and splitting it, saving all records
         individually except for `key`. Return the data for `key` if it existed,
         otherwise ``None``."""
-        it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
+        it = iterators.BatchIterator(txn, self.prefix, self.compressor)
         it.set_lo(key)
         for res in it.forward():
             old = None

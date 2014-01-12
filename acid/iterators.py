@@ -56,12 +56,12 @@ class Result(object):
     #: raw record data.
     data = None
 
-    #: For a :py:class:`BatchRangeIterator`, the current key. Unused for a
-    #: :py:class:`RangeIterator`.
+    #: For a :py:class:`BatchIterator`, the current key. Unused for a
+    #: :py:class:`BasicIterator`.
     key = None
 
-    #: For a :py:class:`BatchRangeIterator`, the current key's index into
-    #: the batch. Unused for :py:class:`RangeIterator`.
+    #: For a :py:class:`BatchIterator`, the current key's index into
+    #: the batch. Unused for :py:class:`BasicIterator`.
     index = None
 
 
@@ -124,7 +124,7 @@ class Iterator(object):
         self._hi_pred = key.__ge__
 
 
-class RangeIterator(Iterator):
+class BasicIterator(Iterator):
     """Provides bidirectional iteration of a range of keys.
 
         `engine`:
@@ -203,7 +203,7 @@ class RangeIterator(Iterator):
             go = self._step()
 
 
-class BatchRangeIterator(Iterator):
+class BatchIterator(Iterator):
     """Provides bidirectional iteration of a range of keys, treating >1-length
     keys as batch records.
 

@@ -232,12 +232,12 @@ typedef struct {
 } Iterator;
 
 /**
- * _iterators.RangeIterator.
+ * _iterators.BasicIterator.
  */
 typedef struct {
     /** Base Iterator fields. */
     Iterator base;
-} RangeIterator;
+} BasicIterator;
 
 
 // ----------
