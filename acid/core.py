@@ -323,7 +323,7 @@ class BasicStrategy(object):
 
     def get(self, txn, key):
         """Implement `get()` as `Engine.get(key)`."""
-        return txn.get(key.to_raw(self.prefix))
+        return bytes(txn.get(key.to_raw(self.prefix)))
 
     def put(self, txn, key, data):
         """Implement `put()` as `Engine.put(key)`."""
@@ -360,7 +360,7 @@ class BatchStrategy(object):
         it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
-            return str(res.data) # TODO: buf dies at cursor exit
+            return bytes(res.data) # TODO: buf dies at cursor exit
 
     def _prepare_batch(self, items):
         keytups = [key for key, _ in reversed(items)]
@@ -375,7 +375,7 @@ class BatchStrategy(object):
                 keylib.write_int(len(data), out.append, 0)
             concat = ''.join(data for _, data in items)
             out.extend(self.compressor.pack(concat))
-        return phys, str(out)
+        return phys, bytes(out)
 
     def batch(self, lo=None, hi=None, prefix=None, max_recs=None,
               max_bytes=None, max_keylen=None, preserve=True,
@@ -601,7 +601,7 @@ class Collection(object):
         """Yield all `(key tuple, value)` tuples in key order."""
         it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         if raw:
-            return ((r.key, r.data) for r in it)
+            return ((r.key, bytes(r.data)) for r in it)
         return ((r.key, self.encoder.unpack(r.key, r.data)) for r in it)
 
     def keys(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
@@ -615,7 +615,7 @@ class Collection(object):
         """Yield record values in key order."""
         it = self._iter(key, lo, hi, prefix, reverse, max, include, None)
         if raw:
-            return itertools.imap(ATTRGETTER_DATA, it)
+            return (bytes(r.data) for r in it)
         return (self.encoder.unpack(r.key, r.data) for r in it)
 
     def find(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
@@ -625,7 +625,7 @@ class Collection(object):
         it = self._iter(key, lo, hi, prefix, reverse, None, include, None)
         for r in it:
             if raw:
-                return r.data
+                return bytes(r.data)
             return self.encoder.unpack(r.key, r.data)
         return default
 

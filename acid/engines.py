@@ -335,7 +335,7 @@ class SkiplistEngine(Engine):
     from_url = classmethod(from_url)
 
     def put(self, key, value):
-        self.sl.insert(str(key), str(value))
+        self.sl.insert(bytes(key), bytes(value))
 
     def close(self):
         self.sl = None
@@ -367,8 +367,8 @@ class ListEngine(Engine):
 
     def put(self, k, v):
         # Ensure we don't hold on to buffers.
-        k = str(k)
-        v = str(v)
+        k = bytes(k)
+        v = bytes(v)
         idx = bisect.bisect_left(self.items, (k,))
         if idx < len(self.items) and self.items[idx][0] == k:
             old = self.items[idx][1]
@@ -645,7 +645,7 @@ class TraceEngine(object):
             if isinstance(arg, bytes):
                 bits.append(arg.encode('hex'))
             elif isinstance(arg, bool):
-                bits.append(str(int(arg)))
+                bits.append(bytes(int(arg)))
         self.fp.write('%s %s %s\n' % (self.idx, op, ' '.join(bits)))
 
     def close(self):

@@ -144,7 +144,7 @@ class Key(object):
         does not match."""
         self = cls()
         self.prefix = prefix or ''
-        self.packed = str(packed)
+        self.packed = bytes(packed)
         return self
 
     def __add__(self, extra):
@@ -505,7 +505,7 @@ def read_str(inp, pos, length):
                 break
             pos += 1
 
-    return str(out), pos
+    return bytes(out), pos
 
 
 def write_time(dt, w):
@@ -552,7 +552,7 @@ def pack_int(i, prefix=None):
     as a bytestring."""
     ba = bytearray(prefix or '')
     write_int(i, ba.append, 0)
-    return str(ba)
+    return bytes(ba)
 
 
 def unpack_int(s):
@@ -638,7 +638,7 @@ def packs(tups, prefix=None):
                 write_time(arg, w)
             else:
                 raise TypeError('unsupported type: %r' % (arg,))
-    return str(ba)
+    return bytes(ba)
 
 
 pack = packs

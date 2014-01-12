@@ -153,7 +153,7 @@ def make_json_encoder(separators=',:', **kwargs):
     except ImportError:
         decoder = json.JSONDecoder().decode
 
-    decode = lambda key, data: decoder(str(data))
+    decode = lambda key, data: decoder(bytes(data))
     return RecordEncoder('json', decode, encoder.encode)
 
 
