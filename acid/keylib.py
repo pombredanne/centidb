@@ -47,8 +47,8 @@ KIND_TIME = 0x5c
 KIND_SEP = 0x66
 INVERT_TBL = ''.join(chr(c ^ 0xff) for c in xrange(256))
 
-UTCOFFSET_SHIFT = 64 # 16 hours * 4 (15 minute increments)
-UTCOFFSET_DIV = 15 * 60 # 15 minutes
+UTCOFFSET_SHIFT = 64     # 16 hours * 4 (15 minute increments)
+UTCOFFSET_DIV = 15 * 60  # 15 minutes
 
 _tz_cache = {}
 _max_unicode = unichr(sys.maxunicode)
@@ -129,7 +129,7 @@ class Key(object):
         key = None
         try:
             key = cls.from_raw(s.decode('hex'))
-            len(key) # Trigger full decoding.
+            len(key)  # Trigger full decoding.
         except ValueError:
             pass
         return key
@@ -407,46 +407,46 @@ def read_int(inp, pos, length, xor):
         raise ValueError('not enough bytes: need %d' % (o - 249))
 
     if o == 249:
-        return 2288 + (256*(xor^inp[pos+1])) + (xor^inp[pos+2]), pos+3
+        return 2288 + (256*(xor ^ inp[pos+1])) + (xor ^ inp[pos+2]), pos+3
     elif o == 250:
-        return ((xor^(inp[pos+1] << 16)) |
-                (xor^(inp[pos+2] << 8)) |
-                (xor^(inp[pos+3]))), pos+4
+        return ((xor ^ (inp[pos+1] << 16)) |
+                (xor ^ (inp[pos+2] << 8)) |
+                (xor ^ (inp[pos+3]))), pos+4
     elif o == 251:
-        return ((xor^(inp[pos+1] << 24)) |
-                (xor^(inp[pos+2] << 16)) |
-                (xor^(inp[pos+3] << 8)) |
-                (xor^(inp[pos+4]))), pos+5
+        return ((xor ^ (inp[pos+1] << 24)) |
+                (xor ^ (inp[pos+2] << 16)) |
+                (xor ^ (inp[pos+3] << 8)) |
+                (xor ^ (inp[pos+4]))), pos+5
     elif o == 252:
-        return ((xor^(inp[pos+1] << 32)) |
-                (xor^(inp[pos+2] << 24)) |
-                (xor^(inp[pos+3] << 16)) |
-                (xor^(inp[pos+4] << 8)) |
-                (xor^(inp[pos+5]))), pos+6
+        return ((xor ^ (inp[pos+1] << 32)) |
+                (xor ^ (inp[pos+2] << 24)) |
+                (xor ^ (inp[pos+3] << 16)) |
+                (xor ^ (inp[pos+4] << 8)) |
+                (xor ^ (inp[pos+5]))), pos+6
     elif o == 253:
-        return ((xor^(inp[pos+1] << 40)) |
-                (xor^(inp[pos+2] << 32)) |
-                (xor^(inp[pos+3] << 24)) |
-                (xor^(inp[pos+4] << 16)) |
-                (xor^(inp[pos+5] << 8)) |
-                (xor^(inp[pos+6]))), pos+7
+        return ((xor ^ (inp[pos+1] << 40)) |
+                (xor ^ (inp[pos+2] << 32)) |
+                (xor ^ (inp[pos+3] << 24)) |
+                (xor ^ (inp[pos+4] << 16)) |
+                (xor ^ (inp[pos+5] << 8)) |
+                (xor ^ (inp[pos+6]))), pos+7
     elif o == 254:
-        return ((xor^(inp[pos+1] << 48)) |
-                (xor^(inp[pos+2] << 40)) |
-                (xor^(inp[pos+3] << 32)) |
-                (xor^(inp[pos+4] << 24)) |
-                (xor^(inp[pos+5] << 16)) |
-                (xor^(inp[pos+6] << 8)) |
-                (xor^(inp[pos+7]))), pos+8
+        return ((xor ^ (inp[pos+1] << 48)) |
+                (xor ^ (inp[pos+2] << 40)) |
+                (xor ^ (inp[pos+3] << 32)) |
+                (xor ^ (inp[pos+4] << 24)) |
+                (xor ^ (inp[pos+5] << 16)) |
+                (xor ^ (inp[pos+6] << 8)) |
+                (xor ^ (inp[pos+7]))), pos+8
     elif o == 255:
-        return ((xor^(inp[pos+1] << 56)) |
-                (xor^(inp[pos+2] << 48)) |
-                (xor^(inp[pos+3] << 40)) |
-                (xor^(inp[pos+4] << 32)) |
-                (xor^(inp[pos+5] << 24)) |
-                (xor^(inp[pos+6] << 16)) |
-                (xor^(inp[pos+7] << 8)) |
-                (xor^(inp[pos+8]))), pos+9
+        return ((xor ^ (inp[pos+1] << 56)) |
+                (xor ^ (inp[pos+2] << 48)) |
+                (xor ^ (inp[pos+3] << 40)) |
+                (xor ^ (inp[pos+4] << 32)) |
+                (xor ^ (inp[pos+5] << 24)) |
+                (xor ^ (inp[pos+6] << 16)) |
+                (xor ^ (inp[pos+7] << 8)) |
+                (xor ^ (inp[pos+8]))), pos+9
 
 
 def write_str(s, w):
@@ -564,6 +564,7 @@ def unpack_int(s):
 
 GOOD_TYPES = (tuple, Key)
 
+
 def packs(tups, prefix=None):
     """Encode a list of tuples of primitive values to a bytestring that
     preserves a meaningful lexicographical sort order.
@@ -609,7 +610,7 @@ def packs(tups, prefix=None):
     for i, tup in enumerate(tups):
         if i:
             w(KIND_SEP)
-        if type(tup) not in GOOD_TYPES:
+        if type(tup) not in PACKS_GOOD_TYPES:
             tup = (tup,)
         for j, arg in enumerate(tup):
             type_ = type(arg)
@@ -710,7 +711,6 @@ def unpacks(s, prefix=None, first=False):
 
 def unpack(s, prefix=None):
     return unpacks(s, prefix, True)
-
 
 
 if acid._use_speedups:

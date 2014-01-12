@@ -63,9 +63,11 @@ def dispatch(lst, *args):
             LOG.exception('While invoking %r%r', lst[i], args)
             lst.pop(i)
 
+
 def abort():
     """Trigger a graceful abort of the active transaction."""
     raise errors.AbortError('')
+
 
 def open(url, trace_path=None, txn_context=None):
     """Instantiate an engine described by `url` and return a new
@@ -105,6 +107,7 @@ def open(url, trace_path=None, txn_context=None):
         return Store(engine, txn_context=txn_context(engine))
     else:
         return Store(engine)
+
 
 def add_index(coll, name, func):
     """Associate an index with the collection. Index metadata will be
@@ -360,7 +363,7 @@ class BatchStrategy(object):
         it = iterators.BatchRangeIterator(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
-            return bytes(res.data) # TODO: buf dies at cursor exit
+            return bytes(res.data)  # TODO: buf dies at cursor exit
 
     def _prepare_batch(self, items):
         keytups = [key for key, _ in reversed(items)]
@@ -705,7 +708,7 @@ class TxnContext(object):
 
     def begin(self, write=False):
         if getattr(self.local, 'mode', None) is not None:
-            raise errors.TxnError('Transaction already active for this thread.')
+            raise errors.TxnError('Transaction already active for this thread')
         self.local.write = write
         return self
 

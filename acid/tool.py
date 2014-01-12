@@ -75,9 +75,11 @@ def _get_term_width(default=80):
     except:
         return default
 
+
 def _on_sigwinch(*args):
     global _TERM_WIDTH, _TERM_HEIGHT
     _TERM_WIDTH, _TERM_HEIGHT = _get_term_width()
+
 
 def main():
     parser = make_parser()

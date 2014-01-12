@@ -279,7 +279,7 @@ class BatchRangeIterator(Iterator):
     def batch_items(self):
         """Yield `(key, value)` pairs that are present in the current batch.
         Used to implement batch split, may be removed in future."""
-        for index in xrange(len(self.keys) -1, -1, -1):
+        for index in xrange(len(self.keys) - 1, -1, -1):
             start = self.offsets[index]
             stop = self.offsets[index + 1]
             key = self.keys[-1 + -index]

@@ -26,13 +26,16 @@ class Error(Exception):
         #: The inner exception, if any.
         self.inner = inner
 
+
 class AbortError(Error):
     """Used by :py:func:`acid.abort` to trigger graceful abort of the active
     transaction."""
 
+
 class ConfigError(Error):
     """Attempt to use a store in a misconfigured state (e.g. missing index
     functions, or incompatible constructor options)."""
+
 
 class ConstraintError(Error):
     """An acid.meta model constraint failed."""
@@ -41,15 +44,19 @@ class ConstraintError(Error):
         #: String name of the constraint function that failed.
         self.name = name
 
+
 class EngineError(Error):
     """Unspecified error occurred with the database engine. The original
     exception may be available as the :py:attr:`inner` attribute."""
 
+
 class NameInUse(Error):
     """Attempt to rename an object to a name already in use."""
 
+
 class NotFound(Error):
     """Attempt to fetch an object that doesn't exist."""
+
 
 class TxnError(Error):
     """An attempt to start, cancel or commit a transaction failed."""

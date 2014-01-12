@@ -503,11 +503,11 @@ class PlyvelEngine(Engine):
         return PlyvelEngine(self.db, self.lock, snapshot)
 
     def commit(self):
-        if not self.snapshot: # write txn
+        if not self.snapshot:  # write txn
             self.lock.release()
 
     def abort(self):
-        if not self.snapshot: # write txn
+        if not self.snapshot:  # write txn
             self.lock.release()
 
     def iter(self, k, reverse):
@@ -517,7 +517,7 @@ class PlyvelEngine(Engine):
             tup = next(it, None)
             it = iter(it.prev, None)
             if tup:
-                next(it) # skip back past tup
+                next(it)  # skip back past tup
                 it = itertools.chain((tup,), it)
         return it
 
