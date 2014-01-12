@@ -219,6 +219,10 @@ class Index(object):
             for k in newkeys:
                 txn.put(k, '')
 
+    def __repr__(self):
+        klass = self.__class__.__name__
+        return "<%s.%s %s>" % (__name__, klass, self.info['name'])
+
     def __init__(self, coll, info, func):
         self.coll = coll
         self.store = coll.store
@@ -840,7 +844,7 @@ class Store(object):
         dct = self.get_meta(KIND_INDEX, name)
         if not dct:
             idx = self.count('\x00collections_idx', init=10)
-            dct = {'idx': idx, 'index_for': index_for}
+            dct = {'name': name, 'idx': idx, 'index_for': index_for}
             self.set_meta(KIND_INDEX, name, dct)
         return dct
 
