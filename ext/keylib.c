@@ -868,9 +868,10 @@ static Py_ssize_t
 longest_prefix(uint8_t *p, Py_ssize_t len)
 {
     Py_ssize_t goodlen = 0;
-    for(Py_ssize_t i = 0; i < len; i++) {
+    for(Py_ssize_t i = len - 1; i--;) {
         if(p[i] != 0xff) {
             goodlen = 1 + i;
+            break;
         }
     }
     return goodlen;
@@ -907,9 +908,10 @@ acid_next_greater_text(PyObject *src)
     Py_ssize_t goodlen = 0;
 
     // Find longest prefix of `src` not ending with `maxord`.
-    for(Py_ssize_t i = 0; i < srclen; i++) {
+    for(Py_ssize_t i = srclen - 1; i--;) {
         if(srcpu[i] != max_unicode_ordinal) {
             goodlen = 1 + i;
+            break;
         }
     }
 
