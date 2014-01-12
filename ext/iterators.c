@@ -26,10 +26,82 @@ static PyTypeObject IteratorType;
 static PyTypeObject BasicIteratorType;
 
 
+/**
+ * Return 1 if the encoded key presented by `s[0..len]` matches the given `key`
+ * and `predicate`, otherwise 0.
+ */
+static int
+test_bound(Bound *bound, uint8_t *p, Py_ssize_t len)
+{
+    int out = 1;
+    if(bound) {
+        Key *key = bound->key;
+        if(key) {
+            Slice bound_slice;
+            acid_key_as_slice(&bound_slice, key);
+            Slice test_slice = {p, p+len};
+            int rc = acid_memcmp(&bound_slice, &test_slice);
+            switch(bound->pred) {
+            case PRED_LE:
+                out = rc <= 0;
+                break;
+            case PRED_LT:
+                out = rc < 0;
+                break;
+            case PRED_GT:
+                out = rc > 0;
+                break;
+            case PRED_GE:
+                out = rc >= 0;
+                break;
+            }
+        }
+    }
+    return out;
+}
+
+
 // -------------
 // Iterator Type
 // -------------
 
+
+/**
+ * Iterator.__init__(engine, prefix).
+ *
+ * Not exposed to Python; used by subclasses.
+ */
+static int
+iter_init(Iterator *self, PyObject *engine, PyObject *prefix)
+{
+    Py_INCREF(engine);
+    self->engine = engine;
+    Py_INCREF(prefix);
+    self->prefix = prefix;
+    self->lo.key = NULL;
+    self->hi.key = NULL;
+    self->stop = NULL;
+    self->max = -1;
+    self->it = NULL;
+    self->tup = NULL;
+    self->started = 0;
+    self->keys = NULL;
+
+    if(! PyString_GET_SIZE(prefix)) {
+        // next_greater() would fail in this case.
+        PyErr_SetString(PyExc_ValueError, "'prefix' cannot be 0 bytes.");
+        return NULL;
+    }
+
+    if(! ((self->source = PyObject_GetAttrString(engine, "source")))) {
+        if(PyErr_Occurred()) {
+            PyErr_Clear();
+        }
+    } else if(self->source == Py_None) {
+        Py_CLEAR(self->source);
+    }
+    return 0;
+}
 
 /**
  * Iterator(engine, prefix). 
@@ -48,34 +120,9 @@ iter_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    if(! PyString_GET_SIZE(prefix)) {
-        // next_greater() would fail in this case.
-        PyErr_SetString(PyExc_ValueError, "'prefix' cannot be 0 bytes.");
-        return NULL;
-    }
-
     Iterator *self = PyObject_New(Iterator, cls);
-    if(self) {
-        Py_INCREF(engine);
-        self->engine = engine;
-        Py_INCREF(prefix);
-        self->prefix = prefix;
-        self->lo.key = NULL;
-        self->hi.key = NULL;
-        self->stop = NULL;
-        self->max = -1;
-        self->it = NULL;
-        self->tup = NULL;
-        self->started = 0;
-        self->keys = NULL;
-
-        if(! ((self->source = PyObject_GetAttrString(engine, "source")))) {
-            if(PyErr_Occurred()) {
-                PyErr_Clear();
-            }
-        } else if(self->source == Py_None) {
-            Py_CLEAR(self->source);
-        }
+    if(self && iter_init(self, engine, prefix)) {
+        Py_CLEAR(self);
     }
     return self;
 }
@@ -382,40 +429,6 @@ basiciter_dealloc(KeyIter *self)
 {
     iter_clear((Iterator *) self);
     PyObject_Del(self);
-}
-
-/**
- * Return 1 if the encoded key presented by `s[0..len]` matches the given `key`
- * and `predicate`, otherwise 0.
- */
-static int
-test_bound(Bound *bound, uint8_t *p, Py_ssize_t len)
-{
-    int out = 1;
-    if(bound) {
-        Key *key = bound->key;
-        if(key) {
-            Slice bound_slice;
-            acid_key_as_slice(&bound_slice, key);
-            Slice test_slice = {p, p+len};
-            int rc = acid_memcmp(&bound_slice, &test_slice);
-            switch(bound->pred) {
-            case PRED_LE:
-                out = rc <= 0;
-                break;
-            case PRED_LT:
-                out = rc < 0;
-                break;
-            case PRED_GT:
-                out = rc > 0;
-                break;
-            case PRED_GE:
-                out = rc >= 0;
-                break;
-            }
-        }
-    }
-    return out;
 }
 
 /**
