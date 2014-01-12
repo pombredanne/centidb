@@ -73,6 +73,18 @@ class Iterator(object):
     _hi_pred = bool
     _remain = -1
 
+    def __repr__(self):
+        cls = self.__class__
+        bits = ['%s.%s' % (cls.__module__, cls.__name__)]
+        bits.append('prefix:%r' % (self.prefix,))
+        if self._lo:
+            pname = self._lo_pred.__name__.strip('_')
+            bits.append('%s:%s' % (pname, self._lo.to_hex(self.prefix)))
+        if self._hi:
+            pname = self._hi_pred.__name__.strip('_')
+            bits.append('%s:%s' % (pname, self._hi.to_hex(self.prefix)))
+        return '<%s>' % (' '.join(bits),)
+
     def set_lo(self, key, closed=True):
         """Set the lower bound to `key`. If `closed` is ``True``, include the
         lower bound in the result set, otherwise exclude it."""
