@@ -74,19 +74,6 @@ test_bound(Bound *bound, uint8_t *p, Py_ssize_t len)
 static int
 iter_init(Iterator *self, PyObject *engine, PyObject *prefix)
 {
-    Py_INCREF(engine);
-    self->engine = engine;
-    Py_INCREF(prefix);
-    self->prefix = prefix;
-    self->lo.key = NULL;
-    self->hi.key = NULL;
-    self->stop = NULL;
-    self->max = -1;
-    self->it = NULL;
-    self->tup = NULL;
-    self->started = 0;
-    self->keys = NULL;
-
     if(! PyString_GET_SIZE(prefix)) {
         // next_greater() would fail in this case.
         PyErr_SetString(PyExc_ValueError, "'prefix' cannot be 0 bytes.");
@@ -100,6 +87,19 @@ iter_init(Iterator *self, PyObject *engine, PyObject *prefix)
     } else if(self->source == Py_None) {
         Py_CLEAR(self->source);
     }
+
+    Py_INCREF(engine);
+    self->engine = engine;
+    Py_INCREF(prefix);
+    self->prefix = prefix;
+    self->lo.key = NULL;
+    self->hi.key = NULL;
+    self->stop = NULL;
+    self->max = -1;
+    self->it = NULL;
+    self->tup = NULL;
+    self->started = 0;
+    self->keys = NULL;
     return 0;
 }
 
@@ -332,7 +332,6 @@ iter_start(Iterator *self, PyObject *key, int reverse)
     PyObject *py_reverse = reverse ? Py_True : Py_False;
     self->it = PyObject_CallFunction(func, "OO", key, py_reverse);
     Py_DECREF(func);
-    Py_DECREF(key);
     if(! self->it) {
         return -1;
     }
@@ -481,6 +480,7 @@ basiciter_forward(BasicIterator *self)
     }
 
     if(! (key && !iter_start(&self->base, key, 0))) {
+        Py_CLEAR(key);
         return NULL;
     }
 
@@ -515,6 +515,7 @@ basiciter_reverse(BasicIterator *self)
 
     // TODO: may "return without exception set" if next_greater failed.
     if(! (key && !iter_start(&self->base, key, 1))) {
+        Py_CLEAR(key);
         return NULL;
     }
 
