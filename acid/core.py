@@ -326,7 +326,9 @@ class BasicStrategy(object):
 
     def get(self, txn, key):
         """Implement `get()` as `Engine.get(key)`."""
-        return bytes(txn.get(key.to_raw(self.prefix)))
+        value = txn.get(key.to_raw(self.prefix))
+        if value:
+            return bytes(value)
 
     def put(self, txn, key, data):
         """Implement `put()` as `Engine.put(key)`."""
