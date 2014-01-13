@@ -77,7 +77,7 @@ iter_init(Iterator *self, PyObject *engine, PyObject *prefix)
     if(! PyString_GET_SIZE(prefix)) {
         // next_greater() would fail in this case.
         PyErr_SetString(PyExc_ValueError, "'prefix' cannot be 0 bytes.");
-        return NULL;
+        return -1;
     }
 
     if(! ((self->source = PyObject_GetAttrString(engine, "source")))) {
@@ -327,21 +327,20 @@ iter_start(Iterator *self, int reverse)
     PyObject *py_reverse;
     Slice prefix;
 
-    acid_string_as_slice(&prefix, self->base.prefix);
+    acid_string_as_slice(&prefix, self->prefix);
     if(reverse) {
         py_reverse = Py_True;
-        PyObject *key;
-        if(self->base.hi.key) {
-            key = acid_key_to_raw(self->base.hi.key, &prefix);
+        if(self->hi.key) {
+            key = acid_key_to_raw(self->hi.key, &prefix);
         } else {
             key = acid_next_greater_bytes(&prefix);
         }
     } else {
         py_reverse = Py_False;
         if(self->lo.key) {
-            key = acid_key_to_raw(self->base.lo.key, &prefix);
+            key = acid_key_to_raw(self->lo.key, &prefix);
         } else {
-            key = self->base.prefix;
+            key = self->prefix;
             Py_INCREF(key);
         }
     }
@@ -360,7 +359,7 @@ iter_start(Iterator *self, int reverse)
         }
     }
     Py_DECREF(key);
-    return -1;
+    return rc;
 }
 
 /**
