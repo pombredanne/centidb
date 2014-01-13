@@ -772,7 +772,7 @@ acid_read_element(struct reader *rdr)
         arg = read_uuid(rdr);
         break;
     default:
-        PyErr_Format(PyExc_ValueError, "bad kind %d; key corrupt?", ch);
+        PyErr_Format(PyExc_ValueError, "bad kind 0x%02x; key corrupt?", ch);
         break;
     }
     return arg;

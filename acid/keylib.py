@@ -703,7 +703,7 @@ def unpacks(s, prefix=None, first=False):
             tup = []
             continue
         else:
-            raise ValueError('bad kind %r; key corrupt? %r' % (c, tup))
+            raise ValueError('bad kind 0x%02x; key corrupt? %r' % (c, tup))
         tup.append(arg)
     tups.append(tuple(tup))
     return tups[0] if first else tups
