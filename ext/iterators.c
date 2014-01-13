@@ -365,7 +365,8 @@ iter_start(Iterator *self, int reverse)
 /**
  * Getter for `Iterator.key`.
  */
-static PyObject *iter_get_key(Iterator *self)
+static PyObject *
+iter_get_key(Iterator *self)
 {
     PyObject *out = Py_None;
     if(self->keys && PyList_GET_SIZE(self->keys)) {
@@ -378,7 +379,8 @@ static PyObject *iter_get_key(Iterator *self)
 /**
  * Getter for `Iterator.keys`.
  */
-static PyObject *iter_get_keys(Iterator *self)
+static PyObject *
+iter_get_keys(Iterator *self)
 {
     PyObject *out = Py_None;
     if(self->keys) {
@@ -391,7 +393,8 @@ static PyObject *iter_get_keys(Iterator *self)
 /**
  * Getter for `Iterator.data'.
  */
-static PyObject *iter_get_data(Iterator *self)
+static PyObject *
+iter_get_data(Iterator *self)
 {
     PyObject *out = Py_None;
     if(self->tup) {
