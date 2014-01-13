@@ -49,7 +49,7 @@ class Result(object):
     #: iterator, or the current key in a batch iterator.
     key = None
 
-    #: List of :py:class:`acid.Key` decoded from the physical engine key.
+    #: List of :py:class:`acid.keylib.Key` decoded from the physical engine key.
     keys = None
 
     #: Object satisfying the :py:class:`buffer` interface that represents the
