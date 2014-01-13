@@ -214,7 +214,12 @@ class BatchIterator(Iterator):
             batch keys.
     """
     _max_phys = -1
+    #: The current key's index into the batch.
     _index = 0
+    #: Array of integer start offsets for records within the batch.
+    _offsets = None
+    #: Raw bytestring/buffer physical key for the current batch, or ``None``.
+    phys_key = None
 
     def __init__(self, engine, prefix, compressor):
         self.engine = engine
@@ -257,7 +262,7 @@ class BatchIterator(Iterator):
 
             # Decode the array of logical record offsets and save it, along
             # with the decompressed concatenation of all records.
-            self.offsets, dstart = decode_offsets(self.raw)
+            self._offsets, dstart = decode_offsets(self.raw)
             self.concat = self.compressor.unpack(buffer(self.raw, dstart))
             self._index = lenk
 
@@ -266,8 +271,8 @@ class BatchIterator(Iterator):
             idx = self._index
         else:
             idx = (len(self.keys) - self._index) - 1
-        start = self.offsets[idx]
-        stop = self.offsets[idx + 1]
+        start = self._offsets[idx]
+        stop = self._offsets[idx + 1]
         self.key = self.keys[-1 + -idx]
         self.data = self.concat[start:stop]
         return True
@@ -276,8 +281,8 @@ class BatchIterator(Iterator):
         """Yield `(key, value)` pairs that are present in the current batch.
         Used to implement batch split, may be removed in future."""
         for index in xrange(len(self.keys) - 1, -1, -1):
-            start = self.offsets[index]
-            stop = self.offsets[index + 1]
+            start = self._offsets[index]
+            stop = self._offsets[index + 1]
             key = self.keys[-1 + -index]
             data = self.concat[start:stop]
             yield keylib.Key(key), data
