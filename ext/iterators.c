@@ -320,22 +320,47 @@ iter_iter(Iterator *self)
  * exception on error.
  */
 static int
-iter_start(Iterator *self, PyObject *key, int reverse)
+iter_start(Iterator *self, int reverse)
 {
-    /* Not using PyObject_CallMethod it produces crap exceptions */
-    PyObject *func = PyObject_GetAttrString(self->engine, "iter");
-    if(! func) {
-        return -1;
+    // TODO: may "return without exception set" if next_greater failed.
+    PyObject *key;
+    PyObject *py_reverse;
+    Slice prefix;
+
+    acid_string_as_slice(&prefix, self->base.prefix);
+    if(reverse) {
+        py_reverse = Py_True;
+        PyObject *key;
+        if(self->base.hi.key) {
+            key = acid_key_to_raw(self->base.hi.key, &prefix);
+        } else {
+            key = acid_next_greater_bytes(&prefix);
+        }
+    } else {
+        py_reverse = Py_False;
+        if(self->lo.key) {
+            key = acid_key_to_raw(self->base.lo.key, &prefix);
+        } else {
+            key = self->base.prefix;
+            Py_INCREF(key);
+        }
     }
 
-    Py_CLEAR(self->it);
-    PyObject *py_reverse = reverse ? Py_True : Py_False;
-    self->it = PyObject_CallFunction(func, "OO", key, py_reverse);
-    Py_DECREF(func);
-    if(! self->it) {
-        return -1;
+    int rc = -1;
+    if(key) {
+        /* Avoiding PyObject_CallMethod as it produces crap exceptions */
+        PyObject *func = PyObject_GetAttrString(self->engine, "iter");
+        if(func) {
+            Py_CLEAR(self->it);
+            self->it = PyObject_CallFunction(func, "OO", key, py_reverse);
+            Py_DECREF(func);
+            if(self->it) {
+                rc = 0;
+            }
+        }
     }
-    return 0;
+    Py_DECREF(key);
+    return -1;
 }
 
 /**
@@ -469,18 +494,7 @@ basiciter_next(BasicIterator *self)
 static PyObject *
 basiciter_forward(BasicIterator *self)
 {
-    PyObject *key;
-    if(self->base.lo.key) {
-        Slice prefix;
-        acid_string_as_slice(&prefix, self->base.prefix);
-        key = acid_key_to_raw(self->base.lo.key, &prefix);
-    } else {
-        key = self->base.prefix;
-        Py_INCREF(key);
-    }
-
-    if(! (key && !iter_start(&self->base, key, 0))) {
-        Py_CLEAR(key);
+    if(iter_start(&self->base, 0)) {
         return NULL;
     }
 
@@ -504,18 +518,7 @@ basiciter_forward(BasicIterator *self)
 static PyObject *
 basiciter_reverse(BasicIterator *self)
 {
-    Slice prefix;
-    acid_string_as_slice(&prefix, self->base.prefix);
-    PyObject *key;
-    if(self->base.hi.key) {
-        key = acid_key_to_raw(self->base.hi.key, &prefix);
-    } else {
-        key = acid_next_greater_bytes(&prefix);
-    }
-
-    // TODO: may "return without exception set" if next_greater failed.
-    if(! (key && !iter_start(&self->base, key, 1))) {
-        Py_CLEAR(key);
+    if(iter_start(&self->base, 1)) {
         return NULL;
     }
 
