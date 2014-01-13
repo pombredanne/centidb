@@ -60,10 +60,6 @@ class Result(object):
     #: :py:class:`BasicIterator`.
     key = None
 
-    #: For a :py:class:`BatchIterator`, the current key's index into
-    #: the batch. Unused for :py:class:`BasicIterator`.
-    index = None
-
 
 class Iterator(object):
     # Various defaults set here to avoid necessity for repeat initialization.
