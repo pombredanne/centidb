@@ -19,14 +19,7 @@ import acid.meta
 
 def init_store():
     global store
-    store = acid.open('LmdbEngine',
-        #trace_path='trace.out',
-        path='/media/scratch/t4.lmdb',
-        map_size=1048576*1024*10,
-        map_async=True,
-        sync=False,
-        metasync=False,
-        writemap=True)
+    store = acid.open('lmdb:t4.lmdb;map_async;nosync;nometasync;writemap')
     Model.bind_store(store)
     return store
 
