@@ -19,7 +19,7 @@ import acid.meta
 
 def init_store():
     global store
-    store = acid.open('lmdb:t4.lmdb;map_async;nosync;nometasync;writemap')
+    store = acid.open('lmdb:/media/scratch/t4.lmdb;map_async;nosync;nometasync;writemap')
     Model.bind_store(store)
     return store
 
