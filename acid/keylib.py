@@ -35,7 +35,6 @@ import acid
 __all__ = ['Key', 'KeyList', 'invert', 'unpacks', 'packs', 'unpack_int',
            'pack_int']
 
-KIND_PAD = 0x00
 KIND_NULL = 0x0f
 KIND_NEG_INTEGER = 0x14
 KIND_INTEGER = 0x15
@@ -703,10 +702,6 @@ def unpacks(s, prefix=None, first=False):
                 return tups[0]
             tup = []
             continue
-        elif c == KIND_PAD:
-            if pos == 1:
-                raise ValueError('KIND_PAD at index 0; illegal encoding')
-            break
         else:
             raise ValueError('bad kind 0x%02x; key corrupt? %r' % (c, tup))
         tup.append(arg)
