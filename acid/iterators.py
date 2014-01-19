@@ -40,6 +40,16 @@ def decode_offsets(s):
     return out, pos
 
 
+def common_prefix_len(s1, s2):
+    """Given bytestrings `s1` and `s2`, return the length of their common
+    prefix, otherwise 0."""
+    shared_len = min(len(s1), len(s2))
+    for i in xrange(shared_len):
+        if s1[i] != s2[i]:
+            return i
+    return shared_len
+
+
 class Result(object):
     """Interface for a single element from an iterator's result set. Iterator
     classes do not return :py:class:`Result` instances, they only return
@@ -271,6 +281,182 @@ class BatchIterator(Iterator):
             idx = self._index
         else:
             idx = (len(self.keys) - self._index) - 1
+        start = self._offsets[idx]
+        stop = self._offsets[idx + 1]
+        self.key = self.keys[-1 + -idx]
+        self.data = self.concat[start:stop]
+        return True
+
+    def batch_items(self):
+        """Yield `(key, value)` pairs that are present in the current batch.
+        Used to implement batch split, may be removed in future."""
+        for index in xrange(len(self.keys) - 1, -1, -1):
+            start = self._offsets[index]
+            stop = self._offsets[index + 1]
+            key = self.keys[-1 + -index]
+            data = self.concat[start:stop]
+            yield keylib.Key(key), data
+
+    def forward(self):
+        """Begin yielding objects satisfying the :py:class:`Result` interface,
+        from `lo`..`hi`. Note the yielded object is reused, so references to it
+        should not be held."""
+        if self._lo is None:
+            key = self.prefix
+        else:
+            key = self._lo.to_raw(self.prefix)
+
+        self.it = self.engine.iter(key, False)
+        self._reverse = False
+        # Fetch the first key. If _step() returns false, then first key is
+        # beyond collection prefix. Cease iteration.
+        go = self._step()
+
+        # When lo(closed=False), skip the start key.
+        while go and not self._lo_pred(self.key):
+            go = self._step()
+
+        remain = self._remain
+        while go and remain and self._hi_pred(self.key):
+            yield self
+            remain -= 1
+            go = self._step()
+
+    def reverse(self):
+        """Begin yielding objects satisfying the :py:class:`Result` interface,
+        from `lo`..`hi`. Note the yielded object is reused, so references to it
+        should not be held."""
+        if self._hi is None:
+            key = keylib.next_greater_bytes(self.prefix)
+        else:
+            key = self._hi.to_raw(self.prefix)
+
+        self.it = self.engine.iter(key, True)
+        self._reverse = True
+
+        # Fetch the first key. If _step() returns false, then we may have
+        # seeked to first record of next prefix, so skip first returned result.
+        go = self._step()
+        if not go:
+            go = self._step()
+
+        # When hi(closed=False), skip the start key.
+        while go and not self._hi_pred(self.key):
+            go = self._step()
+
+        remain = self._remain
+        while go and remain and self._lo_pred(self.key):
+            yield self
+            remain -= 1
+            go = self._step()
+
+
+class BatchV2Iterator(Iterator):
+    """Provides bidirectional iteration of a range of keys, treating >1-length
+    keys as batch records.
+
+        `engine`:
+            :py:class:`acid.engines.Engine` instance to iterate.
+
+        `prefix`:
+            Bytestring prefix for all keys.
+
+        `compressor`:
+            :py:class:`acid.encoders.Compressor` instance used to decompress
+            batch keys.
+    """
+    _max_phys = -1
+    #: The current key's index into the batch.
+    _index = 0
+    #: Number of logical records in the current batch.
+    _key_count = 0
+    #: Maximum length of any suffix for the current batch.
+    _max_suffix_len = 0
+    #: Bytestring common prefix shared by all member keys.
+    _common_prefix = None
+    #: Cached length of the common prefix.
+    _common_prefix_len = None
+    #: Temporary buffer for constructing logical keys.
+    _key_buf = None
+    #: Array of integer start offsets for records within the batch.
+    _offsets = None
+    #: Raw bytestring/buffer physical key for the current batch, or ``None``.
+    phys_key = None
+
+    def __init__(self, engine, prefix, compressor):
+        self.engine = engine
+        self.prefix = prefix
+        self.compressor = compressor
+
+    def set_max_phys(self, max_phys):
+        """Set the maximum number of physical records to visit."""
+        self._max_phys = max_phys
+
+    def _init_key_buf(self, k1, k2):
+        s1 = k1.to_raw()
+        self._common_prefix_len = common_prefix_len(s1, k2.to_raw())
+        self._common_prefix = s1[:self._common_prefix_len]
+        self._key_buf = bytearray(self._common_prefix_len + self._max_suffix_len)
+        self._key_buf[:self._common_prefix_len] = self._common_prefix
+
+    def _logical_key(self, index):
+        max_suffix_len = self._max_suffix_len
+        start = 4 + (max_suffix_len * index)
+        suffix = self.raw[start:start+max_suffix_len].lstrip('\x00')
+        suffix_len = len(suffix)
+        key_len = len(self._common_prefix) + suffix_len
+        self._key_buf[-suffix_max_len:key_len] = suffix
+        key = buffer(self._key_buf, 0, key_len)
+        return keylib.Key.from_raw(key, self.prefix)
+
+    def _logical_value(self, index):
+        offset = self._offsets_start + (4*idx)
+        start, end = struct.unpacks('>LL', self.uncompressed[offset:offset+8])
+        return buffer(self.uncompressed, start, end-start)
+
+    def _step(self):
+        """Progress one step through the batch, or fetch another physical
+        record if the batch is exhausted. Returns ``True`` so long as the
+        collection range has not been exceeded."""
+        # Previous record was non-batch, or previous batch exhausted. Need to
+        # fetch another record.
+        if not self._index:
+            # Have we visited maximum number of physical records? If so, stop
+            # iteration.
+            if not self._max_phys:
+                return False
+            self._max_phys -= 1
+
+            # Get the next record and decode its key. from_raw() returns None
+            # if the key's prefix doesn't match self.prefix, which indicates
+            # we've reached the end of the collection.
+            self.phys_key, self.raw = next(self.it, ('', ''))
+            self.keys = keylib.KeyList.from_raw(self.phys_key, self.prefix)
+            if not self.keys:
+                return False
+
+            # Single record.
+            if len(self.keys) == 1:
+                self.key = self.keys[0]
+                self.data = self.raw
+                self._key_count = 1
+                self._index = 0
+                return True
+
+            # Decode the array of logical record offsets and save it, along
+            # with the decompressed concatenation of all records.
+            (self._key_count, \
+             self._max_suffix_len) = struct.unpack('>HH', self.raw[:4])
+            self._uncompressed = self.compressor.unpack(buffer(self.raw, 4))
+            self._offsets_start = (self._key_count * self._max_suffix_len)
+            self._index = self._key_count
+            return True
+
+        self._index -= 1
+        if self._reverse:
+            idx = self._index
+        else:
+            idx = (self._key_count - self._index) - 1
         start = self._offsets[idx]
         stop = self._offsets[idx + 1]
         self.key = self.keys[-1 + -idx]

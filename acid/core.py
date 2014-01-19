@@ -527,6 +527,46 @@ class BatchStrategy(object):
     put = replace
 
 
+class BatchV2Strategy(BatchStrategy):
+    """Access strategy for ordered collections containing batch records.
+    """
+    ITERATOR_CLASS = iterators.BatchV2Iterator
+
+    def _prepare_batch(self, items):
+        if len(items) == 1:
+            return (items[0][0].to_raw(self.prefix),  # key
+                    items[0][1])                      # data
+
+        keys = [item[0] for item in items]
+        high_key_s = keys[-1].to_raw()
+        low_key_s = keys[0].to_raw()
+        cp_len = iterators.common_prefix_len(high_key_s, low_key_s)
+
+        suffixes = [k.to_raw(self.prefix)[cp_len:] for k in keys]
+        max_suffix_len = max(len(suffix) for suffix in suffixes)
+
+        compressed = bytearray()
+        for suffix in suffixes:
+            compressed.extend(b'\x00' * (max_suffix_len - len(suffix)))
+            compressed.extend(suffix)
+
+        pos = 0
+        for _, value in items:
+            pos += len(value)
+            compressed.extend(struct.pack('>L', pos))
+
+        for _, value in items:
+            compressed.extend(value)
+
+        raw = bytearray()
+        raw.extend(struct.pack('>H', len(items)))  # record count
+        raw.extend(struct.pack('>H', max_suffix_len))
+        raw.extend(self.compressor.pack(bytes(compressed)))
+
+        phys = keylib.packs([keys[-1], keys[0]], self.prefix)
+        return phys, bytes(raw)
+
+
 class Collection(object):
     """Provides access to a record collection contained within a
     :py:class:`Store`, and ensures associated indices update consistently when
