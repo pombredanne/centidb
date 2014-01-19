@@ -355,6 +355,8 @@ class BasicStrategy(object):
 class BatchStrategy(object):
     """Access strategy for ordered collections containing batch records.
     """
+    ITERATOR_CLASS = iterators.BatchIterator
+
     def __init__(self, prefix, store, compressor):
         self.prefix = prefix
         self.store = store
@@ -362,7 +364,7 @@ class BatchStrategy(object):
 
     def get(self, txn, key):
         """Implement `get()` using a range query over `>= key`."""
-        it = iterators.BatchIterator(txn, self.prefix, self.compressor)
+        it = self.ITERATOR_CLAS(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
             return bytes(res.data)  # TODO: buf dies at cursor exit
@@ -453,7 +455,7 @@ class BatchStrategy(object):
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
 
         txn = self.store._txn_context.get()
-        it = iterators.BatchIterator(txn, self.prefix, self.compressor)
+        it = self.ITERATOR_CLASS(txn, self.prefix, self.compressor)
         groupval = object()
         items = []
 
@@ -488,14 +490,14 @@ class BatchStrategy(object):
     def iter(self, txn):
         """Implement `iter()` using
         :py:class:`acid.iterators.BatchIterator`."""
-        return iterators.BatchIterator(txn, self.prefix, self.compressor)
+        return self.ITERATOR_CLASS(txn, self.prefix, self.compressor)
 
     def pop(self, txn, key):
         """Implement `pop()` using a range query to find the single or batch
         record `key` belongs to and splitting it, saving all records
         individually except for `key`. Return the data for `key` if it existed,
         otherwise ``None``."""
-        it = iterators.BatchIterator(txn, self.prefix, self.compressor)
+        it = self.ITERATOR_CLASS(txn, self.prefix, self.compressor)
         it.set_lo(key)
         for res in it.forward():
             old = None
