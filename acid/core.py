@@ -26,6 +26,7 @@ from __future__ import with_statement
 import itertools
 import logging
 import operator
+import struct
 import threading
 import warnings
 
@@ -364,7 +365,7 @@ class BatchStrategy(object):
 
     def get(self, txn, key):
         """Implement `get()` using a range query over `>= key`."""
-        it = self.ITERATOR_CLAS(txn, self.prefix, self.compressor)
+        it = self.ITERATOR_CLASS(txn, self.prefix, self.compressor)
         it.set_exact(key)
         for res in it.forward():
             return bytes(res.data)  # TODO: buf dies at cursor exit
@@ -470,7 +471,7 @@ class BatchStrategy(object):
                     _, encoded = self._prepare_batch(items)
                     if len(encoded) > max_bytes:
                         items.pop()
-                        self._write_batch(txn, items, packer)
+                        self._write_batch(txn, items)
                         items.append((r.key, r.data))
                 done = max_recs and len(items) == max_recs
                 if (not done) and grouper:
@@ -534,12 +535,12 @@ class BatchV2Strategy(BatchStrategy):
 
     def _prepare_batch(self, items):
         if len(items) == 1:
-            return (items[0][0].to_raw(self.prefix),  # key
-                    items[0][1])                      # data
+            phys = keylib.Key(items[0][0]).to_raw(self.prefix)
+            return phys, items[0][1]
 
         keys = [item[0] for item in items]
-        high_key_s = keys[-1].to_raw()
-        low_key_s = keys[0].to_raw()
+        high_key_s = keys[-1].to_raw(self.prefix)
+        low_key_s = keys[0].to_raw(self.prefix)
         cp_len = iterators.common_prefix_len(high_key_s, low_key_s)
 
         suffixes = [k.to_raw(self.prefix)[cp_len:] for k in keys]
@@ -550,7 +551,8 @@ class BatchV2Strategy(BatchStrategy):
             compressed.extend(b'\x00' * (max_suffix_len - len(suffix)))
             compressed.extend(suffix)
 
-        pos = 0
+        pos = len(compressed)
+        compressed.extend(struct.pack('>L', pos))
         for _, value in items:
             pos += len(value)
             compressed.extend(struct.pack('>L', pos))
@@ -607,7 +609,7 @@ class Collection(object):
         prefix = keylib.pack_int(info['idx'], self.store.prefix)
         if info.get('strategy', 'batch') == 'batch':
             compressor = compressor or encoders.PLAIN
-            self.strategy = BatchStrategy(prefix, store, compressor)
+            self.strategy = BatchV2Strategy(prefix, store, compressor)
         else:
             assert info['strategy'] == 'basic'
             self.strategy = BasicStrategy(prefix)

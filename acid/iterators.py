@@ -19,6 +19,7 @@ Iterator implementations.
 """
 
 from __future__ import absolute_import
+import struct
 
 import acid
 from acid import keylib
@@ -393,9 +394,11 @@ class BatchV2Iterator(Iterator):
         self._max_phys = max_phys
 
     def _init_key_buf(self, k1, k2):
-        s1 = k1.to_raw()
-        self._common_prefix_len = common_prefix_len(s1, k2.to_raw())
+        s1 = k1.to_raw(self.prefix)
+        self._common_prefix_len = common_prefix_len(s1, k2.to_raw(self.prefix))
         self._common_prefix = s1[:self._common_prefix_len]
+        print['common prefix:', self._common_prefix]
+        print['max suffix:', self._max_suffix_len]
         self._key_buf = bytearray(self._common_prefix_len + self._max_suffix_len)
         self._key_buf[:self._common_prefix_len] = self._common_prefix
 
@@ -403,16 +406,21 @@ class BatchV2Iterator(Iterator):
         max_suffix_len = self._max_suffix_len
         start = 4 + (max_suffix_len * index)
         suffix = self.raw[start:start+max_suffix_len].lstrip('\x00')
+        print ['suffix:', suffix]
         suffix_len = len(suffix)
         key_len = len(self._common_prefix) + suffix_len
-        self._key_buf[-suffix_max_len:key_len] = suffix
+        self._key_buf[-max_suffix_len:key_len] = suffix
         key = buffer(self._key_buf, 0, key_len)
+        print['key:', str(key)]
         return keylib.Key.from_raw(key, self.prefix)
 
     def _logical_value(self, index):
-        offset = self._offsets_start + (4*idx)
-        start, end = struct.unpacks('>LL', self.uncompressed[offset:offset+8])
-        return buffer(self.uncompressed, start, end-start)
+        offset = self._offsets_start + (4*index)
+        start, end = struct.unpack('>LL', self._uncompressed[offset:offset+8])
+        start += self._values_start
+        end += self._values_start
+        print['offset', start, end]
+        return buffer(self._uncompressed, start, end-start)
 
     def _step(self):
         """Progress one step through the batch, or fetch another physical
@@ -448,19 +456,19 @@ class BatchV2Iterator(Iterator):
             (self._key_count, \
              self._max_suffix_len) = struct.unpack('>HH', self.raw[:4])
             self._uncompressed = self.compressor.unpack(buffer(self.raw, 4))
-            self._offsets_start = (self._key_count * self._max_suffix_len)
+            self._offsets_start = ((1 + self._key_count) * self._max_suffix_len)
+            self._values_start = self._offsets_start + (self._key_count * 4)
             self._index = self._key_count
-            return True
+            self._init_key_buf(*self.keys)
 
         self._index -= 1
         if self._reverse:
             idx = self._index
         else:
             idx = (self._key_count - self._index) - 1
-        start = self._offsets[idx]
-        stop = self._offsets[idx + 1]
-        self.key = self.keys[-1 + -idx]
-        self.data = self.concat[start:stop]
+        self.key = self._logical_key(idx)
+        self.data = self._logical_value(idx)
+        print (idx, self.key, str(self.data))
         return True
 
     def batch_items(self):
