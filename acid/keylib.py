@@ -257,7 +257,11 @@ class KeyList(object):
         If `source` is not ``None``, `packed` must be a :py:class:`buffer` and
         `source` should be a *source object* implementing the `Memsink
         Protocol <https://github.com/dw/acid/issues/23>`_."""
-        return unpacks(packed, prefix)
+        lst = unpacks(packed, prefix)
+        if lst:
+            # TODO: this forces decode-then-reencode, but at least the returned
+            # types are correct.
+            return map(Key, lst)
 
 
 class FixedOffsetZone(datetime.tzinfo):
