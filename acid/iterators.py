@@ -352,7 +352,7 @@ class BatchIterator(Iterator):
             go = self._step()
 
 
-class BatchV2Iterator(Iterator):
+class BatchV2Iterator(BatchIterator):
     """Provides bidirectional iteration of a range of keys, treating >1-length
     keys as batch records.
 
@@ -383,15 +383,6 @@ class BatchV2Iterator(Iterator):
     _offsets = None
     #: Raw bytestring/buffer physical key for the current batch, or ``None``.
     phys_key = None
-
-    def __init__(self, engine, prefix, compressor):
-        self.engine = engine
-        self.prefix = prefix
-        self.compressor = compressor
-
-    def set_max_phys(self, max_phys):
-        """Set the maximum number of physical records to visit."""
-        self._max_phys = max_phys
 
     def _init_key_buf(self, k1, k2):
         s1 = k1.to_raw(self.prefix)
