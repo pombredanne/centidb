@@ -551,7 +551,7 @@ class BatchV2Strategy(BatchStrategy):
             compressed.extend(b'\x00' * (max_suffix_len - len(suffix)))
             compressed.extend(suffix)
 
-        pos = len(compressed)
+        pos = len(compressed) + (4 * (1+len(items)))
         compressed.extend(struct.pack('>L', pos))
         for _, value in items:
             pos += len(value)

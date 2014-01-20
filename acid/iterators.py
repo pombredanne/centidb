@@ -397,29 +397,22 @@ class BatchV2Iterator(Iterator):
         s1 = k1.to_raw(self.prefix)
         self._common_prefix_len = common_prefix_len(s1, k2.to_raw(self.prefix))
         self._common_prefix = s1[:self._common_prefix_len]
-        print['common prefix:', self._common_prefix]
-        print['max suffix:', self._max_suffix_len]
         self._key_buf = bytearray(self._common_prefix_len + self._max_suffix_len)
         self._key_buf[:self._common_prefix_len] = self._common_prefix
 
     def _logical_key(self, index):
         max_suffix_len = self._max_suffix_len
-        start = 4 + (max_suffix_len * index)
-        suffix = self.raw[start:start+max_suffix_len].lstrip('\x00')
-        print ['suffix:', suffix]
+        start = max_suffix_len * index
+        suffix = self._uncompressed[start:start+max_suffix_len].lstrip('\x00')
         suffix_len = len(suffix)
         key_len = len(self._common_prefix) + suffix_len
         self._key_buf[-max_suffix_len:key_len] = suffix
         key = buffer(self._key_buf, 0, key_len)
-        print['key:', str(key)]
         return keylib.Key.from_raw(key, self.prefix)
 
     def _logical_value(self, index):
         offset = self._offsets_start + (4*index)
         start, end = struct.unpack('>LL', self._uncompressed[offset:offset+8])
-        start += self._values_start
-        end += self._values_start
-        print['offset', start, end]
         return buffer(self._uncompressed, start, end-start)
 
     def _step(self):
@@ -456,8 +449,7 @@ class BatchV2Iterator(Iterator):
             (self._key_count, \
              self._max_suffix_len) = struct.unpack('>HH', self.raw[:4])
             self._uncompressed = self.compressor.unpack(buffer(self.raw, 4))
-            self._offsets_start = ((1 + self._key_count) * self._max_suffix_len)
-            self._values_start = self._offsets_start + (self._key_count * 4)
+            self._offsets_start = (self._key_count * self._max_suffix_len)
             self._index = self._key_count
             self._init_key_buf(*self.keys)
 
@@ -468,7 +460,6 @@ class BatchV2Iterator(Iterator):
             idx = (self._key_count - self._index) - 1
         self.key = self._logical_key(idx)
         self.data = self._logical_value(idx)
-        print (idx, self.key, str(self.data))
         return True
 
     def batch_items(self):
@@ -480,59 +471,6 @@ class BatchV2Iterator(Iterator):
             key = self.keys[-1 + -index]
             data = self.concat[start:stop]
             yield keylib.Key(key), data
-
-    def forward(self):
-        """Begin yielding objects satisfying the :py:class:`Result` interface,
-        from `lo`..`hi`. Note the yielded object is reused, so references to it
-        should not be held."""
-        if self._lo is None:
-            key = self.prefix
-        else:
-            key = self._lo.to_raw(self.prefix)
-
-        self.it = self.engine.iter(key, False)
-        self._reverse = False
-        # Fetch the first key. If _step() returns false, then first key is
-        # beyond collection prefix. Cease iteration.
-        go = self._step()
-
-        # When lo(closed=False), skip the start key.
-        while go and not self._lo_pred(self.key):
-            go = self._step()
-
-        remain = self._remain
-        while go and remain and self._hi_pred(self.key):
-            yield self
-            remain -= 1
-            go = self._step()
-
-    def reverse(self):
-        """Begin yielding objects satisfying the :py:class:`Result` interface,
-        from `lo`..`hi`. Note the yielded object is reused, so references to it
-        should not be held."""
-        if self._hi is None:
-            key = keylib.next_greater_bytes(self.prefix)
-        else:
-            key = self._hi.to_raw(self.prefix)
-
-        self.it = self.engine.iter(key, True)
-        self._reverse = True
-
-        # Fetch the first key. If _step() returns false, then we may have
-        # seeked to first record of next prefix, so skip first returned result.
-        go = self._step()
-        if not go:
-            go = self._step()
-
-        # When hi(closed=False), skip the start key.
-        while go and not self._hi_pred(self.key):
-            go = self._step()
-
-        remain = self._remain
-        while go and remain and self._lo_pred(self.key):
-            yield self
-            remain -= 1
-            go = self._step()
 
 
 def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
