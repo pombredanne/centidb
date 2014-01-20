@@ -456,12 +456,9 @@ class BatchV2Iterator(BatchIterator):
     def batch_items(self):
         """Yield `(key, value)` pairs that are present in the current batch.
         Used to implement batch split, may be removed in future."""
-        for index in xrange(len(self.keys) - 1, -1, -1):
-            start = self._offsets[index]
-            stop = self._offsets[index + 1]
-            key = self.keys[-1 + -index]
-            data = self.concat[start:stop]
-            yield keylib.Key(key), data
+        for idx in xrange(self._key_count - 1, -1, -1):
+            yield self._logical_key(idx), \
+                  self._logical_value(idx)
 
 
 def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
