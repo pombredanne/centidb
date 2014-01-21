@@ -240,9 +240,12 @@ class Key(object):
         return cmp(self.packed, Key(other).to_raw(self.prefix))
 
     def __repr__(self):
-        if self.args is None:
-            self.args = unpacks(self.packed, self.prefix, True)
-        return 'acid.Key%r' % (self.args,)
+        try:
+            if self.args is None:
+                self.args = unpacks(self.packed, self.prefix, True)
+            return 'acid.Key%r' % (self.args,)
+        except ValueError:
+            return 'acid.Key(<corrupt>)'
 
 
 class KeyList(object):

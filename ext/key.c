@@ -356,20 +356,26 @@ key_from_raw(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 static PyObject *
 key_repr(Key *self)
 {
+    PyObject *repr = NULL;
     PyObject *tup = PySequence_Tuple((PyObject *) self);
-    if(! tup) {
+    if(tup) {
+        repr = PyObject_Repr(tup);
+        Py_DECREF(tup);
+    } else {
+        if(! (PyErr_Occurred() && PyErr_ExceptionMatches(PyExc_ValueError))) {
+            return NULL;
+        }
+        PyErr_Clear();
+        repr = PyString_FromString("(<corrupt>)");
+    }
+
+    if(! repr) {
         return NULL;
     }
 
-    PyObject *tup_repr = PyObject_Repr(tup);
-    Py_DECREF(tup);
-    if(! tup_repr) {
-        return NULL;
-    }
-
-    const char *repr_s = PyString_AS_STRING(tup_repr);
+    const char *repr_s = PyString_AS_STRING(repr);
     PyObject *out = PyString_FromFormat("acid.Key%s", repr_s);
-    Py_DECREF(tup_repr);
+    Py_DECREF(repr);
     return out;
 }
 
