@@ -424,10 +424,6 @@ class BatchStrategy(object):
                 size. Single records are skipped if they exceed this size when
                 compressed individually.
 
-            `max_keylen`:
-                Maximum size in bytes of the batch record's key part, or
-                ``None`` for no maximum size.
-
             `preserve`:
                 If ``True``, then existing batch records in the database are
                 left untouched. When one is found within `lo..hi`, the
@@ -452,7 +448,6 @@ class BatchStrategy(object):
                 function's return value changes.
 
         """
-        assert max_keylen is None, 'max_keylen is not implemented.'
         assert max_bytes or max_recs, 'max_bytes and/or max_recs is required.'
 
         txn = self.store._txn_context.get()
