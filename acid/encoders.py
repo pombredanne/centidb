@@ -117,6 +117,9 @@ class Compressor(object):
         self.unpack = unpack
         self.pack = pack
 
+    def __repr__(self):
+        klass = self.__class__
+        return '<%s.%s %r>' % (klass.__module__, klass.__name__, self.name)
 
 def make_json_encoder(separators=',:', **kwargs):
     """Return a :py:class:`RecordEncoder` that serializes
