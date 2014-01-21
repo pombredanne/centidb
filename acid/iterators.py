@@ -371,40 +371,23 @@ class BatchV2Iterator(BatchIterator):
     _index = 0
     #: Number of logical records in the current batch.
     _key_count = 0
-    #: Maximum length of any suffix for the current batch.
-    _max_suffix_len = 0
-    #: Bytestring common prefix shared by all member keys.
-    _common_prefix = None
+    #: Cache common prefix.
+    _cp = None
     #: Cached length of the common prefix.
-    _common_prefix_len = None
-    #: Temporary buffer for constructing logical keys.
-    _key_buf = None
+    _cp_len = None
     #: Array of integer start offsets for records within the batch.
     _offsets = None
     #: Raw bytestring/buffer physical key for the current batch, or ``None``.
     phys_key = None
 
-    def _init_key_buf(self, k1, k2):
-        s1 = k1.to_raw(self.prefix)
-        self._common_prefix_len = common_prefix_len(s1, k2.to_raw(self.prefix))
-        self._common_prefix = s1[:self._common_prefix_len]
-        self._key_buf = bytearray(self._common_prefix_len + self._max_suffix_len)
-        self._key_buf[:self._common_prefix_len] = self._common_prefix
-
-    def _logical_key(self, index):
-        max_suffix_len = self._max_suffix_len
-        start = max_suffix_len * index
-        suffix = self._uncompressed[start:start+max_suffix_len].lstrip('\x00')
-        suffix_len = len(suffix)
-        key_len = len(self._common_prefix) + suffix_len
-        self._key_buf[-max_suffix_len:key_len] = suffix
-        key = buffer(self._key_buf, 0, key_len)
-        return keylib.Key.from_raw(key, self.prefix)
-
-    def _logical_value(self, index):
-        offset = self._offsets_start + (4*index)
-        start, end = struct.unpack('>LL', self._uncompressed[offset:offset+8])
-        return buffer(self._uncompressed, start, end-start)
+    def _load_item(self, index):
+        pos = 2 + (2*index)
+        start, end = struct.unpack('>HH', self._uncompressed[pos:pos+4])
+        suffix_len = ord(self._uncompressed[start])
+        start += 1
+        suffix = self._uncompressed[start:start+suffix_len]
+        self.key = keylib.Key.from_raw(self._cp + suffix)
+        self.data = self._uncompressed[start+suffix_len:end]
 
     def _step(self):
         """Progress one step through the batch, or fetch another physical
@@ -437,28 +420,28 @@ class BatchV2Iterator(BatchIterator):
 
             # Decode the array of logical record offsets and save it, along
             # with the decompressed concatenation of all records.
-            (self._key_count, \
-             self._max_suffix_len) = struct.unpack('>HH', self.raw[:4])
-            self._uncompressed = self.compressor.unpack(buffer(self.raw, 4))
-            self._offsets_start = (self._key_count * self._max_suffix_len)
+            self._uncompressed = self.compressor.unpack(self.raw)
+            self._key_count, = struct.unpack('>H', self._uncompressed[:2])
             self._index = self._key_count
-            self._init_key_buf(*self.keys)
+
+            s1 = self.keys[0].to_raw()
+            self._cp_len = common_prefix_len(s1, self.keys[1].to_raw())
+            self._cp = s1[:self._cp_len]
 
         self._index -= 1
         if self._reverse:
             idx = self._index
         else:
             idx = (self._key_count - self._index) - 1
-        self.key = self._logical_key(idx)
-        self.data = self._logical_value(idx)
+        self._load_item(idx)
         return True
 
     def batch_items(self):
         """Yield `(key, value)` pairs that are present in the current batch.
         Used to implement batch split, may be removed in future."""
-        for idx in xrange(self._key_count - 1, -1, -1):
-            yield self._logical_key(idx), \
-                  self._logical_value(idx)
+        for i in xrange(self._key_count):
+            self._load_item(i)
+            yield self.key, self.value
 
 
 def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):

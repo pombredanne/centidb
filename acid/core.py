@@ -538,35 +538,24 @@ class BatchV2Strategy(BatchStrategy):
             phys = keylib.Key(items[0][0]).to_raw(self.prefix)
             return phys, items[0][1]
 
-        keys = [item[0] for item in items]
-        high_key_s = keys[-1].to_raw(self.prefix)
-        low_key_s = keys[0].to_raw(self.prefix)
+        high_key_s = items[-1][0].to_raw()
+        low_key_s = items[0][0].to_raw()
         cp_len = iterators.common_prefix_len(high_key_s, low_key_s)
 
-        suffixes = [k.to_raw(self.prefix)[cp_len:] for k in keys]
-        max_suffix_len = max(len(suffix) for suffix in suffixes)
+        raw = bytearray(2 + (2 * (1 + len(items))))
+        raw[0:2] = struct.pack('>HH', len(items), len(raw))
+        for idx, (key, value) in enumerate(items):
+            opos = 2 + (2 * idx)
+            raw[opos:opos+2] = struct.pack('>H', len(raw))
+            suffix = key.to_raw()[cp_len:]
+            raw.append(len(suffix))
+            raw.extend(suffix)
+            raw.extend(value)
 
-        compressed = bytearray()
-        for suffix in suffixes:
-            compressed.extend(b'\x00' * (max_suffix_len - len(suffix)))
-            compressed.extend(suffix)
-
-        pos = len(compressed) + (4 * (1+len(items)))
-        compressed.extend(struct.pack('>L', pos))
-        for _, value in items:
-            pos += len(value)
-            compressed.extend(struct.pack('>L', pos))
-
-        for _, value in items:
-            compressed.extend(value)
-
-        raw = bytearray()
-        raw.extend(struct.pack('>H', len(items)))  # record count
-        raw.extend(struct.pack('>H', max_suffix_len))
-        raw.extend(self.compressor.pack(bytes(compressed)))
-
-        phys = keylib.packs([keys[-1], keys[0]], self.prefix)
-        return phys, bytes(raw)
+        opos = 2 + (2 * len(items))
+        raw[opos:opos+2] = struct.pack('>H', len(raw))
+        phys = keylib.packs([items[-1][0], items[0][0]], self.prefix)
+        return phys, self.compressor.pack(bytes(raw))
 
 
 class Collection(object):
