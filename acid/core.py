@@ -65,6 +65,21 @@ def dispatch(lst, *args):
             lst.pop(i)
 
 
+def bisect_func_right(x, lo, hi, func):
+    """Bisect `func(i)`, returning an index such that consecutive values are
+    greater than `x`. If `x` is present, the returned index is past its last
+    occurrence. EOF is assumed if `func` returns None."""
+    while lo < hi:
+        mid = (lo + hi) // 2
+        k = func(mid)
+        if k is not None and x < k:
+            hi = mid
+        else:
+            lo = mid + 1
+
+    return lo
+
+
 def abort():
     """Trigger a graceful abort of the active transaction."""
     raise errors.AbortError('')
@@ -419,7 +434,7 @@ class BatchStrategy(object):
                 Maximum size in bytes of the batch record's value after
                 compression, or ``None`` for no maximum size. When not
                 ``None``, values are recompressed after each member is
-                appended, in order to test if `maxbytes` has been reached. This
+                appended, in order to test if `max_bytes` has been reached. This
                 is inefficient, but provides the best guarantee of final record
                 size. Single records are skipped if they exceed this size when
                 compressed individually.
