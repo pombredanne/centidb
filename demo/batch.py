@@ -26,10 +26,13 @@ import acid
 import acid.encoders
 import acid.engines
 
+from demo_util import store_len
+from demo_util import store_size
+
+
 TMP_PATH = os.environ.get('ACID_TMPDIR', '/tmp') + '/tmp.db'
 INPUT_PATH = os.path.join(os.path.dirname(__file__), 'laforge.json.gz')
-recs = json.load(gzip.open(INPUT_PATH))
-
+recs = json.load(gzip.open(INPUT_PATH))[:100]
 
 def dotestget():
     t0 = time.time()
@@ -68,10 +71,6 @@ print '"Packer","Size","Count","Ratio","BatchSz","Gets/sec","Iters/sec","Iterrec
 def out(*args):
     print '"%s","%.2fkb","%d","%.2f","%d","%.2f","%.2f","%.2f"' % args
 
-def store_count(store):
-    it = store._txn_context.get().iter('', False)
-    return sum(1 for _ in it)
-
 def store_size(store):
     it = store._txn_context.get().iter('', False)
     return sum(len(k) + len(v) for k, v in it)
@@ -85,25 +84,26 @@ for packer in acid.encoders.ZLIB, SNAPPY, LZ4:
     for bsize in 1, 2, 4, 5, 8, 16, 32, 64:
         if os.path.exists(TMP_PATH):
             shutil.rmtree(TMP_PATH)
-        st = acid.open('LmdbEngine', path=TMP_PATH, map_size=1048576*1024)
+        st = acid.open('lmdb:%s' % (TMP_PATH,))
         with st.begin(write=True):
             co = st.add_collection('people',
-                encoder=acid.encoders.make_json_encoder(sort_keys=True))
+                encoder=acid.encoders.make_json_encoder(sort_keys=True),
+                compressor=packer)
 
             keys = [co.put(rec) for rec in recs]
             random.shuffle(keys)
             nextkey = iter(itertools.cycle(keys)).next
 
             before = store_size(st)
-            itemcount = store_count(st)
+            itemcount = store_len(st)
 
             if bsize == 1:
                 iterrecs, te = dotestiter()
                 out('plain', before / 1024., itemcount, 1, 1, dotestget(), te, iterrecs)
-            co.batch(max_recs=bsize, packer=packer)
+            co.strategy.batch(max_recs=bsize)
 
-            itemcount = store_count(st)
-            after = store_count(st)
+            itemcount = store_len(st)
+            after = store_len(st)
 
             iterrecs, te = dotestiter()
             out(packer.name, after / 1024., itemcount, float(before) / after,
