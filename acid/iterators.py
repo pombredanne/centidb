@@ -441,7 +441,7 @@ class BatchV2Iterator(BatchIterator):
         Used to implement batch split, may be removed in future."""
         for i in xrange(self._key_count):
             self._load_item(i)
-            yield self.key, self.value
+            yield self.key, self.data
 
 
 def from_args(it, key, lo, hi, prefix, reverse, max_, include, max_phys):
