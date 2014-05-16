@@ -3,3 +3,4 @@ acid.egg-info
 build
 demo/redcache/t4.lmdb
 docs/_build
+unfinished-docs
