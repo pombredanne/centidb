@@ -51,7 +51,7 @@ def index():
     hi = getint('hi')
     with store.begin():
         posts = list(models.Post.iter(hi=hi, reverse=True, max=5))
-        highest_id = models.Post.find(reverse=True)
+        highest_id = models.Post.collection().findkey(reverse=True)
     t1 = time.time()
     older = None
     newer = None
@@ -62,7 +62,8 @@ def index():
         if posts[0].key < highest_id:
             newer = '?hi=' + str(posts[0].key[0] + 5)
 
-    return templates.get_template('index.html').render({
+    template = templates.get_template('index.html')
+    return template.render({
         'error': bottle.request.query.get('error'),
         'posts': posts,
         'older': older,
@@ -78,8 +79,8 @@ def static(filename):
 
 @bottle.post('/newpost')
 def newpost():
-    post = models.Post(name=bottle.request.POST.get('name'),
-                       text=bottle.request.POST.get('text'))
+    post = models.Post(name=bottle.request.POST.name,
+                       text=bottle.request.POST.text)
     try:
         with store.begin(write=True):
             post.save()

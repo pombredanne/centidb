@@ -681,6 +681,15 @@ class Collection(object):
             return self.encoder.unpack(r.key, r.data)
         return default
 
+    def findkey(self, key=None, lo=None, hi=None, prefix=None, reverse=None,
+                include=False, raw=None, default=None):
+        """Return the first matching key, or None. Like ``next(iterkeys(),
+        default)``."""
+        it = self._iter(key, lo, hi, prefix, reverse, None, include, None)
+        for r in it:
+            return r.key
+        return default
+
     def get(self, key, default=None, raw=False):
         """Fetch a record given its key. If `key` is not a tuple, it is wrapped
         in a 1-tuple. If the record does not exist, return ``None`` or if
