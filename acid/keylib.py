@@ -280,13 +280,13 @@ class FixedOffsetZone(datetime.tzinfo):
         hours, minutes = divmod(seconds / 60, 60)
         self._name = '%s%02d:%02d' % (sign, hours, minutes)
 
-    def utcoffset(self, dt):
+    def utcoffset(self, _dt):
         return self._offset
 
-    def tzname(self, dt):
+    def tzname(self, _dt):
         return self._name
 
-    def dst(self, dt):
+    def dst(self, _dt):
         return self.ZERO
 
     def __repr__(self):

@@ -139,6 +139,9 @@ class BasicIterator(Iterator):
         `prefix`:
             Bytestring prefix for all keys.
     """
+    keys = None
+    data = None
+    raw = None
 
     def __init__(self, engine, prefix):
         self.engine = engine
@@ -231,6 +234,11 @@ class BatchIterator(Iterator):
     _offsets = None
     #: Raw bytestring/buffer physical key for the current batch, or ``None``.
     phys_key = None
+
+    key = None
+    keys = None
+    data = None
+    _reverse = None
 
     def __init__(self, engine, prefix, compressor):
         self.engine = engine

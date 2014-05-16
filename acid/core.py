@@ -60,7 +60,7 @@ def dispatch(lst, *args):
         try:
             if lst[i](*args) is False:
                 lst.pop(i)
-        except Exception, e:
+        except Exception:  # pylint: disable=W0703
             LOG.exception('While invoking %r%r', lst[i], args)
             lst.pop(i)
 
@@ -115,7 +115,7 @@ def open(url, trace_path=None, txn_context=None):
         # Cause "mypkg.acid" to be imported, then use "myengine:/".
         store = acid.open('mypkg.acid+myengine:/')
     """
-    import acid.engines
+    import acid.engines  # pylint: disable=W0621
     engine = acid.engines.from_url(url)
     if trace_path is not None:
         engine = acid.engines.TraceEngine(engine, trace_path=trace_path)
@@ -386,6 +386,8 @@ class BatchStrategy(object):
             return bytes(res.data)  # TODO: buf dies at cursor exit
 
     def _prepare_batch(self, items):
+        """Encode a list of records into their batch representation, returning
+        a tuple of the encoded physical key and value."""
         keytups = [key for key, _ in reversed(items)]
         phys = keylib.packs(keytups, self.prefix)
 
@@ -473,7 +475,7 @@ class BatchStrategy(object):
         for r in iterators.from_args(it, None, lo, hi, prefix,
                                      False, None, True, max_phys):
             if preserve and len(r.keys) > 1:
-                self._write_batch(txn, items, packer)
+                self._write_batch(txn, items, self.compressor)
             else:
                 txn.delete(keylib.packs(r.key, self.prefix))
                 items.append((r.key, r.data))
@@ -836,7 +838,7 @@ class Store(object):
                                 key_func=lambda t: t[:3])
         self._objs = {}
 
-    def begin(self, write=False):
+    def begin(self, write=False):  # pylint: disable=E0202
         """Return a context manager that starts a database transaction when it
         is entered.
 
@@ -853,7 +855,7 @@ class Store(object):
         gracefully abort the current transaction, and return control to below
         with ``with:`` block without causing an exception to be raised.
         """
-        return self._txn_context.begin()
+        return self._txn_context.begin(write)
 
     def in_txn(self, func, write=False):
         """Execute `func()` inside a transaction, and return its return value.
@@ -902,10 +904,10 @@ class Store(object):
         """Rename the collection named `old` to `new`. Any existing
         :py:class:`Collection` instances will be updated. Raises
         :py:class:`acid.errors.NameInUse` on error."""
-        if self.get_meta(KIND_TABLE, name):
+        if self.get_meta(KIND_TABLE, new):
             raise errors.NameInUse('collection %r already exists.' % (new,))
         coll = self[old]
-        info = self.get_info(KIND_TABLE, name)
+        info = self.get_info(KIND_TABLE, old)
         info['name'] = new
 
     def add_collection(self, name, **kwargs):

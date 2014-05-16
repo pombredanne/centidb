@@ -193,7 +193,7 @@ class SkipList(object):
         self.head = self._makeNode(self.max_level, None, None)
         self.nil = self._makeNode(-1, None, None)
         self.tail = self.nil
-        self.head[3:] = [self.nil for x in xrange(self.max_level)]
+        self.head[3:] = [self.nil for _ in xrange(self.max_level)]
         self._update = [self.head] * (1 + self.max_level)
         self.p = 1/math.e
 
@@ -510,7 +510,7 @@ class PlyvelEngine(Engine):
         if not self.snapshot:  # write txn
             self.lock.release()
 
-    def iter(self, k, reverse):
+    def iter(self, k, reverse=Fase):
         it = self._iter()
         it.seek(k)
         if reverse:
@@ -536,7 +536,7 @@ class KyotoEngine(Engine):
         self.put = self.db.set
         self.delete = self.db.remove
 
-    def iter(self, k, reverse):
+    def iter(self, k, reverse=False):
         c = self.db.cursor()
         c.jump(k)
         tup = c.get()
@@ -679,7 +679,7 @@ class TraceEngine(object):
         self._trace('commit')
         return self.engine.commit()
 
-    def iter(self, k, reverse):
+    def iter(self, k, reverse=False):
         iter_id = self._counter
         self._counter += 1
 
