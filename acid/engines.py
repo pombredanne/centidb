@@ -510,7 +510,7 @@ class PlyvelEngine(Engine):
         if not self.snapshot:  # write txn
             self.lock.release()
 
-    def iter(self, k, reverse=Fase):
+    def iter(self, k, reverse=False):
         it = self._iter()
         it.seek(k)
         if reverse:
