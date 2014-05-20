@@ -1,0 +1,64 @@
+@require(error, posts, newer, older, msec)
+<!doctype html>
+<title>CheeseBoard!</title>
+<link rel=stylesheet href=static/style.css>
+
+
+<table id=frame>
+<tr>
+<td id=logo>
+<img src=/static/logo.png><br>
+CheeseBoard
+
+
+<td id=body>
+
+<div id=newpost>
+
+<h3>New Post</h3>
+@if error:
+    <div style="color: red;">@error</div>
+@end
+
+<form action=newpost method=post>
+<table>
+<th>Name:
+<td><input name=name>
+
+<tr>
+<th>Text:
+<td><input name=text>
+</table>
+
+<input type=submit>
+</form>
+</div>
+
+
+<div id=posts>
+<h3>Posts</h3>
+
+@if posts:
+    @for post in posts:
+        <h5><img src=/static/cheese2.png> Comment @str(post.key[0]) from @post.name</h5>
+        <blockquote>@post.text</blockquote>
+@end
+@else:
+    <em>(no posts)</em>
+@end
+
+@if older:
+    <a href="@older">Older</a>
+@end
+
+@if newer:
+    <a href="@newer">Newer</a>
+@end
+
+</div>
+
+<hr>
+
+Served in @str(msec) ms from an 800mhz Raspberry Pi
+
+</table>

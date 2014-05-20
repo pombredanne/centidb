@@ -1,4 +1,6 @@
-docs/_build
-test.ldb
+acid/_acid.so
+acid.egg-info
 build
-_centidb.so
+demo/redcache/t4.lmdb
+docs/_build
+unfinished-docs

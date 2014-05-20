@@ -1,0 +1,59 @@
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: url(bg.jpg);
+}
+
+#logo {
+    height: 100%;
+    width: 310px;
+    text-align: center;
+    color: #b8860b;
+    font-size: 24pt;
+    letter-spacing: 3px;
+    font-variant: small-caps;
+    text-shadow:
+        -1px -1px 0 yellow,
+        1px -1px 0 yellow,
+        -1px 1px 0 yellow,
+        1px 1px 0 yellow;
+}
+
+#logo img {
+    padding-top: 16px;
+}
+
+#posts, #newpost {
+    margin-right: 16px;
+    padding: 8px;
+    border-radius: 16px;
+    background-color: rgba(255,255,255,0.3);
+}
+
+#posts {
+    margin-top: 1em;
+}
+
+
+h3 {
+    border-radius: 8px;
+    margin-top: 0;
+}
+
+#posts h5 img {
+    vertical-align: middle;
+}
+
+#posts h5 {
+    padding: 3px;
+    border-radius: 8px;
+    margin: 0;
+    background: linear-gradient(to right, rgba(255,255,255,0.6) 0%,rgba(255,255,255,0) 70%);
+}
+
+#frame {
+    width: 100%;
+}
