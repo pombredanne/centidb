@@ -137,7 +137,7 @@ class PackedFieldCoder(FieldCoder):
         dct[field.name] = l
 
 
-class FixedPackedFieldCoder(PackedFieldCoder):
+class FixedPackedFieldCoder(FieldCoder):
     def __init__(self, item_size):
         self.item_size = item_size
 
@@ -146,6 +146,10 @@ class FixedPackedFieldCoder(PackedFieldCoder):
         write_varint(self.item_size * len(o))
         for elem in o:
             field.write(elem, w)
+
+    def read_value(self, field, dct, r):
+        n = read_varint(r) / self.item_size
+        dct[field.name] = [field.read(r) for _ in xrange(n)]
 
 
 class DelimitedFieldCoder(FieldCoder):
