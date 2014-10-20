@@ -15,6 +15,7 @@
 #
 
 from __future__ import absolute_import
+import io
 import socket
 
 
@@ -93,6 +94,69 @@ def write_svarint(w, i):
 
 def write_key(w, field, tag):
     write_varint(w, (field << 3) | tag)
+
+
+#
+# Field coder types.
+#
+
+class FieldCoder(object):
+    def write_value(self, field, o, w):
+        pass
+
+    def read_value(self, field, dct, r):
+        pass
+
+
+class ScalarFieldCoder(FieldCoder):
+    def write_value(self, field, o, w):
+        write_key(w, field.field_id, field.WIRE_TYPE)
+        field.write(o, w)
+
+    def read_value(self, field, dct, r):
+        dct[field.name] = field.read(r)
+
+
+class PackedFieldCoder(FieldCoder):
+    def write_value(self, field, o, w):
+        bio = io.BytesIO()
+        for elem in o:
+            field.write(elem, bio.write)
+
+        s = bio.getvalue()
+        write_key(w, field.field_id, LENGTH_DELIMITED)
+        write_varint(w, len(s))
+        w(s)
+
+    def read_value(self, field, dct, r):
+        n = read_varint(r)
+        bio = io.BytesIO(r(n))
+        l = []
+        while bio.tell() < n:
+            l.append(field.read(r))
+        dct[field.name] = l
+
+
+class FixedPackedFieldCoder(PackedFieldCoder):
+    def __init__(self, item_size):
+        self.item_size = item_size
+
+    def write_value(self, field, o, w):
+        write_key(w, field.field_id, LENGTH_DELIMITED)
+        write_varint(self.item_size * len(o))
+        for elem in o:
+            field.write(elem, w)
+
+
+class DelimitedFieldCoder(FieldCoder):
+    def write_value(self, field, o, w):
+        for elem in o:
+            write_key(w, field.field_id, LENGTH_DELIMITED)
+            field.write(elem, w)
+
+    def read_value(self, field, dct, r):
+        l = dct.setdefault(field.name, [])
+        l.append(field.read(r))
 
 
 #
