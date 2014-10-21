@@ -210,8 +210,7 @@ Planned changes are tracked using `Github's issues list
 Blog Posts
 ++++++++++
 
-Various aspects of the library's design have discussed in a series of blog
-posts:
+Various design aspects were discussed in a series of blog posts:
 
 * 2014-01-21: `Cowboy optimization: bisecting a function <http://pythonsweetness.tumblr.com/post/74073984682/cowboy-optimization-bisecting-a-function>`_
 * 2014-01-13: `Acid batch record format <http://pythonsweetness.tumblr.com/post/73248785592/acid-batch-record-format>`_
