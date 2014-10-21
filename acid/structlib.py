@@ -33,6 +33,8 @@ INT64_MAX = (1 << 63) - 1
 INT64_MIN = -(1 << 63)
 UINT64_MAX = (1 << 64) - 1
 
+_undefined = object()
+
 
 #
 # Encoding functions.
@@ -534,6 +536,9 @@ class Struct(object):
     def to_raw(self):
         return self.struct_type._to_raw(self.dct)
 
+    def __len__(self):
+        return len(self.dct)
+
     def __getitem__(self, key):
         return self.dct[key]
 
@@ -549,9 +554,65 @@ class Struct(object):
     def __delitem__(self, key):
         del self.dct[key]
 
+    def __contains__(self, key):
+        return key in self.dct
+    has_key = __contains__
+
+    def __iter__(self):
+        return iter(self.dct)
+
+    def clear(self):
+        self.dct.clear()
+
+    def copy(self):
+        new = type(self)(self.struct_type)
+        new.buf = self.buf
+        new.dct = self.dct.copy()
+        return new
+
+    def get(self, key, default=_undefined):
+        value = self.dct.get(key, default)
+        if value is _undefined:
+            raise KeyError(key)
+        return value
+
     def __repr__(self):
         typ = type(self)
         return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, self.dct)
+
+    def items(self):
+        return self.dct.items()
+
+    def iteritems(self):
+        return self.dct.iteritems()
+
+    def iterkeys(self):
+        return self.dct.iterkeys()
+
+    def itervalues(self):
+        return self.dct.itervalues()
+
+    def keys(self):
+        return self.dct.keys()
+
+    def pop(self, key, default=_undefined):
+        value = self.dct.pop(key, default)
+        if default is _undefined:
+            raise KeyError(key)
+        return value
+
+    def popitem(self):
+        return self.dct.popitem()
+
+    def setdefault(self, key, default=None):
+        return self.dct.setdefault(key, default)
+
+    def update(self, other):
+        for key in other:
+            self[key] = other[key]
+
+    def values(self):
+        return self.dct.values()
 
 
 #: Mapping of _Field subclass to field kind.
