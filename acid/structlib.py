@@ -15,15 +15,16 @@
 #
 
 from __future__ import absolute_import
+import functools
 import io
 import socket
 
 
 # Wire type constants.
-LENGTH_VARIABLE     = 0
-LENGTH_64           = 1
-LENGTH_DELIMITED    = 2
-LENGTH_32           = 5
+WIRE_TYPE_VARIABLE     = 0
+WIRE_TYPE_64           = 1
+WIRE_TYPE_DELIMITED    = 2
+WIRE_TYPE_32           = 5
 
 INT32_MAX = (1 << 31) - 1
 INT32_MIN = -1 << 31
@@ -36,6 +37,13 @@ UINT64_MAX = (1 << 64) - 1
 #
 # Encoding functions.
 #
+
+def exact_read(fp, n=1):
+    s = fp.read(n)
+    if len(s) == n:
+        return s
+    raise ValueError('could not exact read %d bytes' % (n,))
+
 
 def read_varint(r):
     number = 0
@@ -64,6 +72,11 @@ def read_svarint(r):
         return (value >> 1) ^ ~0
 
     return value >> 1
+
+
+def read_key(r):
+    i = read_varint(r)
+    return i >> 3, i & 0x7
 
 
 def write_varint(w, i):
@@ -100,7 +113,7 @@ def write_key(w, field, tag):
 # Field coder types.
 #
 
-class FieldCoder(object):
+class _Coder(object):
     def write_value(self, field, o, w):
         pass
 
@@ -108,7 +121,7 @@ class FieldCoder(object):
         pass
 
 
-class ScalarFieldCoder(FieldCoder):
+class _ScalarCoder(_Coder):
     def write_value(self, field, o, w):
         write_key(w, field.field_id, field.WIRE_TYPE)
         field.write(o, w)
@@ -117,14 +130,14 @@ class ScalarFieldCoder(FieldCoder):
         dct[field.name] = field.read(r)
 
 
-class PackedFieldCoder(FieldCoder):
+class _PackedCoder(_Coder):
     def write_value(self, field, o, w):
         bio = io.BytesIO()
         for elem in o:
             field.write(elem, bio.write)
 
         s = bio.getvalue()
-        write_key(w, field.field_id, LENGTH_DELIMITED)
+        write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
         write_varint(w, len(s))
         w(s)
 
@@ -137,12 +150,12 @@ class PackedFieldCoder(FieldCoder):
         dct[field.name] = l
 
 
-class FixedPackedFieldCoder(FieldCoder):
+class _FixedPackedCoder(_Coder):
     def __init__(self, item_size):
         self.item_size = item_size
 
     def write_value(self, field, o, w):
-        write_key(w, field.field_id, LENGTH_DELIMITED)
+        write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
         write_varint(self.item_size * len(o))
         for elem in o:
             field.write(elem, w)
@@ -152,10 +165,10 @@ class FixedPackedFieldCoder(FieldCoder):
         dct[field.name] = [field.read(r) for _ in xrange(n)]
 
 
-class DelimitedFieldCoder(FieldCoder):
+class _DelimitedCoder(_Coder):
     def write_value(self, field, o, w):
         for elem in o:
-            write_key(w, field.field_id, LENGTH_DELIMITED)
+            write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
             field.write(elem, w)
 
     def read_value(self, field, dct, r):
@@ -181,15 +194,11 @@ class _Field(object):
             insert(self.read(r))
 
 
-class _UnpackedField(object):
-    def readseq(self, r, insert):
-        insert(self.read(r))
-
-
 class _BoolField(_Field):
     TYPES = (bool,)
     KIND = 'bool'
-    WIRE_TYPE = LENGTH_VARIABLE
+    WIRE_TYPE = WIRE_TYPE_VARIABLE
+    COLLECTION_CODER = _FixedPackedCoder(1)
 
     def skip(self, r):
         r(1)
@@ -204,7 +213,8 @@ class _BoolField(_Field):
 class _DoubleField(_Field):
     TYPES = (float,)
     KIND = 'double'
-    WIRE_TYPE = LENGTH_64
+    WIRE_TYPE = WIRE_TYPE_64
+    COLLECTION_CODER = _FixedPackedCoder(8)
 
     def skip(self, r):
         r(8)
@@ -216,7 +226,7 @@ class _DoubleField(_Field):
         w(struct.pack('d', o))
 
 
-class _IntegerField(_Field):
+class _FixedIntegerField(_Field):
     TYPES = (int, long)
 
     def skip(self, r):
@@ -229,38 +239,43 @@ class _IntegerField(_Field):
         w(struct.pack(self.FORMAT, o))
 
 
-class _Fixed32Field(_IntegerField):
+class _Fixed32Field(_FixedIntegerField):
     KIND = 'fixed32'
     SIZE = 4
     FORMAT = '<l'
-    WIRE_TYPE = LENGTH_32
+    WIRE_TYPE = WIRE_TYPE_32
+    COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
-class _Fixed64Field(_IntegerField):
+class _Fixed64Field(_FixedIntegerField):
     KIND = 'fixed64'
     SIZE = 8
     FORMAT = '<q'
-    WIRE_TYPE = LENGTH_64
+    WIRE_TYPE = WIRE_TYPE_64
+    COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
-class _FixedU32Field(_IntegerField):
+class _FixedU32Field(_FixedIntegerField):
     KIND = 'fixedu32'
     SIZE = 4
     FORMAT = '<L'
-    WIRE_TYPE = LENGTH_32
+    WIRE_TYPE = WIRE_TYPE_32
+    COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
-class _FixedU64Field(_IntegerField):
+class _FixedU64Field(_FixedIntegerField):
     KIND = 'fixedu64'
     SIZE = 8
     FORMAT = '<Q'
-    WIRE_TYPE = LENGTH_64
+    WIRE_TYPE = WIRE_TYPE_64
+    COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
 class _FloatField(_Field):
     TYPES = (float,)
     KIND = 'float'
-    WIRE_TYPE = LENGTH_32
+    WIRE_TYPE = WIRE_TYPE_32
+    COLLECTION_CODER = _FixedPackedCoder(4)
 
     def skip(self, r):
         r(4)
@@ -272,10 +287,40 @@ class _FloatField(_Field):
         w(struct.pack('f', o))
 
 
+class _VarField(_Field):
+    TYPES = (int, long)
+    WIRE_TYPE = WIRE_TYPE_VARIABLE
+    COLLECTION_CODER = _PackedCoder()
+
+    def skip(self, r):
+        read_varint(r)
+
+
+class _IntField(_VarField):
+    KIND = 'varint'
+
+    def read(self, r):
+        return read_varint(r)
+
+    def write(self, o, w):
+        write_varint(w, o)
+
+
+class _SintField(_Field):
+    KIND = 'svarint'
+
+    def read(self, r):
+        return read_svarint(r)
+
+    def write(self, o, w):
+        write_svarint(w, o)
+
+
 class _Inet4Field(_Field):
     TYPES = (basestring,)
     KIND = 'inet4'
-    WIRE_TYPE = LENGTH_32
+    WIRE_TYPE = WIRE_TYPE_32
+    COLLECTION_CODER = _FixedPackedCoder(4)
 
     def skip(self, r):
         r(4)
@@ -290,7 +335,8 @@ class _Inet4Field(_Field):
 class _Inet4PortField(_Field):
     TYPES = (basestring,)
     KIND = 'inet4port'
-    WIRE_TYPE = LENGTH_DELIMITED
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _FixedPackedCoder(6)
 
     def skip(self, r):
         r(7)
@@ -313,7 +359,8 @@ class _Inet4PortField(_Field):
 class _Inet6Field(_Field):
     TYPES = (basestring,)
     KIND = 'inet6'
-    WIRE_TYPE = LENGTH_DELIMITED
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _FixedPackedCoder(16)
 
     def skip(self, r):
         r(17)
@@ -330,7 +377,8 @@ class _Inet6Field(_Field):
 class _Inet6PortField(_Field):
     TYPES = (basestring,)
     KIND = 'inet6port'
-    WIRE_TYPE = LENGTH_DELIMITED
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _FixedPackedCoder(18)
 
     def skip(self, r):
         r(19)
@@ -353,7 +401,8 @@ class _Inet6PortField(_Field):
 class _BytesField(_Field):
     TYPES = (bytes,)
     KIND = 'bytes'
-    WIRE_TYPE = LENGTH_DELIMITED
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _DelimitedCoder()
 
     def skip(self, r):
         r(read_varint(r))
@@ -369,7 +418,8 @@ class _BytesField(_Field):
 class _StringField(_Field):
     TYPES = (unicode,)
     KIND = 'str'
-    WIRE_TYPE = LENGTH_DELIMITED
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _DelimitedCoder()
 
     def skip(self, r):
         r(read_varint(r))
@@ -383,6 +433,28 @@ class _StringField(_Field):
         w(e)
 
 
+class _StructField(_Field):
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _DelimitedCoder()
+
+    def __init__(self, field_id, name, struct_type):
+        super(_StructField, self).__init__(field_id, name)
+        self.struct_type = struct_type
+        self.TYPES = (struct_type,)
+
+    def skip(self, r):
+        r(read_varint(r))
+
+    def read(self, r):
+        n = read_varint(r)
+        return Struct.from_raw(self.struct_type, r(n))
+
+    def write(self, o, w):
+        s = o.to_raw()
+        write_varint(w, len(s))
+        w(s)
+
+
 class StructType(object):
     def __init__(self):
         self.fields = []
@@ -393,18 +465,93 @@ class StructType(object):
             self.fields += [None] * ((1 + field_id) - len(self.fields))
         if self.fields[field_id] is not None:
             raise ValueError('duplicate field ID: %r' % (field_id,))
-
+        if field_name in self.field_map:
+            raise ValueError('duplicate field name: %r' % (field_name,))
         klass = FIELD_KINDS.get(kind)
         if klass is None:
             raise ValueError('unknown kind: %r' % (kind,))
 
+        field = klass(field_id, field_name)
+        if collection:
+            field.coder = field.COLLECTION_CODER
+        else:
+            field.coder = _ScalarCoder()
+
+        self.fields[field_id] = field
+        self.field_map[field_name] = field
+
+    def _skip(self, r, tag):
+        if tag == WIRE_TYPE_VARIABLE:
+            read_varint(r)
+        elif tag == WIRE_TYPE_64:
+            r(8)
+        elif tag == WIRE_TYPE_DELIMITED:
+            r(read_varint(r))
+        elif tag == WIRE_TYPE_32:
+            r(4)
+        assert 0
+
+    def _from_raw(self, buf):
+        dct = {}
+        bio = io.BytesIO(buf)
+        r = functools.partial(exact_read, bio)
+        flen = len(self.fields)
+        blen = len(buf)
+        while bio.tell() < blen:
+            field_id, tag = read_key(r)
+            if field_id < flen and self.fields[field_id]:
+                field = self.fields[field_id]
+                field.coder.read_value(field, dct, r)
+            else:
+                self._skip(r, tag)
+        return dct
+
+    def _to_raw(self, dct):
+        bio = io.BytesIO()
+        for name, value in dct.iteritems():
+            field = self.field_map[name]
+            field.coder.write_value(field, value, bio.write)
+        return bio.getvalue()
+
 
 class Struct(object):
-    __slots__ = ('struct_type', 'dct')
-    dct = None
+    __slots__ = ('struct_type', 'buf', 'dct')
     def __init__(self, struct_type):
         self.struct_type = struct_type
+        self.buf = ''
+        self.dct = {}
 
+    @classmethod
+    def from_raw(cls, struct_type, buf, source=None):
+        self = cls(struct_type)
+        self.buf = buf
+        self.reset()
+        return self
+
+    def reset(self):
+        self.dct = self.struct_type._from_raw(self.buf)
+
+    def to_raw(self):
+        return self.struct_type._to_raw(self.dct)
+
+    def __getitem__(self, key):
+        return self.dct[key]
+
+    def __setitem__(self, key, value):
+        field_type = self.struct_type.field_map.get(key)
+        if field_type is None:
+            raise TypeError('struct_type has no %r key' % (key,))
+        if not isinstance(value, field_type.TYPES):
+            raise TypeError('struct_type requires %r, not %r' %\
+                            (field_type.TYPES, type(value)))
+        self.dct[key] = value
+
+    def __delitem__(self, key):
+        del self.dct[key]
+
+    def __repr__(self):
+        typ = type(self)
+        return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, self.dct)
 
 
 #: Mapping of _Field subclass to field kind.
