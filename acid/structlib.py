@@ -18,6 +18,7 @@ from __future__ import absolute_import
 import functools
 import io
 import socket
+import struct
 
 
 # Wire type constants.
@@ -217,9 +218,6 @@ class _BoolField(_Field):
     WIRE_TYPE = WIRE_TYPE_VARIABLE
     COLLECTION_CODER = _FixedPackedCoder(1)
 
-    def skip(self, r):
-        r(1)
-
     def read(self, buf, pos):
         return pos+1, buf[pos] == '\x01'
 
@@ -233,9 +231,6 @@ class _DoubleField(_Field):
     WIRE_TYPE = WIRE_TYPE_64
     COLLECTION_CODER = _FixedPackedCoder(8)
 
-    def skip(self, r):
-        r(8)
-
     def read(self, buf, pos):
         epos = pos + 8
         return epos, struct.unpack('d', buf[pos:epos])[0]
@@ -246,9 +241,6 @@ class _DoubleField(_Field):
 
 class _FixedIntegerField(_Field):
     TYPES = (int, long)
-
-    def skip(self, r):
-        r(self.SIZE)
 
     def read(self, buf, pos):
         epos = pos + self.SIZE
@@ -296,9 +288,6 @@ class _FloatField(_Field):
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(4)
 
-    def skip(self, r):
-        r(4)
-
     def read(self, buf, pos):
         epos = pos + 4
         return epos, struct.unpack('f', buf[pos:epos])[0]
@@ -311,9 +300,6 @@ class _VarField(_Field):
     TYPES = (int, long)
     WIRE_TYPE = WIRE_TYPE_VARIABLE
     COLLECTION_CODER = _PackedCoder()
-
-    def skip(self, r):
-        read_varint(r)
 
 
 class _IntField(_VarField):
@@ -342,9 +328,6 @@ class _Inet4Field(_Field):
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(4)
 
-    def skip(self, buf, pos):
-        return pos + 4
-
     def read(self, buf, pos):
         epos = pos + 4
         return epos, socket.inet_ntop(socket.AF_INET, buf[pos:epos])
@@ -359,9 +342,6 @@ class _Inet4PortField(_Field):
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(6)
 
-    def skip(self, buf, pos):
-        return pos + 7
-
     def read(self, buf, pos):
         addr = socket.inet_ntop(socket.AF_INET, buf[pos+1:pos+5])
         port = struct.unpack('<H', buf[pos+5:pos+7])
@@ -373,7 +353,7 @@ class _Inet4PortField(_Field):
             raise ValueError('bad inet4port format')
         w(6)
         w(socket.inet_pton(socket.AF_INET, addr))
-        w(struct.pack('>H', port))
+        w(struct.pack('>H', int(port, 10)))
 
 
 class _Inet6Field(_Field):
@@ -381,9 +361,6 @@ class _Inet6Field(_Field):
     KIND = 'inet6'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(16)
-
-    def skip(self, r):
-        r(17)
 
     def read(self, buf, pos):
         epos = pos + 17
@@ -400,13 +377,10 @@ class _Inet6PortField(_Field):
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(18)
 
-    def skip(self, r):
-        r(19)
-
     def read(self, buf, pos):
         epos = pos + 19
         addr = socket.inet_ntop(socket.AF_INET6, buf[pos+1:pos+17])
-        port = struct.unpack('<H', buf[pos+17:epos])
+        port, = struct.unpack('<H', buf[pos+17:epos])
         return epos, '%s:%s' % (addr, port)
 
     def write(self, o, w):
@@ -415,7 +389,7 @@ class _Inet6PortField(_Field):
             raise ValueError('bad inet6port format')
         write_varint(w, 18)
         w(socket.inet_pton(socket.AF_INET6, addr))
-        w(struct.pack('>H', port))
+        w(struct.pack('<H', int(port, 10)))
 
 
 class _BytesField(_Field):
@@ -423,9 +397,6 @@ class _BytesField(_Field):
     KIND = 'bytes'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
-
-    def skip(self, r):
-        r(read_varint(r))
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -442,9 +413,6 @@ class _StringField(_Field):
     KIND = 'str'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
-
-    def skip(self, r):
-        r(read_varint(r))
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -465,9 +433,6 @@ class _StructField(_Field):
         super(_StructField, self).__init__(field_id, name, collection)
         self.struct_type = struct_type
         self.TYPES = (struct_type,)
-
-    def skip(self, r):
-        r(read_varint(r))
 
     def read(self, buf, pos):
         pos, n = read_varint(r)
