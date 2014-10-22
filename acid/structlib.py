@@ -110,8 +110,8 @@ class _Coder(object):
     def write_value(self, field, o, w):
         pass
 
-    def read_value(self, field, dct, buf, pos):
-        return pos, None
+    def read_value(self, field, buf, pos):
+        return pos
 
 
 class _ScalarCoder(_Coder):
@@ -119,9 +119,8 @@ class _ScalarCoder(_Coder):
         write_key(w, field.field_id, field.WIRE_TYPE)
         field.write(o, w)
 
-    def read_value(self, field, dct, buf, pos):
-        pos, dct[field.name] = field.read(buf, pos)
-        return pos
+    def read_value(self, field, buf, pos):
+        return field.read(buf, pos)
 
 
 class _PackedCoder(_Coder):
@@ -135,7 +134,7 @@ class _PackedCoder(_Coder):
         write_varint(w, len(s))
         w(s)
 
-    def read_value(self, field, dct, buf, pos):
+    def read_value(self, field, buf, pos):
         pos, n = read_varint(buf, pos)
         bio = memoryview(buf)[pos:pos+n]
         bpos = 0
@@ -143,8 +142,7 @@ class _PackedCoder(_Coder):
         while bpos < n:
             bpos, value = field.read(bio, bpos)
             l.append(value)
-        dct[field.name] = l
-        return pos + n
+        return pos + n, l
 
 
 class _FixedPackedCoder(_Coder):
@@ -157,14 +155,13 @@ class _FixedPackedCoder(_Coder):
         for elem in o:
             field.write(elem, w)
 
-    def read_value(self, field, dct, buf, pos):
+    def read_value(self, field, buf, pos):
         pos, n = read_varint(buf, pos)
         l = []
         for _ in xrange(n / self.item_size):
             pos, value = field.read(buf, pos)
             l.append(value)
-        dct[field.name] = l
-        return pos
+        return pos + n, l
 
 
 class _DelimitedCoder(_Coder):
@@ -173,10 +170,17 @@ class _DelimitedCoder(_Coder):
             write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
             field.write(elem, w)
 
-    def read_value(self, field, dct, buf, pos):
-        pos, value = field.read(buf, pos)
-        dct.setdefault(field.name, []).append(value)
-        return pos
+    def read_value(self, field, buf, pos):
+        l = []
+        blen = len(buf)
+        field_id = field.field_id
+        pos2 = pos
+        while field_id == field.field_id and pos < blen:
+            pos, value = field.read(buf, pos2)
+            l.append(value)
+            pos2, field_id, tag = read_key(buf, pos)
+
+        return pos, l
 
 
 #
@@ -470,8 +474,9 @@ class StructType(object):
 
     def _skip(self, buf, pos, tag):
         if tag == WIRE_TYPE_VARIABLE:
-            epos, _ = read_varint(buf, pos)
-            return epos
+            while ord(buf[pos]) & 0x80:
+                pos += 1
+            return pos + 1
         elif tag == WIRE_TYPE_64:
             return pos + 8
         elif tag == WIRE_TYPE_DELIMITED:
@@ -481,19 +486,30 @@ class StructType(object):
             return pos + 4
         assert 0
 
-    def _from_raw(self, buf):
-        dct = {}
+    def iter_values(self, buf):
         flen = len(self.fields)
+        blen = len(buf)
+        pos = 0
+        while pos < blen and field_id < flen:
+            pos, field_id, tag = read_key(buf, pos)
+            if field_id < flen and self.fields[field_id]:
+                field = self.fields[field_id]
+                pos, value = field.coder.read_value(field, buf, pos)
+                yield field.name, value
+            else:
+                pos = self._skip(buf, pos, tag)
+
+    def read_value(self, buf, field):
+        target_field_id = field.field_id
+        field_id = -1
         blen = len(buf)
         pos = 0
         while pos < blen:
             pos, field_id, tag = read_key(buf, pos)
-            if field_id < flen and self.fields[field_id]:
-                field = self.fields[field_id]
-                pos = field.coder.read_value(field, dct, buf, pos)
-            else:
-                pos = self._skip(buf, pos, tag)
-        return dct
+            if field_id == target_field_id:
+                _, value = field.coder.read_value(field, buf, pos)
+                return value
+            pos = self._skip(buf, pos, tag)
 
     def _to_raw(self, dct):
         bio = io.BytesIO()
@@ -506,49 +522,85 @@ class StructType(object):
 
 
 class Struct(object):
-    __slots__ = ('struct_type', 'buf', 'dct')
+    __slots__ = ('struct_type', 'buf', 'obuf', 'dct')
     def __init__(self, struct_type):
         self.struct_type = struct_type
         self.buf = ''
+        self.obuf = ''
         self.dct = {}
 
     @classmethod
     def from_raw(cls, struct_type, buf, source=None):
         self = cls(struct_type)
         self.buf = buf
-        self.reset()
+        self.obuf = buf
         return self
 
     def reset(self):
-        self.dct = self.struct_type._from_raw(self.buf)
+        self.buf = self.obuf
+        self.dct = {}
+
+    def _explode(self):
+        if self.buf:
+            for key, value in self.struct_type.iter_values(self.buf):
+                self.dct.setdefault(key, value)
+            self.buf = None
 
     def to_raw(self):
         return self.struct_type._to_raw(self.dct)
 
     def __len__(self):
+        self._explode()
         return len(self.dct)
 
     def __getitem__(self, key):
-        return self.dct[key]
+        value = self.dct.get(key, _undefined)
+        if value is not _undefined:
+            return value
+
+        field = self.struct_type.field_map[key]
+        if self.buf:
+            value = self.struct_type.read_value(self.buf, field)
+            self.dct[key] = value
+            if value is not None:
+                return value
+        raise KeyError(key)
+
+    def get(self, key, default=None):
+        value = self.dct.get(key, _undefined)
+        if value is _undefined:
+            field = self.struct_type.field_map.get(key)
+            if field is None:
+                return default
+
+            if self.buf:
+                value = self.struct_type.read_value(self.buf, field)
+                self.dct[key] = value
+                if value is None:
+                    value = default
+
+        return value
 
     def __setitem__(self, key, value):
-        field_type = self.struct_type.field_map.get(key)
-        if field_type is None:
-            raise TypeError('struct_type has no %r key' % (key,))
-        field_type.type_check(value)
+        field = self.struct_type.field_map[key]
+        field.type_check(value)
         self.dct[key] = value
 
     def __delitem__(self, key):
+        self._explode()
         del self.dct[key]
+        self.dct[key] = None
 
     def __contains__(self, key):
-        return key in self.dct
+        return self.get(key) is not None
     has_key = __contains__
 
     def __iter__(self):
+        self._explode()
         return iter(self.dct)
 
     def clear(self):
+        self.buf = None
         self.dct.clear()
 
     def copy(self):
@@ -557,49 +609,55 @@ class Struct(object):
         new.dct = self.dct.copy()
         return new
 
-    def get(self, key, default=_undefined):
-        value = self.dct.get(key, default)
-        if value is _undefined:
-            raise KeyError(key)
-        return value
-
     def __repr__(self):
         typ = type(self)
         return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, self.dct)
 
     def items(self):
+        self._explode()
         return self.dct.items()
 
     def iteritems(self):
+        self._explode()
         return self.dct.iteritems()
 
     def iterkeys(self):
-        return self.dct.iterkeys()
+        self._explode()
+        return (k for k, v in self.dct.iteritems() if v is not None)
 
     def itervalues(self):
-        return self.dct.itervalues()
+        self._explode()
+        return (v for v in self.dct.itervalues() if v is not None)
 
     def keys(self):
-        return self.dct.keys()
+        return list(self.iterkeys())
+
+    def values(self):
+        return list(self.itervalues())
 
     def pop(self, key, default=_undefined):
-        value = self.dct.pop(key, default)
+        value = self.get(key)
+        if value is not None:
+            self.dct[key] = None
+            return value
+
         if default is _undefined:
             raise KeyError(key)
-        return value
+        return default
 
     def popitem(self):
-        return self.dct.popitem()
+        k = next(self.iterkeys(), None)
+        if k is None:
+            raise KeyError('Struct is empty')
+        return k, self.pop(k)
 
     def setdefault(self, key, default=None):
-        return self.dct.setdefault(key, default)
+        if self.get(key) is None:
+            self[key] = default
 
     def update(self, other):
         for key in other:
             self[key] = other[key]
-
-    def values(self):
-        return self.dct.values()
 
 
 #: Mapping of _Field subclass to field kind.
