@@ -503,12 +503,13 @@ class StructType(object):
         flen = len(self.fields)
         blen = len(buf)
         pos = 0
-        while pos < blen and field_id < flen:
+        while pos < blen:
             pos, field_id, tag = read_key(buf, pos)
-            if field_id < flen and self.fields[field_id]:
+            if field_id < flen:
                 field = self.fields[field_id]
-                pos, value = field.coder.read_value(field, buf, pos)
-                yield field.name, value
+                if field:
+                    pos, value = field.coder.read_value(field, buf, pos)
+                    yield field.name, value
             else:
                 pos = self._skip(buf, pos, tag)
 
@@ -559,6 +560,7 @@ class Struct(object):
             self.buf = None
 
     def to_raw(self):
+        self._explode()
         return self.struct_type._to_raw(self.dct)
 
     def __len__(self):
@@ -600,7 +602,8 @@ class Struct(object):
 
     def __delitem__(self, key):
         self._explode()
-        del self.dct[key]
+        if self.get(key) is None:
+            raise KeyError(key)
         self.dct[key] = None
 
     def __contains__(self, key):
@@ -623,6 +626,7 @@ class Struct(object):
 
     def __repr__(self):
         typ = type(self)
+        self._explode()
         return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, self.dct)
 
     def items(self):
