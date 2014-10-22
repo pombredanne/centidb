@@ -19,6 +19,7 @@ import functools
 import io
 import socket
 import struct
+import uuid
 
 
 # Wire type constants.
@@ -442,6 +443,22 @@ class _StringField(_Field):
         w(e)
 
 
+class _UuidField(_Field):
+    TYPES = (uuid.UUID,)
+    KIND = 'uuid'
+    WIRE_TYPE = WIRE_TYPE_DELIMITED
+    COLLECTION_CODER = _DelimitedCoder()
+
+    def read(self, buf, pos):
+        pos, n = read_varint(buf, pos)
+        epos = pos + n
+        return epos, uuid.UUID(None, buf[pos:epos])
+
+    def write(self, o, w):
+        write_varint(w, 16)
+        w(o.get_bytes())
+
+
 class _StructField(_Field):
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
@@ -568,8 +585,8 @@ class Struct(object):
         return len(self.dct)
 
     def __getitem__(self, key):
-        value = self.dct.get(key, _undefined)
-        if value is not _undefined:
+        value = self.dct.get(key)
+        if value is not None:
             return value
 
         field = self.struct_type.field_map[key]
@@ -610,10 +627,6 @@ class Struct(object):
         return self.get(key) is not None
     has_key = __contains__
 
-    def __iter__(self):
-        self._explode()
-        return iter(self.dct)
-
     def clear(self):
         self.buf = None
         self.dct.clear()
@@ -626,20 +639,17 @@ class Struct(object):
 
     def __repr__(self):
         typ = type(self)
-        self._explode()
-        return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, self.dct)
-
-    def items(self):
-        self._explode()
-        return self.dct.items()
+        d = dict(self.iteritems())
+        return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, d)
 
     def iteritems(self):
         self._explode()
-        return self.dct.iteritems()
+        return (t for t in self.dct.iteritems() if t[1] is not None)
 
     def iterkeys(self):
         self._explode()
         return (k for k, v in self.dct.iteritems() if v is not None)
+    __iter__ = iterkeys
 
     def itervalues(self):
         self._explode()
@@ -650,6 +660,9 @@ class Struct(object):
 
     def values(self):
         return list(self.itervalues())
+
+    def items(self):
+        return list(self.iteritems())
 
     def pop(self, key, default=_undefined):
         value = self.get(key)
