@@ -40,23 +40,14 @@ _undefined = object()
 # Encoding functions.
 #
 
-def exact_read(fp, n=1):
-    s = fp.read(n)
-    if len(s) == n:
-        return s
-    raise ValueError('could not exact read %d bytes' % (n,))
-
-
-def read_varint(r):
+def read_varint(buf, pos):
     number = 0
     shift = 0
 
     while True:
-        ch = r()
-        if (not ch) and (not number):
-            raise EOFError
+        byte = ord(buf[pos])
+        pos += 1
 
-        byte = ord(ch)
         number |= (byte & 0x7f) << shift
         shift += 7
 
@@ -65,20 +56,19 @@ def read_varint(r):
 
     if number > INT64_MAX:
         number -= 1 << 64
-    return number
+    return pos, number
 
 
-def read_svarint(r):
-    value = read_varint(r)
+def read_svarint(buf, pos):
+    pos, value = read_varint(buf, pos)
     if value & 1:
-        return (value >> 1) ^ ~0
+        return pos, ((value >> 1) ^ ~0)
+    return pos, value >> 1
 
-    return value >> 1
 
-
-def read_key(r):
-    i = read_varint(r)
-    return i >> 3, i & 0x7
+def read_key(buf, pos):
+    pos, i = read_varint(buf, pos)
+    return pos, i >> 3, i & 0x7
 
 
 def write_varint(w, i):
@@ -119,8 +109,8 @@ class _Coder(object):
     def write_value(self, field, o, w):
         pass
 
-    def read_value(self, field, dct, r):
-        pass
+    def read_value(self, field, dct, buf, pos):
+        return pos, None
 
 
 class _ScalarCoder(_Coder):
@@ -128,8 +118,9 @@ class _ScalarCoder(_Coder):
         write_key(w, field.field_id, field.WIRE_TYPE)
         field.write(o, w)
 
-    def read_value(self, field, dct, r):
-        dct[field.name] = field.read(r)
+    def read_value(self, field, dct, buf, pos):
+        pos, dct[field.name] = field.read(buf, pos)
+        return pos
 
 
 class _PackedCoder(_Coder):
@@ -143,14 +134,16 @@ class _PackedCoder(_Coder):
         write_varint(w, len(s))
         w(s)
 
-    def read_value(self, field, dct, r):
-        n = read_varint(r)
-        bio = io.BytesIO(r(n))
-        r = functools.partial(exact_read, bio)
+    def read_value(self, field, dct, buf, pos):
+        pos, n = read_varint(buf, pos)
+        bio = memoryview(buf)[pos:pos+n]
+        bpos = 0
         l = []
-        while bio.tell() < n:
-            l.append(field.read(r))
+        while bpos < n:
+            bpos, value = field.read(bio, bpos)
+            l.append(value)
         dct[field.name] = l
+        return pos + n
 
 
 class _FixedPackedCoder(_Coder):
@@ -163,9 +156,14 @@ class _FixedPackedCoder(_Coder):
         for elem in o:
             field.write(elem, w)
 
-    def read_value(self, field, dct, r):
-        n = read_varint(r) / self.item_size
-        dct[field.name] = [field.read(r) for _ in xrange(n)]
+    def read_value(self, field, dct, buf, pos):
+        pos, n = read_varint(buf, pos)
+        l = []
+        for _ in xrange(n / self.item_size):
+            pos, value = field.read(buf, pos)
+            l.append(value)
+        dct[field.name] = l
+        return pos
 
 
 class _DelimitedCoder(_Coder):
@@ -174,9 +172,10 @@ class _DelimitedCoder(_Coder):
             write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
             field.write(elem, w)
 
-    def read_value(self, field, dct, r):
-        l = dct.setdefault(field.name, [])
-        l.append(field.read(r))
+    def read_value(self, field, dct, buf, pos):
+        pos, value = field.read(buf, pos)
+        dct.setdefault(field.name, []).append(value)
+        return pos
 
 
 #
@@ -211,10 +210,6 @@ class _Field(object):
             raise TypeError('field %r requires list of %r' %\
                             (self.name, self.TYPES))
 
-    def readseq(self, r, insert):
-        for i in xrange(readvarint(r)):
-            insert(self.read(r))
-
 
 class _BoolField(_Field):
     TYPES = (bool,)
@@ -225,8 +220,8 @@ class _BoolField(_Field):
     def skip(self, r):
         r(1)
 
-    def read(self, r):
-        return bool(r(1))
+    def read(self, buf, pos):
+        return pos+1, buf[pos] == '\x01'
 
     def write(self, o, w):
         w(chr(o))
@@ -241,8 +236,9 @@ class _DoubleField(_Field):
     def skip(self, r):
         r(8)
 
-    def read(self, r):
-        return struct.unpack('d', r(8))[0]
+    def read(self, buf, pos):
+        epos = pos + 8
+        return epos, struct.unpack('d', buf[pos:epos])[0]
 
     def write(self, o, w):
         w(struct.pack('d', o))
@@ -254,8 +250,9 @@ class _FixedIntegerField(_Field):
     def skip(self, r):
         r(self.SIZE)
 
-    def read(self, r):
-        return struct.unpack(self.FORMAT, r(self.SIZE))[0]
+    def read(self, buf, pos):
+        epos = pos + self.SIZE
+        return epos, struct.unpack(self.FORMAT, buf[pos:epos])[0]
 
     def write(self, o, w):
         w(struct.pack(self.FORMAT, o))
@@ -302,8 +299,9 @@ class _FloatField(_Field):
     def skip(self, r):
         r(4)
 
-    def read(self, r):
-        return struct.unpack('f', r(4))[0]
+    def read(self, buf, pos):
+        epos = pos + 4
+        return epos, struct.unpack('f', buf[pos:epos])[0]
 
     def write(self, o, w):
         w(struct.pack('f', o))
@@ -321,8 +319,8 @@ class _VarField(_Field):
 class _IntField(_VarField):
     KIND = 'varint'
 
-    def read(self, r):
-        return read_varint(r)
+    def read(self, buf, pos):
+        return read_varint(buf, pos)
 
     def write(self, o, w):
         write_varint(w, o)
@@ -331,7 +329,7 @@ class _IntField(_VarField):
 class _SintField(_Field):
     KIND = 'svarint'
 
-    def read(self, r):
+    def read(self, buf, pos):
         return read_svarint(r)
 
     def write(self, o, w):
@@ -344,11 +342,12 @@ class _Inet4Field(_Field):
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(4)
 
-    def skip(self, r):
-        r(4)
+    def skip(self, buf, pos):
+        return pos + 4
 
-    def read(self, r):
-        return socket.inet_ntop(socket.AF_INET, r(4))
+    def read(self, buf, pos):
+        epos = pos + 4
+        return epos, socket.inet_ntop(socket.AF_INET, buf[pos:epos])
 
     def write(self, o, w):
         w(socket.inet_pton(socket.AF_INET, o))
@@ -360,14 +359,13 @@ class _Inet4PortField(_Field):
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(6)
 
-    def skip(self, r):
-        r(7)
+    def skip(self, buf, pos):
+        return pos + 7
 
-    def read(self, r):
-        r(1)
-        addr = socket.inet_ntop(socket.AF_INET, r(4))
-        port = struct.unpack('<H', r(2))
-        return '%s:%s' % (addr, port)
+    def read(self, buf, pos):
+        addr = socket.inet_ntop(socket.AF_INET, buf[pos+1:pos+5])
+        port = struct.unpack('<H', buf[pos+5:pos+7])
+        return pos+7, '%s:%s' % (addr, port)
 
     def write(self, o, w):
         addr, sep, port = o.rpartition(':')
@@ -387,9 +385,9 @@ class _Inet6Field(_Field):
     def skip(self, r):
         r(17)
 
-    def read(self, r):
-        r(1)
-        return socket.inet_ntop(socket.AF_INET6, r(16))
+    def read(self, buf, pos):
+        epos = pos + 17
+        return epos, socket.inet_ntop(socket.AF_INET6, buf[pos+1:epos])
 
     def write(self, o, w):
         write_varint(w, 16)
@@ -405,11 +403,11 @@ class _Inet6PortField(_Field):
     def skip(self, r):
         r(19)
 
-    def read(self, r):
-        r(1)
-        addr = socket.inet_ntop(socket.AF_INET6, r(16))
-        port = struct.unpack('<H', r(2))
-        return '%s:%s' % (addr, port)
+    def read(self, buf, pos):
+        epos = pos + 19
+        addr = socket.inet_ntop(socket.AF_INET6, buf[pos+1:pos+17])
+        port = struct.unpack('<H', buf[pos+17:epos])
+        return epos, '%s:%s' % (addr, port)
 
     def write(self, o, w):
         addr, sep, port = o.rpartition(':')
@@ -429,8 +427,10 @@ class _BytesField(_Field):
     def skip(self, r):
         r(read_varint(r))
 
-    def read(self, r):
-        return r(read_varint(r))
+    def read(self, buf, pos):
+        pos, n = read_varint(buf, pos)
+        epos = pos + n
+        return epos, buf[pos:epos]
 
     def write(self, o, w):
         write_varint(w, len(o))
@@ -446,8 +446,10 @@ class _StringField(_Field):
     def skip(self, r):
         r(read_varint(r))
 
-    def read(self, r):
-        return r(read_varint(r)).decode('utf-8')
+    def read(self, buf, pos):
+        pos, n = read_varint(buf, pos)
+        epos = pos + n
+        return epos, buf[pos:epos].decode('utf-8')
 
     def write(self, o, w):
         e = o.encode('utf-8')
@@ -467,9 +469,10 @@ class _StructField(_Field):
     def skip(self, r):
         r(read_varint(r))
 
-    def read(self, r):
-        n = read_varint(r)
-        return Struct.from_raw(self.struct_type, r(n))
+    def read(self, buf, pos):
+        pos, n = read_varint(r)
+        epos = pos + n
+        return epos, Struct.from_raw(self.struct_type, buf[pos:epos])
 
     def write(self, o, w):
         s = o.to_raw()
@@ -500,30 +503,31 @@ class StructType(object):
         self.sorted_ids.append(field_id)
         self.sorted_ids.sort()
 
-    def _skip(self, r, tag):
+    def _skip(self, buf, pos, tag):
         if tag == WIRE_TYPE_VARIABLE:
-            read_varint(r)
+            epos, _ = read_varint(buf, pos)
+            return epos
         elif tag == WIRE_TYPE_64:
-            r(8)
+            return pos + 8
         elif tag == WIRE_TYPE_DELIMITED:
-            r(read_varint(r))
+            epos, n = read_varint(buf, pos)
+            return epos + n
         elif tag == WIRE_TYPE_32:
-            r(4)
+            return pos + 4
         assert 0
 
     def _from_raw(self, buf):
         dct = {}
-        bio = io.BytesIO(buf)
-        r = functools.partial(exact_read, bio)
         flen = len(self.fields)
         blen = len(buf)
-        while bio.tell() < blen:
-            field_id, tag = read_key(r)
+        pos = 0
+        while pos < blen:
+            pos, field_id, tag = read_key(buf, pos)
             if field_id < flen and self.fields[field_id]:
                 field = self.fields[field_id]
-                field.coder.read_value(field, dct, r)
+                pos = field.coder.read_value(field, dct, buf, pos)
             else:
-                self._skip(r, tag)
+                pos = self._skip(buf, pos, tag)
         return dct
 
     def _to_raw(self, dct):
