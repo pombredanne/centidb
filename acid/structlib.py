@@ -146,6 +146,7 @@ class _PackedCoder(_Coder):
     def read_value(self, field, dct, r):
         n = read_varint(r)
         bio = io.BytesIO(r(n))
+        r = functools.partial(exact_read, bio)
         l = []
         while bio.tell() < n:
             l.append(field.read(r))
@@ -187,9 +188,28 @@ class _Field(object):
     WIRE_TYPE = None
     KIND = None
 
-    def __init__(self, field_id, name):
+    def __init__(self, field_id, name, collection):
         self.field_id = field_id
         self.name = name
+        self.collection = collection
+        if collection:
+            self.coder = self.COLLECTION_CODER
+            self.type_check = self.type_check_collection
+        else:
+            self.coder = _ScalarCoder()
+
+    def type_check(self, value):
+        if not isinstance(value, self.TYPES):
+            raise TypeError('field %r requires %r, not %r' %\
+                            (self.name, self.TYPES, type(value)))
+
+    def type_check_collection(self, value):
+        if not isinstance(value, list):
+            raise TypeError('field %r requires %r, not %r' %\
+                            (self.name, list, type(value)))
+        if not all(isinstance(v, self.TYPES) for v in value):
+            raise TypeError('field %r requires list of %r' %\
+                            (self.name, self.TYPES))
 
     def readseq(self, r, insert):
         for i in xrange(readvarint(r)):
@@ -372,7 +392,7 @@ class _Inet6Field(_Field):
         return socket.inet_ntop(socket.AF_INET6, r(16))
 
     def write(self, o, w):
-        w(16)
+        write_varint(w, 16)
         w(socket.inet_pton(socket.AF_INET6, o))
 
 
@@ -395,7 +415,7 @@ class _Inet6PortField(_Field):
         addr, sep, port = o.rpartition(':')
         if not (sep and port.isdigit()):
             raise ValueError('bad inet6port format')
-        w(18)
+        write_varint(w, 18)
         w(socket.inet_pton(socket.AF_INET6, addr))
         w(struct.pack('>H', port))
 
@@ -439,8 +459,8 @@ class _StructField(_Field):
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
 
-    def __init__(self, field_id, name, struct_type):
-        super(_StructField, self).__init__(field_id, name)
+    def __init__(self, field_id, name, collection, struct_type):
+        super(_StructField, self).__init__(field_id, name, collection)
         self.struct_type = struct_type
         self.TYPES = (struct_type,)
 
@@ -461,6 +481,7 @@ class StructType(object):
     def __init__(self):
         self.fields = []
         self.field_map = {}
+        self.sorted_ids = []
 
     def add_field(self, field_name, field_id, kind, collection):
         if len(self.fields) < (1 + field_id):
@@ -473,14 +494,11 @@ class StructType(object):
         if klass is None:
             raise ValueError('unknown kind: %r' % (kind,))
 
-        field = klass(field_id, field_name)
-        if collection:
-            field.coder = field.COLLECTION_CODER
-        else:
-            field.coder = _ScalarCoder()
-
+        field = klass(field_id, field_name, collection)
         self.fields[field_id] = field
         self.field_map[field_name] = field
+        self.sorted_ids.append(field_id)
+        self.sorted_ids.sort()
 
     def _skip(self, r, tag):
         if tag == WIRE_TYPE_VARIABLE:
@@ -510,9 +528,11 @@ class StructType(object):
 
     def _to_raw(self, dct):
         bio = io.BytesIO()
-        for name, value in dct.iteritems():
-            field = self.field_map[name]
-            field.coder.write_value(field, value, bio.write)
+        for field_id in self.sorted_ids:
+            field = self.fields[field_id]
+            value = dct.get(field.name)
+            if value is not None:
+                field.coder.write_value(field, value, bio.write)
         return bio.getvalue()
 
 
@@ -546,9 +566,7 @@ class Struct(object):
         field_type = self.struct_type.field_map.get(key)
         if field_type is None:
             raise TypeError('struct_type has no %r key' % (key,))
-        if not isinstance(value, field_type.TYPES):
-            raise TypeError('struct_type requires %r, not %r' %\
-                            (field_type.TYPES, type(value)))
+        field_type.type_check(value)
         self.dct[key] = value
 
     def __delitem__(self, key):
