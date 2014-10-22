@@ -505,11 +505,11 @@ class StructType(object):
         blen = len(buf)
         pos = 0
         while pos < blen:
-            pos, field_id, tag = read_key(buf, pos)
-            if field_id == target_field_id:
+            pos, i = read_varint(buf, pos)
+            if (i >> 3) == target_field_id:
                 _, value = field.coder.read_value(field, buf, pos)
                 return value
-            pos = self._skip(buf, pos, tag)
+            pos = self._skip(buf, pos, i & 0x07)
 
     def _to_raw(self, dct):
         bio = io.BytesIO()
