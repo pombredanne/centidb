@@ -115,6 +115,9 @@ class _Coder(object):
 
 
 class _ScalarCoder(_Coder):
+    def make_key(self, field):
+        return (field.field_id << 3) | field.WIRE_TYPE
+
     def write_value(self, field, o, w):
         write_key(w, field.field_id, field.WIRE_TYPE)
         field.write(o, w)
@@ -124,6 +127,9 @@ class _ScalarCoder(_Coder):
 
 
 class _PackedCoder(_Coder):
+    def make_key(self, field):
+        return (field.field_id << 3) | WIRE_TYPE_DELIMITED
+
     def write_value(self, field, o, w):
         bio = io.BytesIO()
         for elem in o:
@@ -149,6 +155,9 @@ class _FixedPackedCoder(_Coder):
     def __init__(self, item_size):
         self.item_size = item_size
 
+    def make_key(self, field):
+        return (field.field_id << 3) | WIRE_TYPE_DELIMITED
+
     def write_value(self, field, o, w):
         write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
         write_varint(self.item_size * len(o))
@@ -165,6 +174,9 @@ class _FixedPackedCoder(_Coder):
 
 
 class _DelimitedCoder(_Coder):
+    def make_key(self, field):
+        return (field.field_id << 3) | WIRE_TYPE_DELIMITED
+
     def write_value(self, field, o, w):
         for elem in o:
             write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
@@ -201,6 +213,7 @@ class _Field(object):
             self.type_check = self.type_check_collection
         else:
             self.coder = _ScalarCoder()
+        self.wire_key = self.coder.make_key(self)
 
     def type_check(self, value):
         if not isinstance(value, self.TYPES):
@@ -500,16 +513,15 @@ class StructType(object):
                 pos = self._skip(buf, pos, tag)
 
     def read_value(self, buf, field):
-        target_field_id = field.field_id
-        field_id = -1
+        target_wire_key = field.wire_key
         blen = len(buf)
         pos = 0
         while pos < blen:
-            pos, i = read_varint(buf, pos)
-            if (i >> 3) == target_field_id:
+            pos, wire_key = read_varint(buf, pos)
+            if wire_key == target_wire_key:
                 _, value = field.coder.read_value(field, buf, pos)
                 return value
-            pos = self._skip(buf, pos, i & 0x07)
+            pos = self._skip(buf, pos, wire_key & 0x7)
 
     def _to_raw(self, dct):
         bio = io.BytesIO()
