@@ -47,6 +47,10 @@ _undefined = object()
 #
 
 def read_varint(buf, pos):
+    b0 = ord(buf[pos])
+    if b0 < 0x80:
+        return pos+1, b0
+
     number = 0
     shift = 0
 
@@ -81,56 +85,56 @@ def write_varint(w, i):
     if i < (2**7):
         w(chr(i))
     elif i < (2**14):
-        w(chr((i >> 7) | 1))
+        w(chr((i >> 7) | 0x80))
         w(chr(i & 0x7f))
     elif i < (2**21):
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     elif i < (2**28):
-        w(chr((i >> 21) | 1))
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 21) | 0x80))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     elif i < (2**35):
-        w(chr((i >> 28) | 1))
-        w(chr((i >> 21) | 1))
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 28) | 0x80))
+        w(chr((i >> 21) | 0x80))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     elif i < (2**42):
-        w(chr((i >> 35) | 1))
-        w(chr((i >> 28) | 1))
-        w(chr((i >> 21) | 1))
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 35) | 0x80))
+        w(chr((i >> 28) | 0x80))
+        w(chr((i >> 21) | 0x80))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     elif i < (2**49):
-        w(chr((i >> 42) | 1))
-        w(chr((i >> 35) | 1))
-        w(chr((i >> 28) | 1))
-        w(chr((i >> 21) | 1))
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 42) | 0x80))
+        w(chr((i >> 35) | 0x80))
+        w(chr((i >> 28) | 0x80))
+        w(chr((i >> 21) | 0x80))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     elif i < (2**56):
-        w(chr((i >> 49) | 1))
-        w(chr((i >> 42) | 1))
-        w(chr((i >> 35) | 1))
-        w(chr((i >> 28) | 1))
-        w(chr((i >> 21) | 1))
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 49) | 0x80))
+        w(chr((i >> 42) | 0x80))
+        w(chr((i >> 35) | 0x80))
+        w(chr((i >> 28) | 0x80))
+        w(chr((i >> 21) | 0x80))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     elif i <= (2**64):
-        w(chr((i >> 56) | 1))
-        w(chr((i >> 49) | 1))
-        w(chr((i >> 42) | 1))
-        w(chr((i >> 35) | 1))
-        w(chr((i >> 28) | 1))
-        w(chr((i >> 21) | 1))
-        w(chr((i >> 14) | 1))
-        w(chr((i >>  7) | 1))
+        w(chr((i >> 56) | 0x80))
+        w(chr((i >> 49) | 0x80))
+        w(chr((i >> 42) | 0x80))
+        w(chr((i >> 35) | 0x80))
+        w(chr((i >> 28) | 0x80))
+        w(chr((i >> 21) | 0x80))
+        w(chr((i >> 14) | 0x80))
+        w(chr((i >>  7) | 0x80))
         w(chr((i & 0x7f)))
     else:
         raise ValueError('value too large.')
@@ -571,7 +575,7 @@ class StructType(object):
             return epos + n
         elif tag == WIRE_TYPE_32:
             return pos + 4
-        assert 0
+        assert 0, pos
 
     def iter_values(self, buf):
         flen = len(self.fields)
