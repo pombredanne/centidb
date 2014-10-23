@@ -16,10 +16,15 @@
 
 from __future__ import absolute_import
 import functools
-import io
 import socket
 import struct
 import uuid
+from cStringIO import StringIO
+
+try:
+    from __pypy__.builders import StringBuilder
+except ImportError:
+    StringBuilder = None
 
 
 # Wire type constants.
@@ -131,15 +136,28 @@ class _PackedCoder(_Coder):
     def make_key(self, field):
         return (field.field_id << 3) | WIRE_TYPE_DELIMITED
 
-    def write_value(self, field, o, w):
-        bio = io.BytesIO()
-        for elem in o:
-            field.write(elem, bio.write)
+    if StringBuilder:
+        def write_value(self, field, o, w):
+            bio = StringBuilder()
+            ww = bio.append
+            for elem in o:
+                field.write(elem, ww)
 
-        s = bio.getvalue()
-        write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
-        write_varint(w, len(s))
-        w(s)
+            s = bio.build()
+            write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
+            write_varint(w, len(s))
+            w(s)
+    else:
+        def write_value(self, field, o, w):
+            bio = StringIO()
+            ww = bio.write
+            for elem in o:
+                field.write(elem, ww)
+
+            s = bio.getvalue()
+            write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
+            write_varint(w, len(s))
+            w(s)
 
     def read_value(self, field, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -541,14 +559,26 @@ class StructType(object):
                 return value
             pos = self._skip(buf, pos, wire_key & 0x7)
 
-    def _to_raw(self, dct):
-        bio = io.BytesIO()
-        for field_id in self.sorted_ids:
-            field = self.fields[field_id]
-            value = dct.get(field.name)
-            if value is not None:
-                field.coder.write_value(field, value, bio.write)
-        return bio.getvalue()
+    if StringBuilder:
+        def _to_raw(self, dct):
+            bio = StringBuilder()
+            w = bio.append
+            for field_id in self.sorted_ids:
+                field = self.fields[field_id]
+                value = dct.get(field.name)
+                if value is not None:
+                    field.coder.write_value(field, value, w)
+            return bio.build()
+    else:
+        def _to_raw(self, dct):
+            bio = StringIO()
+            w = bio.write
+            for field_id in self.sorted_ids:
+                field = self.fields[field_id]
+                value = dct.get(field.name)
+                if value is not None:
+                    field.coder.write_value(field, value, w)
+            return bio.getvalue()
 
 
 class Struct(object):
