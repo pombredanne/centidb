@@ -612,7 +612,8 @@ class Struct(object):
 
     def __len__(self):
         self._explode()
-        return len(self.dct)
+        return sum(1 for v in self.dct.itervalues() if v is not None)
+    __nonzero__ = __len__
 
     def __getitem__(self, key):
         value = self.dct.get(key)
