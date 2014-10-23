@@ -79,22 +79,62 @@ def read_key(buf, pos):
 
 
 def write_varint(w, i):
-    if not i:
-        w('\0')
-        return
-
-    if not (INT64_MIN <= i <= UINT64_MAX):
+    if i < (2**7):
+        w(chr(i))
+    elif i < (2**14):
+        w(chr((i >> 7) | 1))
+        w(chr(i & 0x7f))
+    elif i < (2**21):
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    elif i < (2**28):
+        w(chr((i >> 21) | 1))
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    elif i < (2**35):
+        w(chr((i >> 28) | 1))
+        w(chr((i >> 21) | 1))
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    elif i < (2**42):
+        w(chr((i >> 35) | 1))
+        w(chr((i >> 28) | 1))
+        w(chr((i >> 21) | 1))
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    elif i < (2**49):
+        w(chr((i >> 42) | 1))
+        w(chr((i >> 35) | 1))
+        w(chr((i >> 28) | 1))
+        w(chr((i >> 21) | 1))
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    elif i < (2**56):
+        w(chr((i >> 49) | 1))
+        w(chr((i >> 42) | 1))
+        w(chr((i >> 35) | 1))
+        w(chr((i >> 28) | 1))
+        w(chr((i >> 21) | 1))
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    elif i <= (2**64):
+        w(chr((i >> 56) | 1))
+        w(chr((i >> 49) | 1))
+        w(chr((i >> 42) | 1))
+        w(chr((i >> 35) | 1))
+        w(chr((i >> 28) | 1))
+        w(chr((i >> 21) | 1))
+        w(chr((i >> 14) | 1))
+        w(chr((i >>  7) | 1))
+        w(chr((i & 0x7f)))
+    else:
         raise ValueError('value too large.')
-
-    if i < 0:
-        i += 1 << 64
-
-    while i:
-        byte = i & 0x7f
-        i >>= 7
-        if i:
-            byte |= 0x80
-        w(chr(byte))
 
 
 def write_svarint(w, i):
