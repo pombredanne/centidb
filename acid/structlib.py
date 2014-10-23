@@ -749,7 +749,8 @@ class Struct(object):
         field = self.struct_type.field_map[key]
         if self.buf:
             value = self.struct_type.read_value(self.buf, field)
-            self.dct[key] = value
+            if field.collection:
+                self.dct[key] = value
             if value is not None:
                 return value
         raise KeyError(key)
