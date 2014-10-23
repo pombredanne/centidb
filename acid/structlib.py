@@ -648,7 +648,7 @@ class StructType(object):
 
     def _skip(self, buf, pos, tag):
         if tag == WIRE_TYPE_VARIABLE:
-            while ord(buf[pos]) & 0x80:
+            while buf[pos] >= '\x80':
                 pos += 1
             return pos + 1
         elif tag == WIRE_TYPE_64:
