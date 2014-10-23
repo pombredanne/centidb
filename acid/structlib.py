@@ -19,7 +19,6 @@ import functools
 import socket
 import struct
 import uuid
-from cStringIO import StringIO
 
 try:
     from __pypy__.builders import StringBuilder
@@ -189,12 +188,12 @@ class _PackedCoder(_Coder):
             w(s)
     else:
         def write_value(self, field, o, w):
-            bio = StringIO()
-            ww = bio.write
+            ba = bytearray()
+            ww = ba.extend
             for elem in o:
                 field.write(elem, ww)
 
-            s = bio.getvalue()
+            s = str(ba)
             write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
             write_varint(w, len(s))
             w(s)
@@ -611,14 +610,14 @@ class StructType(object):
             return bio.build()
     else:
         def _to_raw(self, dct):
-            bio = StringIO()
-            w = bio.write
+            ba = bytearray()
+            w = ba.extend
             for field_id in self.sorted_ids:
                 field = self.fields[field_id]
                 value = dct.get(field.name)
                 if value is not None:
                     field.coder.write_value(field, value, w)
-            return bio.getvalue()
+            return str(ba)
 
 
 class Struct(object):
