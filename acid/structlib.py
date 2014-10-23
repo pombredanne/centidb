@@ -51,29 +51,91 @@ def read_varint(buf, pos):
     if b0 < 0x80:
         return pos+1, b0
 
-    number = 0
-    shift = 0
+    b1 = ord(buf[pos+1])
+    if b1 < 0x80:
+        return pos+2, ((b1       ) << 7)  \
+                     | (b0 & 0x7f)
 
-    while True:
-        byte = ord(buf[pos])
-        pos += 1
+    b2 = ord(buf[pos+2])
+    if b2 < 0x80:
+        return pos+3, ((b2       ) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
 
-        number |= (byte & 0x7f) << shift
-        shift += 7
+    b3 = ord(buf[pos+3])
+    if b3 < 0x80:
+        return pos+4, ((b3       ) << 21) \
+                    | ((b2 & 0x7f) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
 
-        if not byte & 0x80:
-            break
+    b4 = ord(buf[pos+4])
+    if b4 < 0x80:
+        return pos+5, ((b4       ) << 28) \
+                    | ((b3 & 0x7f) << 21) \
+                    | ((b2 & 0x7f) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
 
-    if number > INT64_MAX:
-        number -= 1 << 64
-    return pos, number
+    b5 = ord(buf[pos+5])
+    if b5 < 0x80:
+        return pos+6, ((b5       ) << 35) \
+                    | ((b4 & 0x7f) << 28) \
+                    | ((b3 & 0x7f) << 21) \
+                    | ((b2 & 0x7f) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
 
+    b6 = ord(buf[pos+6])
+    if b6 < 0x80:
+        return pos+7, ((b6       ) << 42) \
+                    | ((b5 & 0x7f) << 35) \
+                    | ((b4 & 0x7f) << 28) \
+                    | ((b3 & 0x7f) << 21) \
+                    | ((b2 & 0x7f) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
 
-def read_svarint(buf, pos):
-    pos, value = read_varint(buf, pos)
-    if value & 1:
-        return pos, ((value >> 1) ^ ~0)
-    return pos, value >> 1
+    b7 = ord(buf[pos+7])
+    if b7 < 0x80:
+        return pos+8, ((b7       ) << 49) \
+                    | ((b6 & 0x7f) << 42) \
+                    | ((b5 & 0x7f) << 35) \
+                    | ((b4 & 0x7f) << 28) \
+                    | ((b3 & 0x7f) << 21) \
+                    | ((b2 & 0x7f) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
+
+    b8 = ord(buf[pos+8])
+    if b8 < 0x80:
+        return pos+9, ((b8       ) << 56) \
+                    | ((b7 & 0x7f) << 49) \
+                    | ((b6 & 0x7f) << 42) \
+                    | ((b5 & 0x7f) << 35) \
+                    | ((b4 & 0x7f) << 28) \
+                    | ((b3 & 0x7f) << 21) \
+                    | ((b2 & 0x7f) << 14) \
+                    | ((b1 & 0x7f) << 7)  \
+                    | ((b0 & 0x7f))
+
+    b9 = ord(buf[pos+9])
+    if b9 < 0x80:
+        n =            ((b9 & 0x01) << 63) \
+                     | ((b8 & 0x7f) << 56) \
+                     | ((b7 & 0x7f) << 49) \
+                     | ((b6 & 0x7f) << 42) \
+                     | ((b5 & 0x7f) << 35) \
+                     | ((b4 & 0x7f) << 28) \
+                     | ((b3 & 0x7f) << 21) \
+                     | ((b2 & 0x7f) << 14) \
+                     | ((b1 & 0x7f) << 7)  \
+                     | ((b0 & 0xff))
+        if n > (2**63-1):  # exceeds int64_t, must be signed, so cast it
+            n -= (1 << 64)
+        return pos+10, n
+
+    assert 0
 
 
 def read_key(buf, pos):
@@ -82,62 +144,83 @@ def read_key(buf, pos):
 
 
 def write_varint(w, i):
+    if i < 0:
+        i &= (2**64-1)  # Cast to uint64_t
+
     if i < (2**7):
-        w(chr(i))
+        w(chr(               (i)))
     elif i < (2**14):
-        w(chr((i >> 7) | 0x80))
-        w(chr(i & 0x7f))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(               (i >> 7)))
     elif i < (2**21):
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(               (i >> 14)))
     elif i < (2**28):
-        w(chr((i >> 21) | 0x80))
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(               (i >> 21)))
     elif i < (2**35):
-        w(chr((i >> 28) | 0x80))
-        w(chr((i >> 21) | 0x80))
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(0x80 | (0x7f & (i >> 21))))
+        w(chr(               (i >> 28)))
     elif i < (2**42):
-        w(chr((i >> 35) | 0x80))
-        w(chr((i >> 28) | 0x80))
-        w(chr((i >> 21) | 0x80))
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(0x80 | (0x7f & (i >> 21))))
+        w(chr(0x80 | (0x7f & (i >> 28))))
+        w(chr(               (i >> 35)))
     elif i < (2**49):
-        w(chr((i >> 42) | 0x80))
-        w(chr((i >> 35) | 0x80))
-        w(chr((i >> 28) | 0x80))
-        w(chr((i >> 21) | 0x80))
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(0x80 | (0x7f & (i >> 21))))
+        w(chr(0x80 | (0x7f & (i >> 28))))
+        w(chr(0x80 | (0x7f & (i >> 35))))
+        w(chr(               (i >> 42)))
     elif i < (2**56):
-        w(chr((i >> 49) | 0x80))
-        w(chr((i >> 42) | 0x80))
-        w(chr((i >> 35) | 0x80))
-        w(chr((i >> 28) | 0x80))
-        w(chr((i >> 21) | 0x80))
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
-    elif i <= (2**64):
-        w(chr((i >> 56) | 0x80))
-        w(chr((i >> 49) | 0x80))
-        w(chr((i >> 42) | 0x80))
-        w(chr((i >> 35) | 0x80))
-        w(chr((i >> 28) | 0x80))
-        w(chr((i >> 21) | 0x80))
-        w(chr((i >> 14) | 0x80))
-        w(chr((i >>  7) | 0x80))
-        w(chr((i & 0x7f)))
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(0x80 | (0x7f & (i >> 21))))
+        w(chr(0x80 | (0x7f & (i >> 28))))
+        w(chr(0x80 | (0x7f & (i >> 35))))
+        w(chr(0x80 | (0x7f & (i >> 42))))
+        w(chr(               (i >> 49)))
+    elif i < (2**63):
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(0x80 | (0x7f & (i >> 21))))
+        w(chr(0x80 | (0x7f & (i >> 28))))
+        w(chr(0x80 | (0x7f & (i >> 35))))
+        w(chr(0x80 | (0x7f & (i >> 42))))
+        w(chr(0x80 | (0x7f & (i >> 49))))
+        w(chr(               (i >> 56)))
+    elif i < (2**64):
+        w(chr(0x80 | (0x7f & (i))))
+        w(chr(0x80 | (0x7f & (i >> 7))))
+        w(chr(0x80 | (0x7f & (i >> 14))))
+        w(chr(0x80 | (0x7f & (i >> 21))))
+        w(chr(0x80 | (0x7f & (i >> 28))))
+        w(chr(0x80 | (0x7f & (i >> 35))))
+        w(chr(0x80 | (0x7f & (i >> 42))))
+        w(chr(0x80 | (0x7f & (i >> 49))))
+        w(chr(0x80 | (0x7f & (i >> 56))))
+        w(chr(               (i >> 63)))
     else:
         raise ValueError('value too large.')
+
+
+def read_svarint(buf, pos):
+    pos, value = read_varint(buf, pos)
+    if value & 1:
+        return pos, ((value >> 1) ^ ~0)
+    return pos, value >> 1
 
 
 def write_svarint(w, i):
