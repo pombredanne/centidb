@@ -625,26 +625,24 @@ class _StructField(_Field):
 
 class StructType(object):
     def __init__(self):
-        self.fields = []
-        self.field_map = {}
-        self.sorted_ids = []
+        self.field_name_map = {}
+        self.field_id_map = {}
+        self.sorted_by_id = []
 
     def add_field(self, field_name, field_id, kind, collection):
-        if len(self.fields) < (1 + field_id):
-            self.fields += [None] * ((1 + field_id) - len(self.fields))
-        if self.fields[field_id] is not None:
+        if field_id in self.field_id_map:
             raise ValueError('duplicate field ID: %r' % (field_id,))
-        if field_name in self.field_map:
+        if field_name in self.field_name_map:
             raise ValueError('duplicate field name: %r' % (field_name,))
         klass = FIELD_KINDS.get(kind)
         if klass is None:
             raise ValueError('unknown kind: %r' % (kind,))
 
         field = klass(field_id, field_name, collection)
-        self.fields[field_id] = field
-        self.field_map[field_name] = field
-        self.sorted_ids.append(field_id)
-        self.sorted_ids.sort()
+        self.field_id_map[field_id] = field
+        self.field_name_map[field_name] = field
+        self.sorted_by_id.append(field)
+        self.sorted_by_id.sort(key=lambda f: f.field_id)
 
     def _skip(self, buf, pos, tag):
         if tag == WIRE_TYPE_VARIABLE:
@@ -661,16 +659,14 @@ class StructType(object):
         assert 0, pos
 
     def iter_values(self, buf):
-        flen = len(self.fields)
         blen = len(buf)
         pos = 0
         while pos < blen:
             pos, field_id, tag = read_key(buf, pos)
-            if field_id < flen:
-                field = self.fields[field_id]
-                if field:
-                    pos, value = field.coder.read_value(field, buf, pos)
-                    yield field.name, value
+            field = self.field_id_map.get(field_id)
+            if field:
+                pos, value = field.coder.read_value(field, buf, pos)
+                yield field.name, value
             else:
                 pos = self._skip(buf, pos, tag)
 
@@ -689,8 +685,7 @@ class StructType(object):
         def _to_raw(self, dct):
             bio = StringBuilder()
             w = bio.append
-            for field_id in self.sorted_ids:
-                field = self.fields[field_id]
+            for field in self.sorted_by_id:
                 value = dct.get(field.name)
                 if value is not None:
                     field.coder.write_value(field, value, w)
@@ -699,8 +694,7 @@ class StructType(object):
         def _to_raw(self, dct):
             ba = bytearray()
             w = ba.extend
-            for field_id in self.sorted_ids:
-                field = self.fields[field_id]
+            for field in self.sorted_by_id:
                 value = dct.get(field.name)
                 if value is not None:
                     field.coder.write_value(field, value, w)
@@ -746,7 +740,7 @@ class Struct(object):
         if value is not None:
             return value
 
-        field = self.struct_type.field_map[key]
+        field = self.struct_type.field_name_map[key]
         if self.buf:
             value = self.struct_type.read_value(self.buf, field)
             if field.collection:
@@ -758,7 +752,7 @@ class Struct(object):
     def get(self, key, default=None):
         value = self.dct.get(key, _undefined)
         if value is _undefined:
-            field = self.struct_type.field_map.get(key)
+            field = self.struct_type.field_name_map.get(key)
             if field is None:
                 return default
 
@@ -771,7 +765,7 @@ class Struct(object):
         return value
 
     def __setitem__(self, key, value):
-        field = self.struct_type.field_map[key]
+        field = self.struct_type.field_name_map[key]
         field.type_check(value)
         self.dct[key] = value
 
