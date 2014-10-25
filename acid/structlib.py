@@ -15,7 +15,6 @@
 #
 
 from __future__ import absolute_import
-import functools
 import socket
 import struct
 import types
@@ -130,11 +129,6 @@ def read_varint(buf, pos):
         return pos+10, n
 
     assert 0
-
-
-def read_key(buf, pos):
-    pos, i = read_varint(buf, pos)
-    return pos, i >> 3, i & 0x7
 
 
 def write_varint(w, i):
@@ -358,12 +352,12 @@ class _DelimitedCoder(_Coder):
     def read_value(self, field, buf, pos):
         l = []
         blen = len(buf)
-        field_id = field.field_id
+        wire_key = field.wire_key
         pos2 = pos
-        while field_id == field.field_id and pos < blen:
+        while wire_key == field.wire_key and pos < blen:
             pos, value = field.read(buf, pos2)
             l.append(value)
-            pos2, field_id, tag = read_key(buf, pos)
+            pos2, wire_key = read_varint(buf, pos)
 
         return pos, l
 
@@ -676,13 +670,13 @@ class StructType(object):
         blen = len(buf)
         pos = 0
         while pos < blen:
-            pos, field_id, tag = read_key(buf, pos)
-            field = self.field_id_map.get(field_id)
+            pos, wire_key = read_varint(buf, pos)
+            field = self.field_id_map.get(wire_key >> 3)
             if field:
                 pos, value = field.coder.read_value(field, buf, pos)
                 yield field.name, value
             else:
-                pos = SKIP_MAP[tag](buf, pos)
+                pos = SKIP_MAP[wire_key & 0x7](buf, pos)
 
     def read_value(self, buf, field):
         target_wire_key = field.wire_key
