@@ -41,6 +41,10 @@ class Field(object):
     """
     default = None
 
+    def __init__(self, ftype, default=None):
+        self.ftype = ftype
+        self.default = default
+
     def __get__(self, instance, klass):
         if instance:
             return klass.META_ENCODER.get(instance._rec, self.name,
@@ -57,34 +61,22 @@ class Field(object):
             raise AttributeError(self.name)
 
 
-class Bool(Field):
-    """A boolean field.
-    """
-
-
-class Double(Field):
-    """A double field.
-    """
-
-
-class Integer(Field):
-    """An integer field.
-    """
-
-
-class String(Field):
-    """A string field.
-    """
-
-
-class Time(Field):
-    """A datetime.datetime field.
-    """
-
-
 class List(Field):
     """A list field.
     """
+    def __init__(self, ftype):
+        self.ftype = ftype
+        super(List, self).__init__(ftype)
+
+    def __get__(self, instance, klass):
+        if instance:
+            lst = klass.META_ENCODER.get(instance._rec, self.name, None)
+            if lst is not None:
+                return lst
+            lst = []
+            klass.META_ENCODER.set(instance._rec, self.name, lst)
+            return lst
+        return self
 
 
 class LazyIndexProperty(object):
