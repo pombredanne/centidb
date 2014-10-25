@@ -434,32 +434,32 @@ class _FixedIntegerField(_Field):
         w(struct.pack(self.FORMAT, o))
 
 
-class _Fixed32Field(_FixedIntegerField):
-    KIND = 'fixed32'
+class _I32Field(_FixedIntegerField):
+    KIND = 'i32'
     SIZE = 4
     FORMAT = '<l'
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
-class _Fixed64Field(_FixedIntegerField):
-    KIND = 'fixed64'
+class _I64Field(_FixedIntegerField):
+    KIND = 'i64'
     SIZE = 8
     FORMAT = '<q'
     WIRE_TYPE = WIRE_TYPE_64
     COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
-class _FixedU32Field(_FixedIntegerField):
-    KIND = 'fixedu32'
+class _U32Field(_FixedIntegerField):
+    KIND = 'u32'
     SIZE = 4
     FORMAT = '<L'
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(SIZE)
 
 
-class _FixedU64Field(_FixedIntegerField):
-    KIND = 'fixedu64'
+class _U64Field(_FixedIntegerField):
+    KIND = 'u64'
     SIZE = 8
     FORMAT = '<Q'
     WIRE_TYPE = WIRE_TYPE_64
