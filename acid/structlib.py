@@ -757,18 +757,15 @@ class Struct(object):
     __nonzero__ = __len__
 
     def __getitem__(self, key):
-        value = self.dct.get(key)
-        if value is not None:
-            return value
-
-        field = self.struct_type.field_name_map[key]
-        if self.buf:
-            value = self.struct_type.read_value(self.buf, field)
-            if field.collection:
-                self.dct[key] = value
-            if value is not None:
-                return value
-        raise KeyError(key)
+        if key not in self.dct:
+            field = self.struct_type.field_name_map[key]
+            if self.buf:
+                value = self.struct_type.read_value(self.buf, field)
+                if field.collection:
+                    self.dct[key] = value
+                if value is not None:
+                    return value
+        return self.dct[key]
 
     def get(self, key, default=None):
         value = self.dct.get(key, _undefined)
