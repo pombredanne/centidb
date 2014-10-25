@@ -18,6 +18,7 @@ from __future__ import absolute_import
 import functools
 import socket
 import struct
+import types
 import uuid
 
 try:
@@ -375,7 +376,7 @@ class _Field(object):
 
 
 class _BoolField(_Field):
-    TYPES = (bool,)
+    TYPES = (bool, types.NoneType)
     KIND = 'bool'
     WIRE_TYPE = WIRE_TYPE_VARIABLE
     COLLECTION_CODER = _FixedPackedCoder(1)
@@ -388,7 +389,7 @@ class _BoolField(_Field):
 
 
 class _DoubleField(_Field):
-    TYPES = (float,)
+    TYPES = (float, types.NoneType)
     KIND = 'double'
     WIRE_TYPE = WIRE_TYPE_64
     COLLECTION_CODER = _FixedPackedCoder(8)
@@ -402,7 +403,7 @@ class _DoubleField(_Field):
 
 
 class _FixedIntegerField(_Field):
-    TYPES = (int, long)
+    TYPES = (int, long, types.NoneType)
 
     def read(self, buf, pos):
         epos = pos + self.SIZE
@@ -445,7 +446,7 @@ class _FixedU64Field(_FixedIntegerField):
 
 
 class _FloatField(_Field):
-    TYPES = (float,)
+    TYPES = (float, types.NoneType)
     KIND = 'float'
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(4)
@@ -459,7 +460,7 @@ class _FloatField(_Field):
 
 
 class _VarField(_Field):
-    TYPES = (int, long)
+    TYPES = (int, long, types.NoneType)
     WIRE_TYPE = WIRE_TYPE_VARIABLE
     COLLECTION_CODER = _PackedCoder()
 
@@ -485,7 +486,7 @@ class _SintField(_Field):
 
 
 class _Inet4Field(_Field):
-    TYPES = (basestring,)
+    TYPES = (basestring, types.NoneType)
     KIND = 'inet4'
     WIRE_TYPE = WIRE_TYPE_32
     COLLECTION_CODER = _FixedPackedCoder(4)
@@ -499,7 +500,7 @@ class _Inet4Field(_Field):
 
 
 class _Inet4PortField(_Field):
-    TYPES = (basestring,)
+    TYPES = (basestring, types.NoneType)
     KIND = 'inet4port'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(6)
@@ -519,7 +520,7 @@ class _Inet4PortField(_Field):
 
 
 class _Inet6Field(_Field):
-    TYPES = (basestring,)
+    TYPES = (basestring, types.NoneType)
     KIND = 'inet6'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(16)
@@ -534,7 +535,7 @@ class _Inet6Field(_Field):
 
 
 class _Inet6PortField(_Field):
-    TYPES = (basestring,)
+    TYPES = (basestring, types.NoneType)
     KIND = 'inet6port'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _FixedPackedCoder(18)
@@ -555,7 +556,7 @@ class _Inet6PortField(_Field):
 
 
 class _BytesField(_Field):
-    TYPES = (bytes,)
+    TYPES = (bytes, types.NoneType)
     KIND = 'bytes'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
@@ -571,7 +572,7 @@ class _BytesField(_Field):
 
 
 class _StringField(_Field):
-    TYPES = (unicode,)
+    TYPES = (unicode, types.NoneType)
     KIND = 'str'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
@@ -588,7 +589,7 @@ class _StringField(_Field):
 
 
 class _UuidField(_Field):
-    TYPES = (uuid.UUID,)
+    TYPES = (uuid.UUID, types.NoneType)
     KIND = 'uuid'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     COLLECTION_CODER = _DelimitedCoder()
@@ -610,7 +611,7 @@ class _StructField(_Field):
     def __init__(self, field_id, name, collection, struct_type):
         super(_StructField, self).__init__(field_id, name, collection)
         self.struct_type = struct_type
-        self.TYPES = (struct_type,)
+        self.TYPES = (struct_type, types.NoneType)
 
     def read(self, buf, pos):
         pos, n = read_varint(r)
