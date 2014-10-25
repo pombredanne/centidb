@@ -33,13 +33,6 @@ WIRE_TYPE_64           = 1
 WIRE_TYPE_DELIMITED    = 2
 WIRE_TYPE_32           = 5
 
-INT32_MAX = (1 << 31) - 1
-INT32_MIN = -1 << 31
-
-INT64_MAX = (1 << 63) - 1
-INT64_MIN = -(1 << 63)
-UINT64_MAX = (1 << 64) - 1
-
 _undefined = object()
 
 
