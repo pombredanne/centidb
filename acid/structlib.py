@@ -236,6 +236,40 @@ def write_key(w, field, tag):
 
 
 #
+# Skipping functions.
+#
+
+def _skip_variable(buf, pos):
+    while buf[pos] >= '\x80':
+        pos += 1
+    return pos + 1
+
+def _skip_64(buf, pos):
+    return pos + 8
+
+def _skip_delimited(buf, pos):
+    epos, n = read_varint(buf, pos)
+    return epos + n
+
+def _skip_32(buf, pos):
+    return pos + 4
+
+def _skip_unknown(buf, pos):
+    raise IOError('cannot skip unrecognized WIRE_TYPE')
+
+SKIP_MAP = [
+    _skip_variable,     # 0
+    _skip_64,           # 1
+    _skip_delimited,    # 2
+    _skip_unknown,      # 3
+    _skip_unknown,      # 4
+    _skip_32,           # 5
+    _skip_unknown,      # 6
+    _skip_unknown,      # 7
+]
+
+
+#
 # Field coder types.
 #
 
@@ -645,20 +679,6 @@ class StructType(object):
         self.sorted_by_id.append(field)
         self.sorted_by_id.sort(key=lambda f: f.field_id)
 
-    def _skip(self, buf, pos, tag):
-        if tag == WIRE_TYPE_VARIABLE:
-            while buf[pos] >= '\x80':
-                pos += 1
-            return pos + 1
-        elif tag == WIRE_TYPE_64:
-            return pos + 8
-        elif tag == WIRE_TYPE_DELIMITED:
-            epos, n = read_varint(buf, pos)
-            return epos + n
-        elif tag == WIRE_TYPE_32:
-            return pos + 4
-        assert 0, pos
-
     def iter_values(self, buf):
         blen = len(buf)
         pos = 0
@@ -669,7 +689,7 @@ class StructType(object):
                 pos, value = field.coder.read_value(field, buf, pos)
                 yield field.name, value
             else:
-                pos = self._skip(buf, pos, tag)
+                pos = SKIP_MAP[tag](buf, pos)
 
     def read_value(self, buf, field):
         target_wire_key = field.wire_key
@@ -680,7 +700,7 @@ class StructType(object):
             if wire_key == target_wire_key:
                 _, value = field.coder.read_value(field, buf, pos)
                 return value
-            pos = self._skip(buf, pos, wire_key & 0x7)
+            pos = SKIP_MAP[wire_key & 0x7](buf, pos)
 
     if StringBuilder:
         def _to_raw(self, dct):
