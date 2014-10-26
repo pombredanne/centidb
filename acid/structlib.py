@@ -15,8 +15,10 @@
 #
 
 from __future__ import absolute_import
+import array
 import socket
 import struct
+import sys
 import types
 import uuid
 
@@ -24,6 +26,9 @@ try:
     from __pypy__.builders import StringBuilder
 except ImportError:
     StringBuilder = None
+
+assert len(array.array('i', [0]).tostring()) == 4
+assert len(array.array('l', [0]).tostring()) == 8
 
 
 # Wire type constants.
@@ -333,11 +338,31 @@ class _FixedPackedCoder(_Coder):
 
     def read_value(self, field, buf, pos):
         pos, n = read_varint(buf, pos)
+        epos = pos + n
         l = []
-        for _ in xrange(n / self.item_size):
+        for pos in xrange(pos, epos, self.item_size):
             pos, value = field.read(buf, pos)
             l.append(value)
-        return pos + n, l
+        return epos, l
+
+
+class _FixedPackedArrayCoder(_FixedPackedCoder):
+    def __init__(self, item_size, type_code):
+        super(_FixedPackedArrayCoder, self).__init__(item_size)
+        self.type_code = type_code
+
+    if sys.byteorder == 'little':
+        def read_value(self, field, buf, pos):
+            pos, n = read_varint(buf, pos)
+            epos = pos + (n * self.item_size)
+            return epos, array.array(self.type_code, buf[pos:epos])
+    else:
+        def read_value(self, field, buf, pos):
+            pos, n = read_varint(buf, pos)
+            epos = pos + (n * self.item_size)
+            ar = array.array(self.type_code, buf[pos:epos])
+            ar.byteswap()
+            return epos, ar
 
 
 class _DelimitedCoder(_Coder):
@@ -413,7 +438,7 @@ class _DoubleField(_Field):
     TYPES = (float, types.NoneType)
     KIND = 'double'
     WIRE_TYPE = WIRE_TYPE_64
-    COLLECTION_CODER = _FixedPackedCoder(8)
+    COLLECTION_CODER = _FixedPackedArrayCoder(8, 'd')
 
     def read(self, buf, pos):
         epos = pos + 8
@@ -439,7 +464,7 @@ class _I32Field(_FixedIntegerField):
     SIZE = 4
     FORMAT = '<l'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedCoder(SIZE)
+    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'i')
 
 
 class _I64Field(_FixedIntegerField):
@@ -447,7 +472,7 @@ class _I64Field(_FixedIntegerField):
     SIZE = 8
     FORMAT = '<q'
     WIRE_TYPE = WIRE_TYPE_64
-    COLLECTION_CODER = _FixedPackedCoder(SIZE)
+    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'l')
 
 
 class _U32Field(_FixedIntegerField):
@@ -455,7 +480,7 @@ class _U32Field(_FixedIntegerField):
     SIZE = 4
     FORMAT = '<L'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedCoder(SIZE)
+    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'I')
 
 
 class _U64Field(_FixedIntegerField):
@@ -463,14 +488,14 @@ class _U64Field(_FixedIntegerField):
     SIZE = 8
     FORMAT = '<Q'
     WIRE_TYPE = WIRE_TYPE_64
-    COLLECTION_CODER = _FixedPackedCoder(SIZE)
+    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'L')
 
 
 class _FloatField(_Field):
     TYPES = (float, types.NoneType)
     KIND = 'float'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedCoder(4)
+    COLLECTION_CODER = _FixedPackedArrayCoder(4, 'f')
 
     def read(self, buf, pos):
         epos = pos + 4
