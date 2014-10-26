@@ -327,7 +327,7 @@ class _FixedPackedCoder(_Coder):
 
     def write_value(self, field, o, w):
         write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
-        write_varint(self.item_size * len(o))
+        write_varint(w, self.item_size * len(o))
         for elem in o:
             field.write(elem, w)
 
