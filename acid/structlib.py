@@ -639,7 +639,7 @@ class _UuidField(_Field):
     TYPES = (uuid.UUID, types.NoneType)
     KIND = 'uuid'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    SEQUENCE_CODER = _DelimitedCoder()
+    SEQUENCE_CODER = _FixedPackedCoder(16)
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -661,7 +661,7 @@ class _StructField(_Field):
         self.TYPES = (struct_type, types.NoneType)
 
     def read(self, buf, pos):
-        pos, n = read_varint(r)
+        pos, n = read_varint(buf, pos)
         epos = pos + n
         return epos, Struct.from_raw(self.struct_type, buf[pos:epos])
 
@@ -669,6 +669,21 @@ class _StructField(_Field):
         s = o.to_raw()
         write_varint(w, len(s))
         w(s)
+
+    def type_check(self, value):
+        if not isinstance(value, Struct):
+            raise TypeError('field %r requires %r, not %r' %\
+                            (self.name, self.TYPES, type(value)))
+
+    SEQUENCE_TYPES = (list, array.array)
+    def type_check_sequence(self, value):
+        if not isinstance(value, self.SEQUENCE_TYPES):
+            raise TypeError('field %r requires %r, not %r' %\
+                            (self.name, list, type(value)))
+        if not all(isinstance(v, Struct) and v.struct_type == self.struct_type
+                   for v in value):
+            raise TypeError('field %r requires list of %r' %\
+                            (self.name, self.struct_type))
 
 
 class StructType(object):
@@ -682,11 +697,13 @@ class StructType(object):
             raise ValueError('duplicate field ID: %r' % (field_id,))
         if field_name in self.field_name_map:
             raise ValueError('duplicate field name: %r' % (field_name,))
-        klass = FIELD_KINDS.get(kind)
-        if klass is None:
-            raise ValueError('unknown kind: %r' % (kind,))
-
-        field = klass(field_id, field_name, sequence)
+        if isinstance(kind, StructType):
+            field = _StructField(field_id, field_name, sequence, kind)
+        else:
+            klass = FIELD_KINDS.get(kind)
+            if klass is None:
+                raise ValueError('unknown kind: %r' % (kind,))
+            field = klass(field_id, field_name, sequence)
         self.field_id_map[field_id] = field
         self.field_name_map[field_name] = field
         self.sorted_by_id.append(field)
