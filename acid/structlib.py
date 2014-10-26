@@ -365,6 +365,34 @@ class _FixedPackedArrayCoder(_FixedPackedCoder):
             return epos, ar
 
 
+class _DelimitedSequence(object):
+    def __init__(self, field, buf, offsets):
+        self._field = field
+        self._buf = buf
+        self._offsets = offsets
+        self._objs = [None] * len(offsets)
+
+    def __iter__(self):
+        for i in xrange(len(self._offsets)):
+            yield self[i]
+
+    def __repr__(self):
+        return '<DelimitedSequence %s>' % (list(self),)
+
+    def __len__(self):
+        return len(self._offsets)
+
+    def __getitem__(self, i):
+        obj = self._objs[i]
+        if obj is None:
+            _, obj = self._field.read(self._buf, self._offsets[i])
+            self._objs[i] = obj
+        return obj
+
+    def __setitem__(self, i, obj):
+        self._objs[i] = obj
+
+
 class _DelimitedCoder(_Coder):
     def make_key(self, field):
         return (field.field_id << 3) | WIRE_TYPE_DELIMITED
@@ -374,17 +402,22 @@ class _DelimitedCoder(_Coder):
             write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
             field.write(elem, w)
 
-    def read_value(self, field, buf, pos):
-        l = []
+    def _get_offsets(self, field, buf, pos):
+        offsets = []
         blen = len(buf)
         wire_key = field.wire_key
-        pos2 = pos
-        while wire_key == field.wire_key and pos < blen:
-            pos, value = field.read(buf, pos2)
-            l.append(value)
-            pos2, wire_key = read_varint(buf, pos)
+        while wire_key == field.wire_key:
+            offsets.append(pos)
+            pos, n = read_varint(buf, pos)
+            pos += n
+            if pos >= blen:
+                break
+            pos, wire_key = read_varint(buf, pos)
+        return pos, offsets
 
-        return pos, l
+    def read_value(self, field, buf, pos):
+        pos, offsets = self._get_offsets(field, buf, pos)
+        return pos, _DelimitedSequence(field, buf, offsets)
 
 
 #
