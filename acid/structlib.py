@@ -396,13 +396,13 @@ class _Field(object):
     WIRE_TYPE = None
     KIND = None
 
-    def __init__(self, field_id, name, collection):
+    def __init__(self, field_id, name, sequence):
         self.field_id = field_id
         self.name = name
-        self.collection = collection
-        if collection:
-            self.coder = self.COLLECTION_CODER
-            self.type_check = self.type_check_collection
+        self.sequence = sequence
+        if sequence:
+            self.coder = self.SEQUENCE_CODER
+            self.type_check = self.type_check_sequence
         else:
             self.coder = _ScalarCoder()
         self.wire_key = self.coder.make_key(self)
@@ -412,8 +412,9 @@ class _Field(object):
             raise TypeError('field %r requires %r, not %r' %\
                             (self.name, self.TYPES, type(value)))
 
-    def type_check_collection(self, value):
-        if not isinstance(value, list):
+    SEQUENCE_TYPES = (list, array.array)
+    def type_check_sequence(self, value):
+        if not isinstance(value, self.SEQUENCE_TYPES):
             raise TypeError('field %r requires %r, not %r' %\
                             (self.name, list, type(value)))
         if not all(isinstance(v, self.TYPES) for v in value):
@@ -425,7 +426,7 @@ class _BoolField(_Field):
     TYPES = (bool, types.NoneType)
     KIND = 'bool'
     WIRE_TYPE = WIRE_TYPE_VARIABLE
-    COLLECTION_CODER = _FixedPackedCoder(1)
+    SEQUENCE_CODER = _FixedPackedCoder(1)
 
     def read(self, buf, pos):
         return pos+1, buf[pos] == '\x01'
@@ -438,7 +439,7 @@ class _DoubleField(_Field):
     TYPES = (float, types.NoneType)
     KIND = 'double'
     WIRE_TYPE = WIRE_TYPE_64
-    COLLECTION_CODER = _FixedPackedArrayCoder(8, 'd')
+    SEQUENCE_CODER = _FixedPackedArrayCoder(8, 'd')
 
     def read(self, buf, pos):
         epos = pos + 8
@@ -464,7 +465,7 @@ class _I32Field(_FixedIntegerField):
     SIZE = 4
     FORMAT = '<l'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'i')
+    SEQUENCE_CODER = _FixedPackedArrayCoder(SIZE, 'i')
 
 
 class _I64Field(_FixedIntegerField):
@@ -472,7 +473,7 @@ class _I64Field(_FixedIntegerField):
     SIZE = 8
     FORMAT = '<q'
     WIRE_TYPE = WIRE_TYPE_64
-    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'l')
+    SEQUENCE_CODER = _FixedPackedArrayCoder(SIZE, 'l')
 
 
 class _U32Field(_FixedIntegerField):
@@ -480,7 +481,7 @@ class _U32Field(_FixedIntegerField):
     SIZE = 4
     FORMAT = '<L'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'I')
+    SEQUENCE_CODER = _FixedPackedArrayCoder(SIZE, 'I')
 
 
 class _U64Field(_FixedIntegerField):
@@ -488,14 +489,14 @@ class _U64Field(_FixedIntegerField):
     SIZE = 8
     FORMAT = '<Q'
     WIRE_TYPE = WIRE_TYPE_64
-    COLLECTION_CODER = _FixedPackedArrayCoder(SIZE, 'L')
+    SEQUENCE_CODER = _FixedPackedArrayCoder(SIZE, 'L')
 
 
 class _FloatField(_Field):
     TYPES = (float, types.NoneType)
     KIND = 'float'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedArrayCoder(4, 'f')
+    SEQUENCE_CODER = _FixedPackedArrayCoder(4, 'f')
 
     def read(self, buf, pos):
         epos = pos + 4
@@ -508,7 +509,7 @@ class _FloatField(_Field):
 class _VarField(_Field):
     TYPES = (int, long, types.NoneType)
     WIRE_TYPE = WIRE_TYPE_VARIABLE
-    COLLECTION_CODER = _PackedCoder()
+    SEQUENCE_CODER = _PackedCoder()
 
 
 class _IntField(_VarField):
@@ -535,7 +536,7 @@ class _Inet4Field(_Field):
     TYPES = (basestring, types.NoneType)
     KIND = 'inet4'
     WIRE_TYPE = WIRE_TYPE_32
-    COLLECTION_CODER = _FixedPackedCoder(4)
+    SEQUENCE_CODER = _FixedPackedCoder(4)
 
     def read(self, buf, pos):
         epos = pos + 4
@@ -549,7 +550,7 @@ class _Inet4PortField(_Field):
     TYPES = (basestring, types.NoneType)
     KIND = 'inet4port'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _FixedPackedCoder(6)
+    SEQUENCE_CODER = _FixedPackedCoder(6)
 
     def read(self, buf, pos):
         addr = socket.inet_ntop(socket.AF_INET, buf[pos+1:pos+5])
@@ -569,7 +570,7 @@ class _Inet6Field(_Field):
     TYPES = (basestring, types.NoneType)
     KIND = 'inet6'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _FixedPackedCoder(16)
+    SEQUENCE_CODER = _FixedPackedCoder(16)
 
     def read(self, buf, pos):
         epos = pos + 17
@@ -584,7 +585,7 @@ class _Inet6PortField(_Field):
     TYPES = (basestring, types.NoneType)
     KIND = 'inet6port'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _FixedPackedCoder(18)
+    SEQUENCE_CODER = _FixedPackedCoder(18)
 
     def read(self, buf, pos):
         epos = pos + 19
@@ -605,7 +606,7 @@ class _BytesField(_Field):
     TYPES = (bytes, types.NoneType)
     KIND = 'bytes'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _DelimitedCoder()
+    SEQUENCE_CODER = _DelimitedCoder()
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -621,7 +622,7 @@ class _StringField(_Field):
     TYPES = (unicode, types.NoneType)
     KIND = 'str'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _DelimitedCoder()
+    SEQUENCE_CODER = _DelimitedCoder()
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -638,7 +639,7 @@ class _UuidField(_Field):
     TYPES = (uuid.UUID, types.NoneType)
     KIND = 'uuid'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _DelimitedCoder()
+    SEQUENCE_CODER = _DelimitedCoder()
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
@@ -652,10 +653,10 @@ class _UuidField(_Field):
 
 class _StructField(_Field):
     WIRE_TYPE = WIRE_TYPE_DELIMITED
-    COLLECTION_CODER = _DelimitedCoder()
+    SEQUENCE_CODER = _DelimitedCoder()
 
-    def __init__(self, field_id, name, collection, struct_type):
-        super(_StructField, self).__init__(field_id, name, collection)
+    def __init__(self, field_id, name, sequence, struct_type):
+        super(_StructField, self).__init__(field_id, name, sequence)
         self.struct_type = struct_type
         self.TYPES = (struct_type, types.NoneType)
 
@@ -676,7 +677,7 @@ class StructType(object):
         self.field_id_map = {}
         self.sorted_by_id = []
 
-    def add_field(self, field_name, field_id, kind, collection):
+    def add_field(self, field_name, field_id, kind, sequence):
         if field_id in self.field_id_map:
             raise ValueError('duplicate field ID: %r' % (field_id,))
         if field_name in self.field_name_map:
@@ -685,7 +686,7 @@ class StructType(object):
         if klass is None:
             raise ValueError('unknown kind: %r' % (kind,))
 
-        field = klass(field_id, field_name, collection)
+        field = klass(field_id, field_name, sequence)
         self.field_id_map[field_id] = field
         self.field_name_map[field_name] = field
         self.sorted_by_id.append(field)
@@ -772,7 +773,7 @@ class Struct(object):
         if key not in self.dct and self.buf:
             field = self.struct_type.field_name_map[key]
             value = self.struct_type.read_value(self.buf, field)
-            if field.collection:
+            if field.sequence:
                 self.dct[key] = value
             if value is not None:
                 return value
