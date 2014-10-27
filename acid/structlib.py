@@ -22,11 +22,11 @@ import sys
 import types
 import uuid
 
-
 try:
-    from __pypy__.builders import StringBuilder
+    import __pypy__.builders
 except ImportError:
-    StringBuilder = None
+    __pypy__ = None
+
 
 assert len(array.array('i', [0]).tostring()) == 4
 assert len(array.array('l', [0]).tostring()) == 8
@@ -286,9 +286,9 @@ class _PackedCoder(_Coder):
     def make_key(self, field):
         return (field.field_id << 3) | WIRE_TYPE_DELIMITED
 
-    if StringBuilder:
+    if __pypy__:
         def write_value(self, field, o, w):
-            bio = StringBuilder()
+            bio = __pypy__.builders.StringBuilder()
             ww = bio.append
             for elem in o:
                 field.write(elem, ww)
@@ -766,9 +766,9 @@ class StructType(object):
                 return value
             pos = SKIP_MAP[wire_key & 0x7](buf, pos)
 
-    if StringBuilder:
+    if __pypy__:
         def _to_raw(self, dct):
-            bio = StringBuilder()
+            bio = __pypy__.builders.StringBuilder()
             w = bio.append
             for field in self.sorted_by_id:
                 value = dct.get(field.name)
