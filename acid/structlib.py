@@ -210,20 +210,6 @@ def write_varint(w, i):
         raise ValueError('value too large.')
 
 
-def read_svarint(buf, pos):
-    pos, value = read_varint(buf, pos)
-    if value & 1:
-        return pos, ((value >> 1) ^ ~0)
-    return pos, value >> 1
-
-
-def write_svarint(w, i):
-    if i < 0:
-        write_varint(w, (i << 1) ^ ~0)
-    else:
-        write_varint(w, i << 1)
-
-
 #
 # Skipping functions.
 #
@@ -540,13 +526,13 @@ class _FloatField(_Field):
         w(struct.pack('f', o))
 
 
-class _VarField(_Field):
+class _VarIntField(_Field):
     TYPES = (int, long, types.NoneType)
     WIRE_TYPE = WIRE_TYPE_VARIABLE
     SEQUENCE_CODER = _PackedCoder()
 
 
-class _IntField(_VarField):
+class _VarIntField(_VarIntField):
     KIND = 'varint'
 
     def read(self, buf, pos):
@@ -556,14 +542,31 @@ class _IntField(_VarField):
         write_varint(w, o)
 
 
-class _SintField(_VarField):
+class _UVarIntField(_VarIntField):
+    KIND = 'uvarint'
+
+    def read(self, buf, pos):
+        pos, n = read_varint(buf, pos)
+        return pos, n & ((2**64)-1)
+
+    def write(self, o, w):
+        write_varint(w, o)
+
+
+class _SVarIntField(_VarIntField):
     KIND = 'svarint'
 
     def read(self, buf, pos):
-        return read_svarint(r)
+        pos, value = read_varint(buf, pos)
+        if value & 1:
+            return pos, ((value >> 1) ^ ~0)
+        return pos, value >> 1
 
     def write(self, o, w):
-        write_svarint(w, o)
+        if i < 0:
+            write_varint(w, (i << 1) ^ ~0)
+        else:
+            write_varint(w, i << 1)
 
 
 class _Inet4Field(_Field):
