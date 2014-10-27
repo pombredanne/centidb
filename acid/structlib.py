@@ -636,9 +636,9 @@ class _Inet6PortField(_Field):
         w(struct.pack('<H', int(port, 10)))
 
 
-class _BytesField(_Field):
+class _BlobField(_Field):
     TYPES = (bytes, types.NoneType)
-    KIND = 'bytes'
+    KIND = 'blob'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     SEQUENCE_CODER = _DelimitedCoder()
 
@@ -652,9 +652,9 @@ class _BytesField(_Field):
         w(o)
 
 
-class _StringField(_Field):
+class _TextField(_Field):
     TYPES = (unicode, types.NoneType)
-    KIND = 'str'
+    KIND = 'text'
     WIRE_TYPE = WIRE_TYPE_DELIMITED
     SEQUENCE_CODER = _DelimitedCoder()
 
