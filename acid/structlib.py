@@ -22,6 +22,7 @@ import sys
 import types
 import uuid
 
+
 try:
     from __pypy__.builders import StringBuilder
 except ImportError:
@@ -223,10 +224,6 @@ def write_svarint(w, i):
         write_varint(w, i << 1)
 
 
-def write_key(w, field, tag):
-    write_varint(w, (field << 3) | tag)
-
-
 #
 # Skipping functions.
 #
@@ -278,7 +275,7 @@ class _ScalarCoder(_Coder):
         return (field.field_id << 3) | field.WIRE_TYPE
 
     def write_value(self, field, o, w):
-        write_key(w, field.field_id, field.WIRE_TYPE)
+        w(field.wire_key_s)
         field.write(o, w)
 
     def read_value(self, field, buf, pos):
@@ -297,7 +294,7 @@ class _PackedCoder(_Coder):
                 field.write(elem, ww)
 
             s = bio.build()
-            write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
+            w(field.wire_key_s)
             write_varint(w, len(s))
             w(s)
     else:
@@ -308,7 +305,7 @@ class _PackedCoder(_Coder):
                 field.write(elem, ww)
 
             s = str(ba)
-            write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
+            w(field.wire_key_s)
             write_varint(w, len(s))
             w(s)
 
@@ -331,7 +328,7 @@ class _FixedPackedCoder(_Coder):
         return (field.field_id << 3) | WIRE_TYPE_DELIMITED
 
     def write_value(self, field, o, w):
-        write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
+        w(field.wire_key_s)
         write_varint(w, self.item_size * len(o))
         for elem in o:
             field.write(elem, w)
@@ -395,11 +392,11 @@ class _DelimitedSequence(object):
 
 class _DelimitedCoder(_Coder):
     def make_key(self, field):
-        return (field.field_id << 3) | WIRE_TYPE_DELIMITED
+        return (field.field_id << 3) | field.WIRE_TYPE
 
     def write_value(self, field, o, w):
         for elem in o:
-            write_key(w, field.field_id, WIRE_TYPE_DELIMITED)
+            w(field.wire_key_s)
             field.write(elem, w)
 
     def _get_offsets(self, field, buf, pos):
@@ -439,6 +436,10 @@ class _Field(object):
         else:
             self.coder = _ScalarCoder()
         self.wire_key = self.coder.make_key(self)
+
+        ba = bytearray()
+        write_varint(ba.extend, self.wire_key)
+        self.wire_key_s = str(ba)
 
     def type_check(self, value):
         if not isinstance(value, self.TYPES):
@@ -555,7 +556,7 @@ class _IntField(_VarField):
         write_varint(w, o)
 
 
-class _SintField(_Field):
+class _SintField(_VarField):
     KIND = 'svarint'
 
     def read(self, buf, pos):
