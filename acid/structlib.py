@@ -38,8 +38,6 @@ WIRE_TYPE_64           = 1
 WIRE_TYPE_DELIMITED    = 2
 WIRE_TYPE_32           = 5
 
-_undefined = object()
-
 
 #
 # Encoding functions.
@@ -418,7 +416,6 @@ class _Field(object):
         self.sequence = sequence
         if sequence:
             self.coder = self.SEQUENCE_CODER
-            self.type_check = self.type_check_sequence
         else:
             self.coder = _ScalarCoder()
         self.wire_key = self.coder.make_key(self)
@@ -695,44 +692,65 @@ class _StructField(_Field):
     def __init__(self, field_id, name, sequence, struct_type):
         super(_StructField, self).__init__(field_id, name, sequence)
         self.struct_type = struct_type
-        self.TYPES = (struct_type, types.NoneType)
+        self.TYPES = (struct_type.klass, types.NoneType)
 
     def read(self, buf, pos):
         pos, n = read_varint(buf, pos)
         epos = pos + n
-        return epos, Struct.from_raw(self.struct_type, buf[pos:epos])
+        return epos, self.struct_type.from_raw(buf[pos:epos])
 
     def write(self, o, w):
         s = o.to_raw()
         write_varint(w, len(s))
         w(s)
 
-    def type_check(self, value):
-        if not isinstance(value, Struct):
-            raise TypeError('field %r requires %r, not %r' %\
-                            (self.name, self.TYPES, type(value)))
 
-    SEQUENCE_TYPES = (list, array.array)
-    def type_check_sequence(self, value):
-        if not isinstance(value, self.SEQUENCE_TYPES):
-            raise TypeError('field %r requires %r, not %r' %\
-                            (self.name, list, type(value)))
-        if not all(isinstance(v, Struct) and v.struct_type == self.struct_type
-                   for v in value):
-            raise TypeError('field %r requires list of %r' %\
-                            (self.name, self.struct_type))
+class _Property(object):
+    def __init__(self, struct_type, field):
+        self.struct_type = struct_type
+        self.field = field
+        self.name = field.name
+
+    def __delete__(self, instance):
+        instance.__dict__[self.name] = None
+
+
+class _ScalarProperty(_Property):
+    def __get__(self, instance, owner):
+        if self.name not in instance.__dict__:
+            return self.struct_type.read_value(instance._buf, self.field)
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance, value):
+        self.field.type_check(value)
+        instance.__dict__[self.name] = value
+
+
+class _SequenceProperty(_Property):
+    def __get__(self, instance, owner):
+        if self.name not in instance.__dict__:
+            value = self.struct_type.read_value(instance._buf, self.field)
+            instance.__dict__[self.name] = value
+            return value
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance, value):
+        self.field.type_check_sequence(value)
+        instance.__dict__[self.name] = value
 
 
 class StructType(object):
     def __init__(self):
-        self.field_name_map = {}
         self.field_id_map = {}
         self.sorted_by_id = []
+        self.klass = type('stct', (Struct,), {})
+        self.new = self.klass
+        self.klass._struct_type = self
 
     def add_field(self, field_name, field_id, kind, sequence):
         if field_id in self.field_id_map:
             raise ValueError('duplicate field ID: %r' % (field_id,))
-        if field_name in self.field_name_map:
+        if any(f.name == field_name for f in self.sorted_by_id):
             raise ValueError('duplicate field name: %r' % (field_name,))
         if isinstance(kind, StructType):
             field = _StructField(field_id, field_name, sequence, kind)
@@ -741,12 +759,15 @@ class StructType(object):
             if klass is None:
                 raise ValueError('unknown kind: %r' % (kind,))
             field = klass(field_id, field_name, sequence)
+
+        pclass = _SequenceProperty if sequence else _ScalarProperty
+        setattr(self.klass, field_name, pclass(self, field))
+
         self.field_id_map[field_id] = field
-        self.field_name_map[field_name] = field
         self.sorted_by_id.append(field)
         self.sorted_by_id.sort(key=lambda f: f.field_id)
 
-    def iter_values(self, buf):
+    def iter_raw(self, buf):
         blen = len(buf)
         pos = 0
         while pos < blen:
@@ -788,141 +809,34 @@ class StructType(object):
                     field.coder.write_value(field, value, w)
             return str(ba)
 
+    def _explode(self, struct):
+        dct = struct.__dict__
+        for key, value in self.iter_raw(struct._buf):
+            dct.setdefault(key, value)
+
+    def to_raw(self, struct):
+        self._explode(struct)
+        return self._to_raw(struct.__dict__)
+
+    def from_raw(self, buf, source=None):
+        struct = self.klass()
+        struct._buf = buf
+        return struct
+
+    HIDE_FIELDS = set(['_buf', '_struct_type'])
+    def iter_struct(self, struct):
+        self._explode(struct)
+        dct = struct.__dict__
+        return ((k, v) for k, v in dct.iteritems()
+                if v is not None and k not in self.HIDE_FIELDS)
+
 
 class Struct(object):
-    __slots__ = ('struct_type', 'buf', 'obuf', 'dct')
-    def __init__(self, struct_type):
-        self.struct_type = struct_type
-        self.buf = ''
-        self.obuf = ''
-        self.dct = {}
-
-    @classmethod
-    def from_raw(cls, struct_type, buf, source=None):
-        self = cls(struct_type)
-        self.buf = buf
-        self.obuf = buf
-        return self
-
-    def reset(self):
-        self.buf = self.obuf
-        self.dct = {}
-
-    def _explode(self):
-        if self.buf:
-            for key, value in self.struct_type.iter_values(self.buf):
-                self.dct.setdefault(key, value)
-            self.buf = None
-
-    def to_raw(self):
-        self._explode()
-        return self.struct_type._to_raw(self.dct)
-
-    def __len__(self):
-        self._explode()
-        return sum(1 for v in self.dct.itervalues() if v is not None)
-    __nonzero__ = __len__
-
-    def __getitem__(self, key):
-        if key not in self.dct and self.buf:
-            field = self.struct_type.field_name_map[key]
-            value = self.struct_type.read_value(self.buf, field)
-            if field.sequence:
-                self.dct[key] = value
-            if value is not None:
-                return value
-        return self.dct[key]
-
-    def get(self, key, default=None):
-        value = self.dct.get(key, _undefined)
-        if value is _undefined:
-            field = self.struct_type.field_name_map.get(key)
-            if field is None:
-                return default
-
-            if self.buf:
-                value = self.struct_type.read_value(self.buf, field)
-                self.dct[key] = value
-                if value is None:
-                    value = default
-
-        return value
-
-    def __setitem__(self, key, value):
-        field = self.struct_type.field_name_map[key]
-        field.type_check(value)
-        self.dct[key] = value
-
-    def __delitem__(self, key):
-        self._explode()
-        if self.get(key) is None:
-            raise KeyError(key)
-        self.dct[key] = None
-
-    def __contains__(self, key):
-        return self.get(key) is not None
-    has_key = __contains__
-
-    def clear(self):
-        self.buf = None
-        self.dct.clear()
-
-    def copy(self):
-        new = type(self)(self.struct_type)
-        new.buf = self.buf
-        new.dct = self.dct.copy()
-        return new
-
+    _buf = ''
     def __repr__(self):
         typ = type(self)
-        d = dict(self.iteritems())
+        d = dict(self._struct_type.iter_struct(self))
         return '<%s.%s(%s)>' % (typ.__module__, typ.__name__, d)
-
-    def iteritems(self):
-        self._explode()
-        return (t for t in self.dct.iteritems() if t[1] is not None)
-
-    def iterkeys(self):
-        self._explode()
-        return (k for k, v in self.dct.iteritems() if v is not None)
-    __iter__ = iterkeys
-
-    def itervalues(self):
-        self._explode()
-        return (v for v in self.dct.itervalues() if v is not None)
-
-    def keys(self):
-        return list(self.iterkeys())
-
-    def values(self):
-        return list(self.itervalues())
-
-    def items(self):
-        return list(self.iteritems())
-
-    def pop(self, key, default=_undefined):
-        value = self.get(key)
-        if value is not None:
-            self.dct[key] = None
-            return value
-
-        if default is _undefined:
-            raise KeyError(key)
-        return default
-
-    def popitem(self):
-        k = next(self.iterkeys(), None)
-        if k is None:
-            raise KeyError('Struct is empty')
-        return k, self.pop(k)
-
-    def setdefault(self, key, default=None):
-        if self.get(key) is None:
-            self[key] = default
-
-    def update(self, other):
-        for key in other:
-            self[key] = other[key]
 
 
 #: Mapping of _Field subclass to field kind.
