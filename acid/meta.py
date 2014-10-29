@@ -116,7 +116,7 @@ class ModelMeta(type):
     def setup_key_func(cls, klass, bases, attrs):
         key_func = None
         for key, value in attrs.iteritems():
-            if not hasattr(value, 'meta_derived_key'):
+            if not hasattr(value, 'meta_key'):
                 continue
             if key_func:
                 raise TypeError('%r: multiple key functions found: %r and %r'
@@ -182,9 +182,7 @@ class ModelMeta(type):
 
 
 def key(func):
-    """Mark a function as the model's primary key function. If the function
-    returns a stable result given the same input model, then
-    :py:func:`derived_key` should be used instead.
+    """Mark a function as the model's primary key function.
 
     ::
 
@@ -192,22 +190,7 @@ def key(func):
         def key_func(self):
             return int(time.time() * 1000)
     """
-    func.meta_derived_key = False
-    return func
-
-
-def derived_key(func):
-    """Mark a function as the model's primary key function. If the function
-    does not return a stable result given the same input model, then use
-    :py:func:`key` instead.
-
-    ::
-
-        @meta.derived_key
-        def key_func(self):
-            return self.name, self.email
-    """
-    func.meta_derived_key = True
+    func.meta_key = False
     return func
 
 

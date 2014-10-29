@@ -178,5 +178,4 @@ Specifying a key function
 +++++++++++++++++++++++++
 
 .. autofunction:: acid.meta.key ()
-.. autofunction:: acid.meta.derived_key ()
 
