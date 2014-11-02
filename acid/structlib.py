@@ -230,7 +230,7 @@ def _skip_32(buf, pos):
 def _skip_unknown(buf, pos):
     raise IOError('cannot skip unrecognized WIRE_TYPE')
 
-SKIP_MAP = [
+SKIP_MAP = (
     _skip_variable,     # 0
     _skip_64,           # 1
     _skip_delimited,    # 2
@@ -239,7 +239,7 @@ SKIP_MAP = [
     _skip_32,           # 5
     _skip_unknown,      # 6
     _skip_unknown,      # 7
-]
+)
 
 
 #
