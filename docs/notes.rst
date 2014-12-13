@@ -205,3 +205,17 @@ Futures
 
 Planned changes are tracked using `Github's issues list
 <https://github.com/dw/acid/issues?state=open>`_
+
+
+Blog Posts
+++++++++++
+
+Various design aspects were discussed in a series of blog posts:
+
+* 2014-01-21: `Cowboy optimization: bisecting a function <http://pythonsweetness.tumblr.com/post/74073984682/cowboy-optimization-bisecting-a-function>`_
+* 2014-01-13: `Acid batch record format <http://pythonsweetness.tumblr.com/post/73248785592/acid-batch-record-format>`_
+* 2013-12-29: `Acid API v2 ideas <http://pythonsweetness.tumblr.com/post/71522621848/acid-api-v2-ideas>`_
+* 2013-10-21: `[Acid] Progress <http://pythonsweetness.tumblr.com/post/64705174861/progress>`_
+* 2013-09-30: `Why we can’t lazy-decode JSON <http://pythonsweetness.tumblr.com/post/62721087542/why-we-cant-lazy-decode-json>`_
+* 2013-09-26: `Thoughts on a better memory abstraction for Python (2) <http://pythonsweetness.tumblr.com/post/62321291712/thoughts-on-a-better-memory-abstraction-for-python-2/>`_
+* 2013-08-13: `Thoughts on a better memory abstraction for Python <http://pythonsweetness.tumblr.com/post/58148801190/thoughts-on-a-better-memory-abstraction-for-python>`_

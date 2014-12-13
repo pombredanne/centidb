@@ -41,6 +41,10 @@ class Field(object):
     """
     default = None
 
+    def __init__(self, ftype, default=None):
+        self.ftype = ftype
+        self.default = default
+
     def __get__(self, instance, klass):
         if instance:
             return klass.META_ENCODER.get(instance._rec, self.name,
@@ -57,34 +61,22 @@ class Field(object):
             raise AttributeError(self.name)
 
 
-class Bool(Field):
-    """A boolean field.
-    """
-
-
-class Double(Field):
-    """A double field.
-    """
-
-
-class Integer(Field):
-    """An integer field.
-    """
-
-
-class String(Field):
-    """A string field.
-    """
-
-
-class Time(Field):
-    """A datetime.datetime field.
-    """
-
-
 class List(Field):
     """A list field.
     """
+    def __init__(self, ftype):
+        self.ftype = ftype
+        super(List, self).__init__(ftype)
+
+    def __get__(self, instance, klass):
+        if instance:
+            lst = klass.META_ENCODER.get(instance._rec, self.name, None)
+            if lst is not None:
+                return lst
+            lst = []
+            klass.META_ENCODER.set(instance._rec, self.name, lst)
+            return lst
+        return self
 
 
 class LazyIndexProperty(object):
@@ -124,7 +116,7 @@ class ModelMeta(type):
     def setup_key_func(cls, klass, bases, attrs):
         key_func = None
         for key, value in attrs.iteritems():
-            if not hasattr(value, 'meta_derived_key'):
+            if not hasattr(value, 'meta_key'):
                 continue
             if key_func:
                 raise TypeError('%r: multiple key functions found: %r and %r'
@@ -190,9 +182,7 @@ class ModelMeta(type):
 
 
 def key(func):
-    """Mark a function as the model's primary key function. If the function
-    returns a stable result given the same input model, then
-    :py:func:`derived_key` should be used instead.
+    """Mark a function as the model's primary key function.
 
     ::
 
@@ -200,22 +190,7 @@ def key(func):
         def key_func(self):
             return int(time.time() * 1000)
     """
-    func.meta_derived_key = False
-    return func
-
-
-def derived_key(func):
-    """Mark a function as the model's primary key function. If the function
-    does not return a stable result given the same input model, then use
-    :py:func:`key` instead.
-
-    ::
-
-        @meta.derived_key
-        def key_func(self):
-            return self.name, self.email
-    """
-    func.meta_derived_key = True
+    func.meta_key = False
     return func
 
 

@@ -264,21 +264,6 @@ Or by UUID:
 
         >>> stuff = acid.Collection(store, 'stuff', key_func=uuid_key)
 
-Finally, a key function may also be marked as `derived` (`derived_keys=True`),
-indicating that if the record value changes, the key function should be
-reinvoked to assign a new key.
-
-    ::
-
-        >>> # If username changes, we need to update the record's key.
-        >>> def user_name_key(val):
-        ...     return val['username']
-
-        >>> users = acid.Collection(store, 'users',
-        ...     key_func=user_name_key,
-        ...     derived_keys=True)
-
-
 Let's create a new collection, this time storing :py:class:`dicts <dict>` with
 some new fields. The collection holds user accounts for an organizational web
 application, where each user belongs to a particular department within a
